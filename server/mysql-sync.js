@@ -7,7 +7,9 @@ const MAX_RESPONSE_BYTES = Number(process.env.MYSQL_SYNC_BUFFER_BYTES || 16 * 10
 const QUERY_TIMEOUT_MS = Number(process.env.MYSQL_QUERY_TIMEOUT_MS || 30000);
 
 function splitStatements(sql) {
-  return String(sql).replace(/^\s*--.*$/gm, '').split(';').map((part) => part.trim()).filter(Boolean);
+  // Xoá TẤT CẢ comment '--' (kể cả inline) trước khi tách theo ';' —
+  // tránh split nhầm khi comment chứa dấu ';' (vd: "-- 1 = auto; 0 = user tự thêm").
+  return String(sql).replace(/--[^\n]*/g, '').split(';').map((part) => part.trim()).filter(Boolean);
 }
 
 function translate(sql) {
