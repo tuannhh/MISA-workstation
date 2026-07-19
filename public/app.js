@@ -264,7 +264,7 @@ function buildNav() {
   for (const item of NAV) {
     if (item.group) { nav.appendChild(el(`<div class="group">${item.group}</div>`)); continue; }
     if (item.mod && !can(item.mod, 'view')) continue;
-    nav.appendChild(el(`<a href="#${item.key}" data-key="${item.key}"><m-icon class="ic" name="${item.ic}" size="20"></m-icon>${item.label}</a>`));
+    nav.appendChild(el(`<a href="#${item.key}" data-key="${item.key}" title="${item.label}"><m-icon class="ic" name="${item.ic}" size="20"></m-icon><span class="nav-label">${item.label}</span></a>`));
   }
 }
 function setActive(key) {
@@ -287,7 +287,7 @@ window.addEventListener('hashchange', route);
 
 // ---------------- generic LIST view ----------------
 function pageState() { return { page: 1, search: '', total: 0, pageSize: 20 }; }
-function renderTable({ head, title, desc, mod, ps, onSearch, rowsHtml, sensitiveNote, addLabel }) {
+function renderTable({ head, title, desc, mod, ps, onSearch, rowsHtml, sensitiveNote, addLabel, searchPlaceholder }) {
   const canCreate = can(mod, 'create');
   $('#crumb').textContent = title;
   const html = `
@@ -297,7 +297,7 @@ function renderTable({ head, title, desc, mod, ps, onSearch, rowsHtml, sensitive
     </div>
     ${sensitiveNote || ''}
     <div class="toolbar">
-      <input type="search" id="search" placeholder="🔎 Tìm kiếm…" value="${esc(ps.search)}" />
+      <input type="search" id="search" placeholder="${esc(searchPlaceholder || 'Tìm kiếm theo tên, địa chỉ, số điện thoại, email…')}" value="${esc(ps.search)}" />
     </div>
     <div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody id="tbody">${rowsHtml}</tbody></table></div>
     <div class="pager">

@@ -97,7 +97,7 @@ const ORG_COLS = ['name', 'org_type', 'tier', 'founded_date', 'parent_org', 'web
 router.get('/partners', requirePerm('partners', 'view'), (req, res) => {
   const { page, pageSize, offset } = pageParams(req);
   const q = `%${(req.query.search || '').trim()}%`;
-  const args = [q, q, q];
+  const args = [q, q, q, q, q, q, q];
   let typeFilter = '';
   if (ORG_TYPES.includes(req.query.type)) { typeFilter = 'AND o.org_type = ?'; args.push(req.query.type); }
   if (req.query.tier) { typeFilter += ' AND o.tier = ?'; args.push(req.query.tier); }
@@ -112,7 +112,7 @@ router.get('/partners', requirePerm('partners', 'view'), (req, res) => {
   const OVERDUE = "(SELECT COUNT(*) FROM association_fees f WHERE f.org_id=o.id AND f.status<>'Đã đóng' AND f.due_date IS NOT NULL AND f.due_date<date('now'))";
   if (req.query.fee_status === 'Quá hạn') typeFilter += ` AND ${OVERDUE}>0`;
   else if (req.query.fee_status === 'Đầy đủ') typeFilter += ` AND ${OVERDUE}=0`;
-  const where = `WHERE (o.name LIKE ? OR o.parent_org LIKE ? OR o.address LIKE ?) ${typeFilter}`;
+  const where = `WHERE (o.name LIKE ? OR o.parent_org LIKE ? OR o.address LIKE ? OR o.website LIKE ? OR o.misa_role LIKE ? OR o.abbreviation LIKE ? OR o.note LIKE ?) ${typeFilter}`;
   const total = db.prepare(`SELECT COUNT(*) c FROM organizations o ${where}`).get(...args).c;
   const rows = db.prepare(`
     SELECT o.*, (SELECT COUNT(*) FROM people p WHERE p.org_id = o.id) AS people_count,
@@ -338,7 +338,7 @@ const P_COLS = ['org_id', 'full_name', 'level', 'position', 'beat', 'category', 
 router.get('/people', requirePerm('partners', 'view'), (req, res) => {
   const { page, pageSize, offset } = pageParams(req);
   const q = `%${(req.query.search || '').trim()}%`;
-  const args = [q, q, q, q];
+  const args = [q, q, q, q, q, q, q];
   let orgFilter = '';
   if (req.query.org_id) { orgFilter = 'AND p.org_id = ?'; args.push(req.query.org_id); }
   let caretakerFilter = '';
@@ -347,8 +347,8 @@ router.get('/people', requirePerm('partners', 'view'), (req, res) => {
       OR EXISTS (SELECT 1 FROM assignments a2 WHERE a2.subject_type='org' AND a2.subject_id=p.org_id AND a2.user_id=?))`;
     args.push(Number(req.query.caretaker_id), Number(req.query.caretaker_id));
   }
-  const where = `WHERE (p.full_name LIKE ? OR p.beat LIKE ? OR p.position LIKE ? OR p.phone_work LIKE ?) ${orgFilter} ${caretakerFilter}`;
-  const total = db.prepare(`SELECT COUNT(*) c FROM people p ${where}`).get(...args).c;
+  const where = `WHERE (p.full_name LIKE ? OR p.beat LIKE ? OR p.position LIKE ? OR p.phone_work LIKE ? OR p.email_work LIKE ? OR p.phone_personal LIKE ? OR o.name LIKE ?) ${orgFilter} ${caretakerFilter}`;
+  const total = db.prepare(`SELECT COUNT(*) c FROM people p LEFT JOIN organizations o ON o.id = p.org_id ${where}`).get(...args).c;
   const rows = db.prepare(`
     SELECT p.*, o.name AS org_name, o.org_type,
       (SELECT a.id FROM attachments a WHERE a.owner_type='person' AND a.owner_id=p.id AND a.kind='portrait' AND a.is_primary=1 LIMIT 1) AS primary_photo_id
@@ -968,10 +968,10 @@ const STRANS_COLS = ['service_type', 'purpose', 'contract_no', 'value', 'signed_
 router.get('/suppliers', requirePerm('suppliers', 'view'), (req, res) => {
   const { page, pageSize, offset } = pageParams(req);
   const q = `%${(req.query.search || '').trim()}%`;
-  const args = [q, q, q];
+  const args = [q, q, q, q, q, q, q];
   let extra = '';
   if (req.query.industry) { extra = ' AND industry LIKE ?'; args.push(`%${req.query.industry}%`); }
-  const where = `WHERE (name LIKE ? OR services LIKE ? OR tax_code LIKE ?)${extra}`;
+  const where = `WHERE (name LIKE ? OR services LIKE ? OR tax_code LIKE ? OR address LIKE ? OR industry LIKE ? OR contact_phone LIKE ? OR contact_email LIKE ?)${extra}`;
   const total = db.prepare(`SELECT COUNT(*) c FROM suppliers ${where}`).get(...args).c;
   const rows = db.prepare(`SELECT * FROM suppliers ${where} ORDER BY name LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
   res.json({ rows, total, page, pageSize });

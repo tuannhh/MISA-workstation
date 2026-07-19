@@ -6,16 +6,23 @@ const mysql = require('mysql2/promise');
 let connection;
 async function getConnection() {
   if (!connection) {
-    connection = mysql.createConnection({
-      host: process.env.MYSQL_HOST || '127.0.0.1',
-      port: Number(process.env.MYSQL_PORT || 3306),
+    // Cloud Run + Cloud SQL: dùng unix socket /cloudsql/<INSTANCE_CONNECTION_NAME>;
+    // Docker/local: dùng host + port. Ưu tiên socketPath nếu có.
+    const cfg = {
       user: process.env.MYSQL_USER || 'pr_media',
       password: process.env.MYSQL_PASSWORD || 'pr_media',
       database: process.env.MYSQL_DATABASE || 'pr_media',
       charset: 'utf8mb4',
       supportBigNumbers: true,
       bigNumberStrings: false,
-    });
+    };
+    if (process.env.MYSQL_SOCKET_PATH) {
+      cfg.socketPath = process.env.MYSQL_SOCKET_PATH;
+    } else {
+      cfg.host = process.env.MYSQL_HOST || '127.0.0.1';
+      cfg.port = Number(process.env.MYSQL_PORT || 3306);
+    }
+    connection = mysql.createConnection(cfg);
   }
   return connection;
 }

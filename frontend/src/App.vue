@@ -6,9 +6,29 @@ import MHeaderIconChat from './components/MHeaderIconChat.vue';
 
 const settingsOpen = ref(false);
 const sideOpen = ref(false);
+const sideCollapsed = ref(localStorage.getItem('mds-sidebar-expanded') === '0');
 const theme = ref(localStorage.getItem('mds-theme') || 'blue');
 const density = ref(localStorage.getItem('mds-density') || 'medium');
 const headerMode = ref(localStorage.getItem('mds-header-mode') || 'brand');
+
+// 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
+const THEMES = [
+  { key: 'blue', label: 'Xanh MISA', color: '#245FDF' },
+  { key: 'indigo', label: 'Chàm', color: '#4155F5' },
+  { key: 'cyan', label: 'Xanh ngọc', color: '#00A2CF' },
+  { key: 'teal', label: 'Xanh mòng két', color: '#0E9384' },
+  { key: 'green', label: 'Xanh lá', color: '#0E9A62' },
+  { key: 'orange', label: 'Cam', color: '#EA580C' },
+  { key: 'red', label: 'Đỏ', color: '#C34266' },
+  { key: 'pink', label: 'Hồng', color: '#C64691' },
+  { key: 'purple', label: 'Tím', color: '#744EC7' },
+  { key: 'blue-gray', label: 'Xanh xám', color: '#4E5BA6' },
+];
+
+function toggleSide() {
+  sideCollapsed.value = !sideCollapsed.value;
+  localStorage.setItem('mds-sidebar-expanded', sideCollapsed.value ? '0' : '1');
+}
 
 function applyPreferences() {
   document.documentElement.dataset.mdsTheme = theme.value;
@@ -75,8 +95,13 @@ onMounted(async () => {
       <button class="header-action" type="button" id="logoutBtn" title="Đăng xuất" aria-label="Đăng xuất"><MIcon name="logout" :size="20" /></button>
     </header>
     <button v-if="sideOpen" class="mobile-nav-overlay" type="button" aria-label="Đóng điều hướng" @click="sideOpen = false"></button>
-    <div class="app-body">
-      <aside class="sidebar" :class="{ 'mobile-open': sideOpen }" @click="sideOpen = false"><nav class="nav" id="nav"></nav></aside>
+    <div class="app-body" :class="{ 'side-collapsed': sideCollapsed }">
+      <aside class="sidebar" :class="{ 'mobile-open': sideOpen }">
+        <nav class="nav" id="nav" @click="sideOpen = false"></nav>
+        <button class="side-toggle" type="button" :title="sideCollapsed ? 'Ghim mở rộng' : 'Thu gọn'" :aria-label="sideCollapsed ? 'Mở rộng' : 'Thu gọn'" @click="toggleSide">
+          <MIcon :name="sideCollapsed ? 'chevron-right' : 'chevron-left'" :size="20" />
+        </button>
+      </aside>
       <main class="main"><div class="content" id="view"></div></main>
     </div>
   </div>
@@ -87,10 +112,37 @@ onMounted(async () => {
   <div v-if="settingsOpen" class="modal-bg settings-layer" @click.self="settingsOpen = false">
     <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="mhead"><h3 id="settings-title">Thiết lập màu sắc và hiển thị</h3><button class="x" type="button" aria-label="Đóng" @click="settingsOpen = false"><MIcon name="x" :size="20" /></button></div>
-      <div class="mbody settings-grid">
-        <fieldset><legend>Giao diện</legend><label><input v-model="headerMode" type="radio" value="brand" /> Màu sắc</label><label><input v-model="headerMode" type="radio" value="light" /> Sáng</label></fieldset>
-        <fieldset><legend>Màu chủ đạo</legend><label><input v-model="theme" type="radio" value="blue" /> Xanh MISA</label><label><input v-model="theme" type="radio" value="green" /> Xanh lá</label><label><input v-model="theme" type="radio" value="purple" /> Tím</label></fieldset>
-        <fieldset><legend>Mật độ hiển thị</legend><label><input v-model="density" type="radio" value="compact" /> Compact</label><label><input v-model="density" type="radio" value="medium" /> Trung bình</label><label><input v-model="density" type="radio" value="comfortable" /> Rộng</label></fieldset>
+      <div class="mbody settings-body">
+        <section class="set-block">
+          <div class="set-title">Giao diện</div>
+          <div class="mode-row">
+            <button type="button" class="mode-card" :class="{ sel: headerMode === 'brand' }" @click="headerMode = 'brand'">
+              <span class="mode-swatch" :style="{ background: (THEMES.find(t => t.key === theme) || {}).color }"></span>
+              <span>Màu sắc</span>
+            </button>
+            <button type="button" class="mode-card" :class="{ sel: headerMode === 'light' }" @click="headerMode = 'light'">
+              <span class="mode-swatch light"></span>
+              <span>Sáng</span>
+            </button>
+          </div>
+        </section>
+        <section class="set-block">
+          <div class="set-title">Màu chủ đạo</div>
+          <div class="swatch-row">
+            <button v-for="t in THEMES" :key="t.key" type="button" class="swatch" :class="{ sel: theme === t.key }" :title="t.label" :aria-label="t.label" @click="theme = t.key">
+              <span class="swatch-dot" :style="{ background: t.color }"></span>
+              <span class="swatch-lb">{{ t.label }}</span>
+            </button>
+          </div>
+        </section>
+        <section class="set-block">
+          <div class="set-title">Mật độ hiển thị</div>
+          <div class="mode-row">
+            <button type="button" class="density-card" :class="{ sel: density === 'compact' }" @click="density = 'compact'">Compact</button>
+            <button type="button" class="density-card" :class="{ sel: density === 'medium' }" @click="density = 'medium'">Trung bình</button>
+            <button type="button" class="density-card" :class="{ sel: density === 'comfortable' }" @click="density = 'comfortable'">Rộng</button>
+          </div>
+        </section>
       </div>
       <div class="mfoot"><button class="btn" type="button" @click="settingsOpen = false">Hủy</button><button class="btn primary" type="button" @click="savePreferences">Lưu</button></div>
     </section>

@@ -28,6 +28,8 @@ services:
       MYSQL_USER: pr_media
       MYSQL_PASSWORD: pr_media
       SESSION_SECRET: change-this-in-production
+      # AI Gemini (tùy chọn): đặt GEMINI_API_KEY để bật tính năng AI; giống biến dùng trên Cloud Run
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
