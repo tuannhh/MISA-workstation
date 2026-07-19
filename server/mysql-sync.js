@@ -14,6 +14,9 @@ function splitStatements(sql) {
 
 function translate(sql) {
   let out = String(sql)
+    // Modifier ngày kiểu SQLite: date/datetime('now','-30 day') -> MySQL INTERVAL (phải xử lý TRƯỚC dạng không modifier)
+    .replace(/datetime\('now'\s*,\s*'([+-]?\d+)\s+(day|month|year|hour|minute)s?'\)/gi, '(UTC_TIMESTAMP() + INTERVAL $1 $2)')
+    .replace(/date\('now'\s*,\s*'([+-]?\d+)\s+(day|month|year)s?'\)/gi, '(CURRENT_DATE() + INTERVAL $1 $2)')
     .replace(/datetime\('now'\)/gi, 'UTC_TIMESTAMP()')
     .replace(/date\('now'\)/gi, 'CURRENT_DATE()')
     .replace(/strftime\('%Y-%m',\s*([^)]+)\)/gi, "DATE_FORMAT($1,'%Y-%m')")

@@ -1213,7 +1213,7 @@ router.get('/dashboard', (req, res) => {
         UNION ALL
         SELECT strftime('%m', s.event_date) m, COUNT(*) c FROM sponsorships s JOIN organizations o ON o.id=s.org_id
           WHERE o.org_type='association' AND s.event_date IS NOT NULL AND strftime('%Y', s.event_date)=? GROUP BY m
-      ) GROUP BY m`).all(yr, yr)),
+      ) t GROUP BY m`).all(yr, yr)),
     eventsHostMonthly: monthly(db.prepare(`SELECT strftime('%m', start_time) m, COUNT(*) c FROM events
       WHERE mode='host' AND start_time IS NOT NULL AND strftime('%Y', start_time)=? GROUP BY m`).all(yr)),
     eventsJoinMonthly: monthly(db.prepare(`SELECT strftime('%m', start_time) m, COUNT(*) c FROM events

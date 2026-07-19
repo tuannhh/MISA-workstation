@@ -32,7 +32,9 @@ parentPort.on('message', async ({ shared, sql, params }) => {
   const output = new Uint8Array(shared, 8);
   try {
     const db = await getConnection();
-    const [rows] = await db.execute(sql, params);
+    // Dùng query() (client-side format) thay execute() (binary prepared) để chấp nhận
+    // LIMIT/OFFSET dạng tham số và tránh lỗi "Incorrect arguments to mysqld_stmt_execute".
+    const [rows] = await db.query(sql, params);
     const result = Array.isArray(rows)
       ? { rows }
       : { affectedRows: rows.affectedRows, insertId: rows.insertId, warningStatus: rows.warningStatus };
