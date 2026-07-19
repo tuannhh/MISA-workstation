@@ -28,10 +28,10 @@ function translate(sql) {
     const uniqueColumns = [...out.matchAll(/UNIQUE\s*\(([^)]+)\)/gi)]
       .flatMap((match) => match[1].split(',').map((name) => name.trim()));
     out = out
-      .replace(/(\b\w+)\s+TEXT\s+NOT\s+NULL\s+DEFAULT\s*\(UTC_TIMESTAMP\(\)\)/gi, '$1 DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP')
-      .replace(/(\b\w+)\s+TEXT\s+PRIMARY\s+KEY/gi, '$1 VARCHAR(191) PRIMARY KEY')
-      .replace(/(\b\w+)\s+TEXT\s+UNIQUE/gi, '$1 VARCHAR(191) UNIQUE')
-      .replace(/(\b\w+)\s+TEXT(\s+(?:NOT\s+NULL\s+)?DEFAULT\s+['"][^'"]*['"])/gi, '$1 VARCHAR(191)$2')
+      .replace(/(`?\w+`?)\s+TEXT\s+NOT\s+NULL\s+DEFAULT\s*\(UTC_TIMESTAMP\(\)\)/gi, '$1 DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP')
+      .replace(/(`?\w+`?)\s+TEXT\s+PRIMARY\s+KEY/gi, '$1 VARCHAR(191) PRIMARY KEY')
+      .replace(/(`?\w+`?)\s+TEXT\s+UNIQUE/gi, '$1 VARCHAR(191) UNIQUE')
+      .replace(/(`?\w+`?)\s+TEXT(\s+(?:NOT\s+NULL\s+)?DEFAULT\s+['"][^'"]*['"])/gi, '$1 VARCHAR(191)$2')
       .replace(/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/gi, 'BIGINT AUTO_INCREMENT PRIMARY KEY')
       .replace(/\bINTEGER\b/gi, 'BIGINT');
     for (const column of uniqueColumns) {
