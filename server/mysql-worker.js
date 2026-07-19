@@ -22,7 +22,9 @@ async function getConnection() {
       cfg.host = process.env.MYSQL_HOST || '127.0.0.1';
       cfg.port = Number(process.env.MYSQL_PORT || 3306);
     }
-    connection = mysql.createConnection(cfg);
+    connection = await mysql.createConnection(cfg);
+    // Bỏ ONLY_FULL_GROUP_BY để GROUP BY hoạt động giống SQLite (app viết theo dialect SQLite).
+    await connection.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
   }
   return connection;
 }
