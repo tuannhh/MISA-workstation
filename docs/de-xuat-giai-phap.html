@@ -1,0 +1,323 @@
+<title>Đề xuất Hệ thống Quản trị & Giám sát Truyền thông – PR MISA</title>
+<style>
+  :root{
+    --red:#C8102E; --red-d:#9b0c23; --ink:#1d2330; --muted:#5b6573;
+    --line:#e7e9ee; --bg:#f6f7f9; --card:#ffffff; --soft:#fbf3f4;
+    --green:#1a8a52; --amber:#c8860a; --blue:#1b5fb0;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.6;font-size:15.5px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 80px}
+  header.hero{background:linear-gradient(135deg,var(--red),var(--red-d));color:#fff;padding:46px 20px 40px}
+  .hero-in{max-width:1080px;margin:0 auto}
+  .kicker{font-size:13px;letter-spacing:.14em;text-transform:uppercase;opacity:.85;font-weight:600}
+  h1{font-size:33px;margin:8px 0 10px;line-height:1.2}
+  .hero p{font-size:16px;opacity:.95;margin:0;max-width:760px}
+  .meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.28);
+    padding:6px 13px;border-radius:999px;font-size:13px}
+  section{margin-top:38px}
+  h2{font-size:23px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  h2 .n{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;
+    background:var(--red);color:#fff;border-radius:8px;font-size:15px;font-weight:700}
+  .lead{color:var(--muted);margin:0 0 18px;max-width:820px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:780px){.g2,.g3{grid-template-columns:1fr}}
+  .card h3{margin:0 0 6px;font-size:17px}
+  .tag{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    padding:3px 9px;border-radius:6px;margin-bottom:10px}
+  .t-mon{background:#fdeef0;color:var(--red)}
+  .t-crm{background:#eaf2fb;color:var(--blue)}
+  .t-core{background:#eef7f1;color:var(--green)}
+  ul.tight{margin:8px 0 0;padding-left:18px}
+  ul.tight li{margin:4px 0}
+  .small{font-size:13.5px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);
+    border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  th,td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#fafbfc;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  .yes{color:var(--green);font-weight:700}
+  .no{color:#b9c0cb}
+  .part{color:var(--amber);font-weight:700}
+  .scroll{overflow-x:auto}
+  /* roadmap */
+  .road{display:flex;flex-direction:column;gap:0}
+  .phase{display:grid;grid-template-columns:130px 1fr;gap:0;position:relative}
+  .phase .when{padding:18px 16px 18px 0;text-align:right;border-right:3px solid var(--line);position:relative}
+  .phase .when .ph{font-weight:700;color:var(--red)}
+  .phase .when .dur{font-size:13px;color:var(--muted)}
+  .phase .dot{position:absolute;right:-9px;top:22px;width:15px;height:15px;border-radius:50%;
+    background:#fff;border:3px solid var(--red)}
+  .phase .body{padding:14px 0 22px 24px}
+  .phase .body h4{margin:0 0 4px;font-size:16px}
+  /* flow */
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:0}
+  .step{flex:1;min-width:130px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:14px;position:relative;text-align:center}
+  .step .ic{font-size:22px}
+  .step b{display:block;margin-top:4px;font-size:14px}
+  .step span{font-size:12.5px;color:var(--muted)}
+  .arrow{display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--red);padding:0 6px}
+  @media(max-width:780px){.arrow{transform:rotate(90deg);padding:4px 0}.flow{flex-direction:column}.step{min-width:0}}
+  .layer{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;background:var(--card)}
+  .layer .lt{font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--red);margin-bottom:8px}
+  .pill{display:inline-block;background:var(--soft);border:1px solid #f0dde0;color:var(--ink);
+    padding:5px 11px;border-radius:8px;font-size:13px;margin:3px 4px 3px 0}
+  .note{background:var(--soft);border-left:4px solid var(--red);padding:13px 16px;border-radius:0 10px 10px 0;margin-top:14px}
+  .ok{border-left-color:var(--green);background:#eef7f1}
+  .warn{border-left-color:var(--amber);background:#fdf6e8}
+  .deploy-col{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card)}
+  .deploy-col h4{margin:0 0 4px}
+  .badge{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:6px}
+  .b-test{background:#eaf2fb;color:var(--blue)}
+  .b-prod{background:#eef7f1;color:var(--green)}
+  footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+  .kpi{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .kpi span{background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12.5px}
+</style>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="kicker">Đề xuất giải pháp · Nội bộ MISA</div>
+    <h1>Hệ thống Quản trị &amp; Giám sát Truyền thông</h1>
+    <p>Nền tảng tập trung giúp Phòng Quan hệ cộng đồng (VP TCT) tự động giám sát truyền thông về thương hiệu – đối thủ – ngành, đo lường hiệu quả, cảnh báo rủi ro và số hóa toàn bộ quan hệ đối ngoại (báo chí, hiệp hội, cơ quan nhà nước).</p>
+    <div class="meta">
+      <span class="chip">📋 Bản v1.0 – Sơ bộ để phê duyệt</span>
+      <span class="chip">👥 Lãnh đạo (xem báo cáo) · PR (vận hành)</span>
+      <span class="chip">🔐 Phân quyền &amp; bảo mật đầy đủ</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- 1. SCOPE -->
+  <section>
+    <h2><span class="n">1</span> Phạm vi hệ thống</h2>
+    <p class="lead">Hệ thống gồm <b>2 phân hệ nghiệp vụ</b>, đặt trên <b>nền tảng lõi dùng chung</b> (phân quyền, dashboard, báo cáo, quản trị). Dưới đây là toàn bộ module được số hóa.</p>
+
+    <div class="grid g2">
+      <div class="card">
+        <span class="tag t-mon">Phân hệ 1</span>
+        <h3>Giám sát truyền thông</h3>
+        <ul class="tight">
+          <li><b>Theo dõi tin tức &amp; sự kiện:</b> tự động thu thập tin bài theo bộ từ khóa (thương hiệu, sản phẩm, lãnh đạo, sự kiện).</li>
+          <li><b>Đo hiệu quả:</b> chấm điểm tin bài (sắc thái/độ phủ thông điệp), chỉ số hiển thị, người đọc, tương tác, click về website, chuyển đổi.</li>
+          <li><b>Giám sát lan tỏa:</b> phát hiện tin bài được các báo khác lấy lại (đo độ lan truyền).</li>
+          <li><b>Theo dõi đối thủ:</b> thu thập &amp; dán nhãn chiến dịch trả phí / tự nhiên của đối thủ cạnh tranh.</li>
+          <li><b>Cảnh báo khủng hoảng:</b> phát hiện tin tiêu cực / spike bất thường → cảnh báo real-time.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <span class="tag t-crm">Phân hệ 2</span>
+        <h3>Quản trị quan hệ đối tác truyền thông (CRM đối ngoại)</h3>
+        <ul class="tight">
+          <li><b>Quan hệ Báo chí:</b> số hóa cơ quan báo chí &amp; phóng viên; lịch sử trao đổi/làm việc; theo dõi bài viết từng PV; tự động chấm điểm quan hệ.</li>
+          <li><b>Quan hệ Hiệp hội:</b> danh sách hiệp hội, lãnh đạo, vai trò MISA, đầu mối; hội phí; tài trợ; giải thưởng.</li>
+          <li><b>Quan hệ Cơ quan nhà nước (CQNN):</b> đầu mối, lịch sử làm việc.</li>
+          <li><b>Danh bạ Phóng viên / VIP Profile:</b> hồ sơ 360° (có lớp dữ liệu nhạy cảm được bảo mật).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <span class="tag t-core">Nền tảng lõi (dùng chung)</span>
+      <div class="grid g3">
+        <div><b>🔐 Quản trị &amp; phân quyền</b><div class="small">Người dùng, vai trò, phân quyền theo module &amp; theo trường dữ liệu nhạy cảm.</div></div>
+        <div><b>📊 Dashboard &amp; báo cáo</b><div class="small">Bảng điều khiển cho lãnh đạo, báo cáo định kỳ, xuất Excel/PDF.</div></div>
+        <div><b>🔔 Cảnh báo &amp; thông báo</b><div class="small">Cảnh báo khủng hoảng, nhắc lịch đối ngoại, gửi email/Telegram.</div></div>
+        <div><b>🗂️ Quản lý từ khóa &amp; nguồn</b><div class="small">Bộ từ khóa thương hiệu/đối thủ/ngành, danh mục nguồn báo.</div></div>
+        <div><b>📜 Nhật ký &amp; audit</b><div class="small">Log truy cập dữ liệu nhạy cảm, lịch sử thay đổi.</div></div>
+        <div><b>📥 Import/Export</b><div class="small">Nhập liệu hàng loạt từ Excel hiện có, đồng bộ danh bạ.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. RBAC -->
+  <section>
+    <h2><span class="n">2</span> Phân quyền quản trị (RBAC)</h2>
+    <p class="lead">Mô hình <b>Vai trò + Phân quyền theo trường dữ liệu</b>. Dữ liệu nhạy cảm (đời tư phóng viên, ngân sách đối ngoại, hội phí) bị che với người không đủ quyền và mọi truy cập đều được ghi log.</p>
+    <div class="scroll">
+      <table>
+        <tr>
+          <th>Vai trò</th>
+          <th>Giám sát TT</th>
+          <th>CRM đối ngoại</th>
+          <th>Dữ liệu nhạy cảm</th>
+          <th>Báo cáo</th>
+          <th>Quản trị hệ thống</th>
+        </tr>
+        <tr>
+          <td><b>Super Admin (IT)</b><div class="small">Cấu hình, vận hành kỹ thuật</div></td>
+          <td class="yes">Toàn quyền</td><td class="yes">Toàn quyền</td><td class="part">Theo cấu hình</td><td class="yes">Toàn quyền</td><td class="yes">Toàn quyền</td>
+        </tr>
+        <tr>
+          <td><b>Trưởng phòng PR</b><div class="small">Quản lý nghiệp vụ</div></td>
+          <td class="yes">Xem + duyệt</td><td class="yes">Toàn quyền</td><td class="yes">Đầy đủ</td><td class="yes">Toàn quyền</td><td class="part">Phân công nội bộ</td>
+        </tr>
+        <tr>
+          <td><b>Chuyên viên PR</b><div class="small">Vận hành hằng ngày</div></td>
+          <td class="yes">Nhập/sửa/chấm điểm</td><td class="yes">Nhập/sửa</td><td class="part">Theo phân công</td><td class="part">Theo mảng</td><td class="no">—</td>
+        </tr>
+        <tr>
+          <td><b>Ban Lãnh đạo</b><div class="small">Chỉ xem</div></td>
+          <td class="yes">Chỉ xem</td><td class="part">Tổng hợp</td><td class="no">Ẩn</td><td class="yes">Dashboard</td><td class="no">—</td>
+        </tr>
+        <tr>
+          <td><b>Cộng tác viên / View</b><div class="small">Hạn chế</div></td>
+          <td class="part">Chỉ xem theo mảng</td><td class="no">—</td><td class="no">Ẩn</td><td class="no">—</td><td class="no">—</td>
+        </tr>
+      </table>
+    </div>
+    <div class="note">🔒 <b>Bảo mật trường dữ liệu:</b> các trường như <i>thông tin đời tư phóng viên, ngân sách đối ngoại, chi phí hội phí</i> được đánh dấu “mật”. Chỉ vai trò được cấp quyền mới thấy giá trị; người khác thấy “●●● (đã ẩn)”. Mọi lần mở dữ liệu mật đều ghi audit log.</div>
+  </section>
+
+  <!-- 3. WORKFLOW -->
+  <section>
+    <h2><span class="n">3</span> Luồng nghiệp vụ chính</h2>
+
+    <h3 style="margin-bottom:8px">A. Luồng giám sát truyền thông (tự động)</h3>
+    <div class="flow">
+      <div class="step"><div class="ic">🔑</div><b>Bộ từ khóa</b><span>Thương hiệu, đối thủ, ngành, sự kiện</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="ic">🕷️</div><b>Thu thập</b><span>Crawler + RSS + Google News + social API</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="ic">🧠</div><b>Phân tích AI</b><span>Sắc thái, chủ đề, độ phủ thông điệp, chấm điểm</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="ic">📊</div><b>Chỉ số &amp; lan tỏa</b><span>Hiển thị, đọc, click, tin báo lấy lại</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="ic">🔔</div><b>Cảnh báo + Báo cáo</b><span>Khủng hoảng, dashboard lãnh đạo</span></div>
+    </div>
+
+    <h3 style="margin:22px 0 8px">B. Luồng CRM đối ngoại (con người + tự động chấm điểm)</h3>
+    <div class="flow">
+      <div class="step"><div class="ic">🗃️</div><b>Hồ sơ đối tác</b><span>Báo chí / hiệp hội / CQNN / PV</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="ic">🤝</div><b>Ghi nhận tương tác</b><span>Trao đổi, làm việc, tài trợ, hội phí</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="ic">🔗</div><b>Liên kết tin bài</b><span>Bài của PV ↔ hồ sơ PV</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="ic">⭐</div><b>Chấm điểm quan hệ</b><span>Tần suất, sắc thái bài viết, mức hỗ trợ</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="ic">📅</div><b>Nhắc &amp; gợi ý</b><span>Lịch chăm sóc, đề xuất hành động</span></div>
+    </div>
+  </section>
+
+  <!-- 4. ARCHITECTURE -->
+  <section>
+    <h2><span class="n">4</span> Kiến trúc &amp; công nghệ đề xuất</h2>
+    <p class="lead">Kiến trúc <b>container hóa (Docker)</b> để cùng một bản triển khai chạy được cả trên cloud (test) và server nội bộ MISA (production). Chọn stack Node/React phù hợp năng lực sẵn có.</p>
+
+    <div class="layer"><div class="lt">Giao diện (Frontend)</div>
+      <span class="pill">Next.js / React</span><span class="pill">Bảng ảo hóa (TanStack / AG Grid) – tải >1.000 tin không treo</span><span class="pill">Biểu đồ dashboard</span>
+    </div>
+    <div class="layer"><div class="lt">Backend &amp; API</div>
+      <span class="pill">NestJS (Node.js, TypeScript)</span><span class="pill">REST/GraphQL</span><span class="pill">RBAC + field-level security</span><span class="pill">Audit log</span>
+    </div>
+    <div class="layer"><div class="lt">Xử lý nền (Workers)</div>
+      <span class="pill">Hàng đợi BullMQ + Redis</span><span class="pill">Crawler tin tức (lịch định kỳ)</span><span class="pill">Phát hiện trùng/lấy lại</span><span class="pill">Tính chỉ số</span>
+    </div>
+    <div class="layer"><div class="lt">Trí tuệ nhân tạo</div>
+      <span class="pill">Gemini API – phân loại sắc thái, độ phủ thông điệp, tóm tắt, chấm điểm</span><span class="pill">Embeddings – phát hiện tin trùng/lan tỏa</span>
+    </div>
+    <div class="layer"><div class="lt">Dữ liệu</div>
+      <span class="pill">PostgreSQL (nghiệp vụ)</span><span class="pill">Redis (cache/queue)</span><span class="pill">Lưu trữ file/ảnh bài báo</span><span class="pill">Mã hóa trường nhạy cảm</span>
+    </div>
+    <div class="layer"><div class="lt">Nguồn dữ liệu thu thập</div>
+      <span class="pill">RSS các báo lớn VN</span><span class="pill">Google News</span><span class="pill">Social listening API (tùy chọn)</span><span class="pill">GA4 (click/chuyển đổi web sở hữu)</span>
+    </div>
+  </section>
+
+  <!-- 5. ROADMAP -->
+  <section>
+    <h2><span class="n">5</span> Lộ trình thực hiện</h2>
+    <p class="lead">Triển khai theo <b>từng giai đoạn dùng được ngay (MVP-first)</b>. Ưu tiên phần chắc chắn (CRM + nền tảng) trước, phần giám sát tự động (R&amp;D crawler/AI) làm song song và mở rộng dần. Thời lượng tham chiếu cho 1–2 lập trình viên.</p>
+    <div class="road">
+      <div class="phase"><div class="when"><div class="dot"></div><div class="ph">GĐ 0</div><div class="dur">~1–2 tuần</div></div>
+        <div class="body"><h4>Khảo sát &amp; chốt yêu cầu chi tiết</h4><div class="small">Phỏng vấn PR, gom file Excel/danh bạ hiện có, chốt danh mục trường dữ liệu, bộ từ khóa, danh sách đối thủ &amp; nguồn báo. Thiết kế DB &amp; wireframe.</div></div></div>
+
+      <div class="phase"><div class="when"><div class="dot"></div><div class="ph">GĐ 1</div><div class="dur">~3–4 tuần</div></div>
+        <div class="body"><h4>Nền tảng lõi + Phân hệ 2 (CRM)</h4><div class="small">Đăng nhập SSO/tài khoản, RBAC + bảo mật trường, quản lý Báo chí / Hiệp hội / CQNN / Danh bạ PV, lịch sử tương tác, import từ Excel. <b>→ Có sản phẩm dùng được đầu tiên.</b></div></div></div>
+
+      <div class="phase"><div class="when"><div class="dot"></div><div class="ph">GĐ 2</div><div class="dur">~4–5 tuần</div></div>
+        <div class="body"><h4>Phân hệ 1 – Thu thập &amp; phân tích tin bài</h4><div class="small">Crawler theo từ khóa, lưu tin bài, bảng tải >1.000 dòng, phân tích AI (sắc thái/độ phủ thông điệp), chấm điểm tin, phát hiện tin được lấy lại.</div></div></div>
+
+      <div class="phase"><div class="when"><div class="dot"></div><div class="ph">GĐ 3</div><div class="dur">~3 tuần</div></div>
+        <div class="body"><h4>Chỉ số hiệu quả, đối thủ &amp; cảnh báo</h4><div class="small">Theo dõi đối thủ (dán nhãn trả phí/tự nhiên), tích hợp GA4 (click/chuyển đổi), tự chấm điểm quan hệ PV, cảnh báo khủng hoảng real-time.</div></div></div>
+
+      <div class="phase"><div class="when"><div class="dot"></div><div class="ph">GĐ 4</div><div class="dur">~2–3 tuần</div></div>
+        <div class="body"><h4>Dashboard lãnh đạo, báo cáo &amp; hoàn thiện</h4><div class="small">Dashboard tổng hợp, báo cáo định kỳ xuất Excel/PDF, tinh chỉnh hiệu năng, audit, tài liệu &amp; đào tạo người dùng.</div></div></div>
+
+      <div class="phase"><div class="when"><div class="dot"></div><div class="ph">GĐ 5</div><div class="dur">liên tục</div></div>
+        <div class="body"><h4>UAT thật → Chuyển về server MISA → Vận hành</h4><div class="small">Chạy UAT trên môi trường thật, nghiệm thu, đưa về hạ tầng nội bộ MISA, bàn giao &amp; bảo trì.</div></div></div>
+    </div>
+    <div class="note ok">⏱️ <b>Tổng thể:</b> bản dùng được đầu tiên (CRM) sau ~5–6 tuần; hệ thống tương đối đầy đủ sau ~4–5 tháng. Có thể rút ngắn nếu tăng nhân sự hoặc thu hẹp phạm vi GĐ đầu.</div>
+  </section>
+
+  <!-- 6. CONSTRUCTION -->
+  <section>
+    <h2><span class="n">6</span> Phương án thi công</h2>
+    <div class="grid g3">
+      <div class="card"><h3>① MVP-first, theo sprint</h3><div class="small">Mỗi giai đoạn ra một bản chạy được, PR dùng &amp; góp ý sớm, tránh làm sai hướng. Giãn cách review 1–2 tuần.</div></div>
+      <div class="card"><h3>② Tách lõi &amp; nghiệp vụ</h3><div class="small">Nền tảng RBAC/dashboard dùng chung; 2 phân hệ là module độc lập, dễ mở rộng thêm (vd: mạng xã hội, KOL) về sau.</div></div>
+      <div class="card"><h3>③ Container hóa từ đầu</h3><div class="small">Docker Compose: 1 lệnh chạy ở mọi nơi → chuyển từ cloud test về server MISA không phải viết lại.</div></div>
+    </div>
+    <div class="note warn">⚠️ <b>Điểm cần lưu ý kỹ thuật:</b> một số chỉ số (lượt hiển thị/người đọc của báo bên ngoài) <b>không có API công khai</b> — sẽ kết hợp <i>ước lượng theo nguồn + nhập tay + tích hợp GA4 cho web sở hữu</i>. Cần làm rõ kỳ vọng với PR ngay từ GĐ 0. Crawler tin tức VN cần xử lý chống chặn &amp; tuân thủ điều khoản nguồn.</div>
+  </section>
+
+  <!-- 7. DEPLOY -->
+  <section>
+    <h2><span class="n">7</span> Phương án triển khai (deploy)</h2>
+    <p class="lead">Chiến lược 2 giai đoạn: <b>test trên môi trường thật</b> để nghiệm thu nhanh, rồi <b>chuyển về server nội bộ MISA</b> cho production (đáp ứng yêu cầu bảo mật dữ liệu).</p>
+    <div class="grid g2">
+      <div class="deploy-col">
+        <span class="badge b-test">GIAI ĐOẠN TEST / UAT</span>
+        <h4 style="margin-top:10px">Cloud (Google Cloud Run / Railway)</h4>
+        <ul class="tight">
+          <li>Có URL thật để PR &amp; lãnh đạo dùng thử mọi nơi.</li>
+          <li>Triển khai nhanh, tự động từ Git, chi phí thấp.</li>
+          <li>Dùng dữ liệu mẫu / ẩn danh, chưa đưa dữ liệu mật thật lên.</li>
+        </ul>
+      </div>
+      <div class="deploy-col">
+        <span class="badge b-prod">GIAI ĐOẠN PRODUCTION</span>
+        <h4 style="margin-top:10px">Server nội bộ MISA (on-premise) ⭐ ưu tiên</h4>
+        <ul class="tight">
+          <li>Cùng bộ Docker → cài lên máy chủ MISA, dữ liệu nằm trong nội bộ.</li>
+          <li>Tích hợp tài khoản nội bộ (SSO/AD), sao lưu định kỳ.</li>
+          <li>Đáp ứng yêu cầu bảo mật dữ liệu đời tư &amp; ngân sách.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note">🔁 Nhờ container hóa, việc chuyển từ bản test (cloud) về server MISA chỉ là đổi cấu hình &amp; kết nối CSDL — không phải làm lại sản phẩm.</div>
+  </section>
+
+  <!-- 8. NEXT -->
+  <section>
+    <h2><span class="n">8</span> Đề xuất bước tiếp theo</h2>
+    <div class="card">
+      <ol class="tight" style="padding-left:18px">
+        <li><b>Chốt phạm vi GĐ 1</b> (CRM + nền tảng phân quyền) — phần giá trị cao, ít rủi ro nhất để khởi động.</li>
+        <li><b>Thu thập tài sản hiện có:</b> file Excel danh bạ báo chí/hiệp hội, bộ từ khóa, danh sách đối thủ &amp; nguồn báo cần theo dõi.</li>
+        <li><b>Quyết định nguồn dữ liệu giám sát:</b> tự crawl hay tích hợp dịch vụ social listening (ảnh hưởng chi phí &amp; độ phủ).</li>
+        <li>Tôi dựng <b>prototype Phân hệ 2 + đăng nhập + phân quyền</b> để các bên hình dung, rồi mở rộng theo lộ trình.</li>
+      </ol>
+      <div class="kpi">
+        <span>✔ Sản phẩm dùng được đầu tiên: ~5–6 tuần</span>
+        <span>✔ Phân quyền &amp; bảo mật trường: ngay từ GĐ 1</span>
+        <span>✔ Deploy: test cloud → production tại MISA</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Tài liệu đề xuất sơ bộ phục vụ thảo luận &amp; phê duyệt nội bộ — Hệ thống Quản trị &amp; Giám sát Truyền thông, Phòng Quan hệ cộng đồng (VP TCT) MISA. Các con số thời lượng mang tính tham chiếu, sẽ được chốt lại sau giai đoạn khảo sát chi tiết.
+  </footer>
+</div>

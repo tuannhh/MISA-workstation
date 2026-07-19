@@ -1,0 +1,40 @@
+{
+  "name": "pr-media-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hệ thống Quản trị & Giám sát Truyền thông - PR MISA (Prototype: CRM đối ngoại + RBAC)",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "npm run build:ui",
+    "build:ui": "vite build --config frontend/vite.config.mjs",
+    "dev:ui": "vite --config frontend/vite.config.mjs",
+    "prestart": "npm run build:ui",
+    "start": "node server/index.js",
+    "start:local": "npm run build:ui && DB_CLIENT=sqlite node server/index.js",
+    "dev": "node --watch server/index.js",
+    "seed": "node server/db.js --reseed",
+    "test:security": "DB_CLIENT=sqlite node --test server/security.test.js"
+  },
+  "dependencies": {
+    "@tabler/icons-vue": "^3.35.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.14.4",
+    "nodemailer": "^9.0.3",
+    "vue": "^3.5.21",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.1.7"
+  }
+}

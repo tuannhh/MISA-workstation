@@ -1,0 +1,65 @@
+<script setup>
+import { computed } from 'vue';
+import {
+  IconBell,
+  IconAddressBook,
+  IconBuilding,
+  IconBuildingCommunity,
+  IconBuildingEstate,
+  IconBuildingFactory2,
+  IconCalendarClock,
+  IconCalendarEvent,
+  IconChartBar,
+  IconDotsCircleHorizontal,
+  IconGridDots,
+  IconHelpCircle,
+  IconLayoutDashboard,
+  IconLogout,
+  IconMessages,
+  IconNews,
+  IconRadar,
+  IconSettings,
+  IconShieldCog,
+  IconSpeakerphone,
+  IconTrophy,
+  IconUsers,
+  IconX,
+} from '@tabler/icons-vue';
+
+const props = defineProps({
+  name: { type: String, required: true },
+  size: { type: [Number, String], default: 20 },
+  title: { type: String, default: '' },
+});
+
+const icons = {
+  'address-book': IconAddressBook,
+  bell: IconBell,
+  building: IconBuilding,
+  'building-community': IconBuildingCommunity,
+  'building-estate': IconBuildingEstate,
+  'building-factory': IconBuildingFactory2,
+  'calendar-clock': IconCalendarClock,
+  'calendar-event': IconCalendarEvent,
+  'chart-bar': IconChartBar,
+  'dots-circle-horizontal': IconDotsCircleHorizontal,
+  'grid-dots': IconGridDots,
+  'help-circle': IconHelpCircle,
+  'layout-dashboard': IconLayoutDashboard,
+  logout: IconLogout,
+  messages: IconMessages,
+  news: IconNews,
+  radar: IconRadar,
+  settings: IconSettings,
+  'shield-cog': IconShieldCog,
+  speakerphone: IconSpeakerphone,
+  trophy: IconTrophy,
+  users: IconUsers,
+  x: IconX,
+};
+const component = computed(() => icons[props.name] || IconHelpCircle);
+</script>
+
+<template>
+  <component :is="component" :size="Number(size)" :stroke-width="1.5" :aria-label="title || undefined" :aria-hidden="title ? undefined : true" />
+</template>
