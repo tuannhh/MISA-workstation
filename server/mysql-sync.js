@@ -33,7 +33,9 @@ function translate(sql) {
     out = out
       .replace(/(`?\w+`?)\s+TEXT\s+NOT\s+NULL\s+DEFAULT\s*\(UTC_TIMESTAMP\(\)\)/gi, '$1 DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP')
       .replace(/(`?\w+`?)\s+TEXT\s+PRIMARY\s+KEY/gi, '$1 VARCHAR(191) PRIMARY KEY')
-      .replace(/(`?\w+`?)\s+TEXT\s+UNIQUE/gi, '$1 VARCHAR(191) UNIQUE')
+      // 768 = tối đa an toàn cho khóa UNIQUE utf8mb4 (row format DYNAMIC, 3072 byte / 4 byte-per-char);
+      // đủ cho URL dài (vd cột `link` dedup theo link bài báo, có thể > 191 ký tự).
+      .replace(/(`?\w+`?)\s+TEXT\s+UNIQUE/gi, '$1 VARCHAR(768) UNIQUE')
       .replace(/(`?\w+`?)\s+TEXT(\s+(?:NOT\s+NULL\s+)?DEFAULT\s+['"][^'"]*['"])/gi, '$1 VARCHAR(191)$2')
       .replace(/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/gi, 'BIGINT AUTO_INCREMENT PRIMARY KEY')
       .replace(/\bINTEGER\b/gi, 'BIGINT');
