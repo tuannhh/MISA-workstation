@@ -94,8 +94,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .login-card .sub { margin: 4px 0 24px; color: var(--mds-text-secondary, #6b707a); }
 .login-card form { display: grid; gap: 8px; }
 .login-card label, .field > label { font-weight: 500; }
-.login-card input, .field input, .field select, .field textarea, .toolbar input, .toolbar select, .filter-sel, .rng-custom input {
+.login-card input, .field input, .field select, .field textarea, .toolbar input, .toolbar select, .filter-sel, select, .rng-custom input {
   width: 100%;
+  height: var(--mds-input-height);
   min-height: var(--mds-input-height);
   border: 1px solid var(--mds-border, #ced1d6) !important;
   border-radius: 8px !important;
@@ -104,8 +105,65 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: #fff;
   box-shadow: none !important;
 }
-.field textarea { min-height: 88px; padding-block: 8px; resize: vertical; }
-.login-card input:hover, .field input:hover, .field select:hover, .field textarea:hover { border-color: var(--mds-brand-600, #245fdf) !important; }
+.field textarea { height: auto; min-height: 88px; padding-block: 8px; resize: vertical; }
+.login-card input:hover, .field input:hover, .field select:hover, .field textarea:hover, .filter-sel:hover, select:hover { border-color: var(--mds-brand-600, #245fdf) !important; }
+
+/* Select — trigger chuẩn MDS: bỏ mũi tên mặc định trình duyệt, thay chevron-down đúng màu --mds-icon-neutral */
+.field select, .toolbar select, .filter-sel, select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B707A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+}
+.field select:disabled, .toolbar select:disabled, .filter-sel:disabled, select:disabled {
+  cursor: not-allowed;
+  color: var(--mds-text-disabled, #9da2ac);
+  background-color: var(--mds-bg-disabled, #f2f2f4);
+}
+
+/* Checkbox/radio thuần — khớp spec MDS 16px bo 4px, tô brand khi check (không đổi markup/JS hiện có) */
+input[type='checkbox'], input[type='radio'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  display: inline-grid;
+  place-content: center;
+  border: 1px solid var(--mds-border, #ced1d6) !important;
+  border-radius: 4px !important;
+  background: #fff;
+  vertical-align: middle;
+}
+input[type='radio'] { border-radius: 9999px !important; }
+input[type='checkbox']:hover, input[type='radio']:hover { border-color: var(--mds-brand-600, #245fdf) !important; }
+input[type='checkbox']:checked, input[type='radio']:checked {
+  border-color: var(--mds-brand-600, #245fdf) !important;
+  background-color: var(--mds-brand-600, #245fdf);
+}
+input[type='checkbox']:checked::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background-color: #fff;
+  clip-path: polygon(9.5% 45%, 39% 71%, 91% 15%, 100% 24%, 40% 89%, 0 55%);
+}
+input[type='radio']:checked::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: #fff;
+}
+input[type='checkbox']:disabled, input[type='radio']:disabled {
+  cursor: not-allowed;
+  border-color: var(--mds-stroke-neutral-light, #e9eaeb) !important;
+  background-color: var(--mds-bg-disabled, #f2f2f4);
+}
 .login-submit { width: 100%; margin-top: 8px; }
 .login-err { min-height: 18px; color: var(--mds-danger, #f04438); }
 .quick { display: grid; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--mds-stroke-neutral-light, #e9eaeb); }
