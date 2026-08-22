@@ -22,8 +22,8 @@ CRM đối ngoại/truyền thông cho phòng PR MISA. Stack: Node 24 + Express 
 
 ## Biên bản debate đầy đủ (ngoài repo, trên Desktop người dùng)
 
-`PR-WORKSTATION-DEBATE-BRIEF.md` (Codex) → `...-CLAUDE-REBUTTAL.md` → `...-CODEX-ROUND-2.md` → `...-CLAUDE-ROUND-3.md` → `...-CODEX-ROUND-4-FINAL-CONVERGENCE.md` → `...-CLAUDE-ROUND-5-CLOSE.md`.
+`PR-WORKSTATION-DEBATE-BRIEF.md` (Codex) → `...-CLAUDE-REBUTTAL.md` → `...-CODEX-ROUND-2.md` → `...-CLAUDE-ROUND-3.md` → `...-CODEX-ROUND-4-FINAL-CONVERGENCE.md` → `...-CLAUDE-ROUND-5-CLOSE.md` → `...-PLAN-ROADMAP.md` (bản roadmap đưa Codex review) → `...-CODEX-ROADMAP-REVIEW.md` (conditional-consensus 8,2/10, 6 amendment).
 
 ## Trạng thái
 
-Debate kỹ thuật **đã đóng, hai bên đồng thuận**. Chưa sửa production code. Chờ owner duyệt 8 quyết định (02-decisions.md §B) và chọn điểm khởi động (Gate 0 / vá lỗ tiền trước).
+Debate kỹ thuật đã đóng. Roadmap đã qua review độc lập của Codex và áp dụng đủ 6 amendment (xem đầu `04-ROADMAP.md`) → **Codex: APPROVE FOR IMPLEMENTATION**. Cách phối hợp: Claude triển khai từng gate/slice, Codex audit độc lập evidence/exit-condition trước khi qua gate tiếp. **Đang thực thi Gate 0.** Owner vẫn cần duyệt 8 quyết định (02-decisions.md §B) — O3/O8 nên xin sớm vì lead-time tổ chức dài, không chặn Gate 0/G1A/G1B.
