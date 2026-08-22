@@ -45,7 +45,7 @@ Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,actio
 |---|---|---|---|
 | Tiêu đề/link tin tức công khai | `monitor.js` sentiment/highlight/campaign-eval | Public | Public — gửi được |
 | Nội dung web do `groundedSearch` trả về | `monitor.js:186-232` (grounding) | Public (nhưng KHÔNG tin cậy nội dung — có thể prompt injection) | Public, nhưng cần tách rõ instruction/data trong prompt |
-| Audio ghi âm tương tác | Voice-intake (chưa audit chi tiết route trong vòng này — cần G0.3 xác nhận) | **Confidential/Restricted** (giọng nói người thật, có thể chứa thông tin nhạy cảm) | Cần consent — chặn bởi O8 |
+| Audio ghi âm tương tác | `POST /ai/interaction-voice` (`server/ai.js:48-82`) — file audio gửi base64 thẳng tới Gemini (`:59-62`), đã xác nhận qua G0.3 | **Confidential/Restricted** (giọng nói người thật, có thể chứa thông tin nhạy cảm) | Cần consent — chặn bởi O8 |
 | File Excel/CSV sự kiện | AI event-extract | Nội dung nghiệp vụ, đã có redaction email/phone (điểm mạnh giữ) | Internal, redact trước khi gửi |
 | Ảnh/PDF giải thưởng | award-extract | Có thể chứa thông tin tài chính/giải thưởng | Internal/Confidential tùy nội dung |
 | Dữ liệu partner/person khi soạn prompt báo cáo | `evaluateCampaign` chỉ dùng title/content/source/sentiment đã lưu — KHÔNG thấy field cá nhân trực tiếp trong prompt hiện tại (`monitor.js:284`) | Đã hạn chế — giữ nguyên pattern | — |
@@ -57,5 +57,5 @@ Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,actio
 - **Tự động, không cần user ác ý:** `resolveLink(ch.uri)` (`monitor.js:167`) fetch URL do chính Gemini grounding trả về — nghĩa là nếu Gemini (hoặc nội dung nó grounding tới) trả một URL nội bộ/metadata, server tự fetch nó. Đây là đường tấn công gián tiếp qua AI output, không chỉ qua form nhập URL.
 
 ## F. Việc cần làm tiếp (không thuộc Gate 0, ghi để không rơi)
-- G0.3 (đang chạy) cần xác nhận chính xác route voice-intake để điền vào bảng D (hiện đánh dấu `UNVERIFIED` vị trí chính xác file:line).
-- Threat model này là bản v1 — cập nhật lại sau khi G0.3 xong và sau khi O8 có chính sách chính thức từ Security/Legal.
+- G0.3 đã xong (`07-route-inventory.md`) — mọi UNVERIFIED của bản v1 này đã đóng.
+- Threat model này là bản v2 (sau G0.3) — cập nhật lại sau khi O8 có chính sách chính thức từ Security/Legal.

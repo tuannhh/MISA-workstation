@@ -16,6 +16,8 @@ Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật c
 - Read leak còn ở **projection/tổng hợp** (không phải cột vật lý): `bookings.total_amount` (`:606-609`), `events.total_cost` (`:1073-1080`), report aggregates (`:647-724`), award `partBudget/mediaCost/totalCost` (`:759-775`).
 - `stripDisallowed` **xóa âm thầm** → client nhận 200 mà dữ liệu không lưu (bug integrity/UX, che tấn công).
 - **Fix hội tụ:** 1 `DATA_POLICY_REGISTRY` + 1 `PolicyEngine` ở tầng service, **fail-closed 403** (không silent-strip); SQL helper chỉ nhận dữ liệu đã authorize. Xem 03-data-classification.md.
+- **CẬP NHẬT sau inventory G0.3 (`07-route-inventory.md`):** blast radius rộng hơn 2 ví dụ ban đầu. Write-bypass xác nhận ở **10 nhóm route**: `POST/PUT /partners` (membership_fee), sponsorships, fees, gifts, `POST /budgets` (raw SQL, ngoài helper `buildInsert/buildUpdate`), `POST/PUT /awards` (cost), award_participations (budget), supplier_transactions (value), supplier_quotes (unit_price), event_costs (amount). Củng cố quyết định D1 — vá per-route chắc chắn sót, cần PolicyEngine 1 choke-point.
+- Read-bypass xác nhận nguồn gốc **duy nhất**: `GET /files/:id` (`routes.js:467-478`) — phục vụ nội dung mọi loại attachment, chỉ gate `kind==='id_doc'`.
 
 ### F2 — Session store = MemoryStore trên Cloud Run · **High / B / browser-production**
 - `server/index.js:19-24` không khai báo `store` → MemoryStore; cookie thiếu `secure`; không regenerate session sau login (session fixation) — `server/auth.js`.

@@ -10,7 +10,11 @@
 | [01-audit-findings.md](01-audit-findings.md) | Phát hiện audit đã hội tụ (Claude ↔ Codex, 5 vòng), severity theo 2 trục |
 | [02-decisions.md](02-decisions.md) | Quyết định kỹ thuật đã chốt + 8 quyết định owner còn mở |
 | [03-data-classification.md](03-data-classification.md) | Registry dữ liệu nhạy cảm/tiền (nguồn sự thật cho PolicyEngine) |
-| [04-ROADMAP.md](04-ROADMAP.md) | Kế hoạch Gate 0 → Wave 4, task chi tiết + exit gate |
+| [04-ROADMAP.md](04-ROADMAP.md) | Kế hoạch Gate 0 → Wave 4, task chi tiết + exit gate (v2, amendment Codex đã áp dụng) |
+| [05-error-contract.md](05-error-contract.md) | G0.5 — envelope lỗi target, giữ tương thích `error` field cũ |
+| [06-threat-model.md](06-threat-model.md) | G0.8 — threat model, data-flow, Gemini egress map |
+| [07-route-inventory.md](07-route-inventory.md) | G0.3 — inventory đầy đủ 142 route + 2 job + 13 UI view, `file:line` |
+| [08-permission-matrix.md](08-permission-matrix.md) | G0.4 — ma trận permission × surface × runtime theo module |
 
 ## Tổng quan sản phẩm (1 đoạn)
 
@@ -26,4 +30,6 @@ CRM đối ngoại/truyền thông cho phòng PR MISA. Stack: Node 24 + Express 
 
 ## Trạng thái
 
-Debate kỹ thuật đã đóng. Roadmap đã qua review độc lập của Codex và áp dụng đủ 6 amendment (xem đầu `04-ROADMAP.md`) → **Codex: APPROVE FOR IMPLEMENTATION**. Cách phối hợp: Claude triển khai từng gate/slice, Codex audit độc lập evidence/exit-condition trước khi qua gate tiếp. **Đang thực thi Gate 0.** Owner vẫn cần duyệt 8 quyết định (02-decisions.md §B) — O3/O8 nên xin sớm vì lead-time tổ chức dài, không chặn Gate 0/G1A/G1B.
+Debate kỹ thuật đã đóng. Roadmap đã qua review độc lập của Codex và áp dụng đủ 6 amendment (xem đầu `04-ROADMAP.md`) → **Codex: APPROVE FOR IMPLEMENTATION**. Cách phối hợp: Claude triển khai từng gate/slice, Codex audit độc lập evidence/exit-condition trước khi qua gate tiếp.
+
+**Gate 0: G0.2/G0.3/G0.4/G0.5/G0.7/G0.8 xong.** G0.3 (inventory 142 route) phát hiện F1 (money write-bypass) rộng hơn audit gốc — 10 nhóm route, không phải 2 (chi tiết `07-route-inventory.md` §Ghi chú). Còn chờ: G0.1 (owner duyệt 8 quyết định — O3/O8 nên xin sớm vì lead-time dài) và 3 UNVERIFIED nhỏ ở `08-permission-matrix.md`. Sau đó vào Gate 1 (test net G1A/G1B).
