@@ -1,7 +1,8 @@
 # 03 — Data Classification Registry (dự thảo cho PolicyEngine)
 
 > Nguồn phân loại **duy nhất** mà PolicyEngine đọc cho cả read-mask, write-guard và file-gate.
-> Cột tiền đã xác nhận trong `server/db.js` (grep 2026-08-22). Owner duyệt trước khi code (quyết định O1).
+> Cột tiền đã xác nhận trong `server/db.js` (grep 2026-08-22).
+> **Status: BLOCKED — O1 = PROPOSED, chưa APPROVED (xem `02-decisions.md` §B).** File này là draft chờ duyệt, KHÔNG phải registry đã chốt. G0.6 không thể PASS tới khi O1 có Approver/Date/Evidence.
 > Lưu ý naming: table (số nhiều) ≠ policy-entity (số ít) — vd `organizations`↔`organization`, `supplier_quotes`↔`supplier_quote`. PolicyEngine dùng **policy-entity**; map table↔entity phải nằm TRONG registry (không để rải rác).
 
 ## A. Nhóm `org_fee` — trường tiền persisted (mặc định đề nghị)

@@ -60,7 +60,7 @@ Wave 4 release đầy đủ ── chặn bởi: security gate + SLO gate (W2.3 
 | G0.2 | Hoàn thiện memory-bank; **commit vào git** (đã untracked tới thời điểm review — Codex xác nhận `git status --short` → `?? memory-bank/`); ghi rõ drift 2-role-code vs 5-role-banner (F11) | Claude / **git commit** / all / — |
 | G0.3 | Inventory 100%: mọi route (`routes.js`,`ai.js`), job (`scheduler`,`monitor`), import/export, AI flow, UI route (`app.js` VIEWS) | code / doc / all / fail nếu còn ô trống |
 | G0.4 | Ma trận mở rộng: `route × surface(desktop/native) × role/permission × UI-state(loading/empty/error/403/masked) × feature-runtime(permission/lifecycle/deep-link/gesture/accessibility-OS)`. Mỗi ô runtime ghi `PASS/FAIL/N-A/UNVERIFIED` | doc / all / — |
-| G0.5 | Chốt error contract: `401/403/404/409/422` + envelope `{code,message,details,requestId}` | doc / browser-prod / — |
+| G0.5 | Chốt error contract: `401/403/404/409/422` + envelope `{code,message,details,requestId}` canonical, `error` = deprecated compat alias (= `message`) — xem `05-error-contract.md` cho spec đầy đủ, đã khớp 1:1 với dòng này | doc / browser-prod / — |
 | G0.6 | Chốt registry classification (`03-data-classification.md`) sau khi owner duyệt O1 | doc / browser-prod / — |
 | G0.7 | **F10 — ĐÃ ĐÓNG:** kiểm lịch sử Git `DEPLOY.md` — giá trị `GEMINI_API_KEY: AQ.Ab8RN6…` là placeholder bị cắt (dấu `…`), không phải key sống. Không cần rotate | Claude / git-log / all / — resolved |
 | G0.8 | Threat model + data-flow + Gemini egress map (input cho O8) | doc / all / — |

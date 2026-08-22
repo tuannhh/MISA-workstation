@@ -9,16 +9,21 @@
 - Error middleware toàn cục (`server/index.js:37-41`) bắt lỗi multer + lỗi chưa xử lý → luôn trả **400** kèm `err.message` **kể cả khi lỗi là 500 thật** (ví dụ lỗi DB) — message có thể lộ chi tiết implementation.
 - **Frontend đọc `data.error` ở khắp nơi** (`public/app.js:14,23,768,2077,2114,...`) — đây là **hợp đồng ngầm hiện tại**, không được phá khi đổi envelope.
 
-## Target envelope (thêm, không thay — giữ tương thích)
+## Target envelope — CHỐT (canonical, đã sửa mâu thuẫn roadmap↔spec do Codex phát hiện)
+
+> Trước đây roadmap (`04-ROADMAP.md` G0.5) ghi `{code,message,details,requestId}` còn spec này ghi `{error,code,requestId,details}` (không có `message`) — hai bên KHÔNG khớp. Chốt lại: **`message` là canonical field**, `error` là **compatibility alias** (luôn cùng giá trị với `message`, không phải field độc lập) giữ cho tới khi frontend legacy migrate xong (Wave 3). Roadmap đã cập nhật khớp câu này.
 
 ```json
 {
-  "error": "Không đủ quyền xem giấy tờ tùy thân",   // GIỮ NGUYÊN — frontend cũ vẫn đọc được
-  "code": "FORBIDDEN_SENSITIVE_GROUP",               // MỚI — machine-readable, ổn định qua thời gian
-  "requestId": "req_c8f1...",                        // MỚI — trace log
-  "details": { "group": "iddoc" }                    // MỚI — optional, không bắt buộc
+  "code": "FORBIDDEN_SENSITIVE_GROUP",               // canonical — machine-readable, ổn định qua thời gian
+  "message": "Không đủ quyền xem giấy tờ tùy thân", // canonical — message người dùng đọc
+  "error": "Không đủ quyền xem giấy tùy thân",       // DEPRECATED COMPATIBILITY ALIAS — LUÔN = message, xóa sau khi frontend hết đọc field này (Wave 3)
+  "requestId": "req_c8f1...",                        // trace log
+  "details": { "group": "iddoc" }                    // optional, không bắt buộc
 }
 ```
+
+**Quy tắc bắt buộc khi implement (Wave 1):** middleware/service tạo lỗi chỉ set `code`+`message`; một lớp serialize DUY NHẤT ở tầng response tự thêm `error = message` (không để mỗi handler tự gán `error` riêng — tránh lệch giá trị giữa 2 field). Khi frontend (Wave 3 strangler) chuyển hết sang đọc `code`/`message`, xóa field `error` trong 1 commit riêng, có changelog.
 
 ## Mã lỗi chuẩn theo HTTP status
 
