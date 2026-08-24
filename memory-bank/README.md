@@ -15,6 +15,14 @@
 | [06-threat-model.md](06-threat-model.md) | G0.8 — threat model, data-flow, Gemini egress map |
 | [07-route-catalog.md](07-route-catalog.md) | G0.3 — catalog **145/145 route literal 1:1** + 2 job + 13 UI view, `file:line` (thay bản wildcard-compress cũ, đã bị Codex bắt lỗi) |
 | [08-permission-matrix.md](08-permission-matrix.md) | G0.4 — ma trận permission × surface × runtime, join theo route ID (đã sửa lỗi MDS P0 admin=N/A + gộp 5 trục runtime) |
+| [09-db-schema.md](09-db-schema.md) | G0.2 — lược đồ đầy đủ 34 bảng (cột/kiểu/PK/FK/index) + quy tắc dịch SQLite→MySQL + migration idempotent |
+| [10-api-contract.md](10-api-contract.md) | G0.2 — ý nghĩa field request/response theo nhóm resource (không lặp route catalog) |
+| [11-business-flows.md](11-business-flows.md) | G0.2 — luồng nghiệp vụ cốt lõi: đối tác, giải thưởng, sự kiện, nhà cung cấp, nhắc việc, giám sát truyền thông |
+| [12-frontend-architecture.md](12-frontend-architecture.md) | G0.2 — kiến trúc Vue shell + legacy `app.js`, pattern list/detail/form, trạng thái MDS thật |
+| [13-deployment-runbook.md](13-deployment-runbook.md) | G0.2 — chạy dev local, deploy Cloud Run + Cloud SQL, biến môi trường đầy đủ |
+| [14-known-traps.md](14-known-traps.md) | G0.2 — bẫy kỹ thuật đã biết (khác audit findings) |
+| [15-changelog.md](15-changelog.md) | G0.2 — lịch sử phát triển theo mốc kiến trúc/tính năng, kèm lý do |
+| [16-coding-rules.md](16-coding-rules.md) | G0.2 — quy tắc code đang thấy trong thực tế, ghi rõ mâu thuẫn/ngoại lệ |
 
 ## Tổng quan sản phẩm (1 đoạn)
 
@@ -44,8 +52,10 @@ Chỉ **G0.7 (F10 secret) PASS** ở round 1.
 - G0.5: sửa lỗi chính tả khiến `error !== message`, thêm exit-criterion equality test.
 - F4: chốt 1 semantics duy nhất — **SUBMISSION O3/O8 là exit G0.1** (RESOLUTION chỉ chặn W1.AI-POLICY/Wave 3 voice/Wave 4), xoá câu tự mâu thuẫn cũ.
 
-**Còn treo, chưa đụng tới (tự khai báo, không né):**
-- **G0.2** (memory-bank mandate coverage) — Codex xác nhận vẫn thiếu DB schema, API contract, business flow, frontend/MDS architecture, deployment/runbook, known-traps, changelog, coding-rules. Đang xử lý ở agent nền song song, chưa xong tại thời điểm ghi dòng này.
-- G0.1/G0.6 vẫn chờ owner quyết thật (6 quyết định + 2 submission) — không phải việc Claude tự làm được.
+**G0.2 — đã bổ sung (round 3, cùng đợt):** thêm 8 file `09-16` phủ đủ mục 2 của `BackEnd.SKILL/20-memory-bank-mandate.md` — [09-db-schema.md](09-db-schema.md) (34 bảng, phát hiện thêm: `CREATE INDEX` bị `translate()` bỏ hoàn toàn trên MySQL — 21 index chỉ tồn tại ở SQLite, production không có), [10-api-contract.md](10-api-contract.md), [11-business-flows.md](11-business-flows.md), [12-frontend-architecture.md](12-frontend-architecture.md) (xác nhận trực tiếp: `app.js` có 0 class `mds-*`, MDS chỉ áp dụng ~5% diện tích UI — khung ngoài), [13-deployment-runbook.md](13-deployment-runbook.md) (2 điểm UNVERIFIED tự khai báo: volume bền cho uploads trên Cloud Run, quy trình migration Railway→Cloud SQL không có trong repo), [14-known-traps.md](14-known-traps.md), [15-changelog.md](15-changelog.md), [16-coding-rules.md](16-coding-rules.md). Đã tự kiểm chứng nhiều claim trọng yếu (CREATE INDEX bị bỏ, MASK định nghĩa độc lập 2 nơi, `notify_opt_in` tắt cả 2 kênh, mds-* = 0) trực tiếp qua source trước khi chấp nhận.
 
-**CHƯA mở Gate 1** — chờ hoàn tất G0.2 rồi mới gửi Codex re-audit round 3 (Claude triển khai, Codex audit độc lập từng gate, đúng mô hình đã thống nhất).
+**Còn treo, không phải việc Claude tự làm được:**
+- G0.1/G0.6 vẫn chờ owner quyết thật (6 quyết định O1/O2/O4/O5/O6/O7 + 2 submission O3/O8).
+- 2 điểm UNVERIFIED hạ tầng ở `13-deployment-runbook.md` §B.3/B.4 (volume uploads bền? quy trình migration Railway thật là gì?) — cần owner xác nhận, không suy đoán.
+
+**CHƯA mở Gate 1** — round 3 (G0.4/G0.5/G0.8/F4 + toàn bộ G0.2) đã xong phần Claude làm được, sẵn sàng gửi Codex re-audit round 3 (Claude triển khai, Codex audit độc lập từng gate, đúng mô hình đã thống nhất).
