@@ -31,9 +31,11 @@ DB lưu ở `data/pr.db`. Reset dữ liệu mẫu: `DB_CLIENT=sqlite npm run see
 | `prestart` | tự chạy `build:ui` trước `start` (npm hook) | đảm bảo `npm start` luôn có bundle Vue mới nhất |
 | `test:security` | `DB_CLIENT=sqlite node --test server/security.test.js` | test bảo mật upload Excel/email (xem `server/security.test.js`) |
 
-## B. Triển khai production — Cloud Run + Cloud SQL (đường THẬT, không phải Railway)
+## B. Triển khai hiện tại — Cloud Run + Cloud SQL (CHỈ LÀ MÔI TRƯỜNG TEST, KHÔNG PHẢI PRODUCTION THẬT)
 
-> **`DEPLOY.md` ở gốc repo mô tả Railway + volume + SQLite — đây là quy trình CŨ, không còn phản ánh production hiện tại.** Theo `memory-bank/README.md` và bằng chứng trong `server/mysql-worker.js:9` (comment "Cloud Run + Cloud SQL: dùng unix socket"), production thật là **Cloud Run + Cloud SQL MySQL** tại `https://misa-workstation-784559735000.asia-southeast1.run.app`, dữ liệu đã migrate từ Railway sang. `DEPLOY.md` chưa được cập nhật theo hạ tầng mới — đây là 1 khoảng lệch tài liệu cần owner xử lý (không thuộc phạm vi file này sửa `DEPLOY.md`, chỉ ghi nhận).
+> **Sửa lại sau xác nhận trực tiếp của owner (2026-08-24) — bản trước ghi SAI khi gọi đây là "production".** Cả Railway (trước đây) lẫn Cloud Run + Cloud SQL (hiện tại) đều **chỉ là môi trường test/thử nghiệm trước khi DevOps MISA cấu hình môi trường production chính thức trên hạ tầng riêng của MISA** — hạ tầng production thật **CHƯA tồn tại** tại thời điểm ghi dòng này. `DEPLOY.md` mô tả Railway càng không áp dụng. Điều này ảnh hưởng cách đọc toàn bộ tài liệu: mọi chỗ trước đây ghi "production Cloud Run" trong `README.md`/file khác cần hiểu là "môi trường test hiện tại", KHÔNG phải cam kết target `browser-production` theo nghĩa `production-compatibility-gate` skill — target đó chỉ thật sự "đã kích hoạt" khi DevOps triển khai xong hạ tầng MISA chính thức.
+>
+> **UNVERIFIED còn treo (owner đã trả lời câu hạ tầng, chưa trả lời câu dữ liệu):** dữ liệu hiện đang nằm trong Cloud Run/Cloud SQL test này có phải dữ liệu thật (thông tin liên hệ báo chí/đối tác thật, nhân viên PR dùng hằng ngày) hay chỉ là dữ liệu demo — quyết định mức độ khẩn cấp bảo vệ dữ liệu ngay bây giờ. Chưa có câu trả lời, không suy đoán.
 
 ### B.1 Build & container
 `Dockerfile` (`node:24-alpine`): `npm ci` → copy source → `npm run build:ui` (build Vue vào `public/`) → `EXPOSE 3007` → `CMD ["node", "server/index.js"]`. App đọc `process.env.PORT` (Cloud Run tự cấp `PORT=8080` khi deploy, override giá trị default `3007` trong `server/index.js:15`).

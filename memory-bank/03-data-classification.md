@@ -4,6 +4,8 @@
 > Cột tiền đã xác nhận trong `server/db.js` (grep 2026-08-22).
 > **Status: BLOCKED — O1 = PROPOSED, chưa APPROVED (xem `02-decisions.md` §B).** File này là draft chờ duyệt, KHÔNG phải registry đã chốt. G0.6 không thể PASS tới khi O1 có Approver/Date/Evidence.
 > Lưu ý naming: table (số nhiều) ≠ policy-entity (số ít) — vd `organizations`↔`organization`, `supplier_quotes`↔`supplier_quote`. PolicyEngine dùng **policy-entity**; map table↔entity phải nằm TRONG registry (không để rải rác).
+>
+> **Cập nhật sau D13 (2026-08-24, xem `02-decisions.md` §D):** owner chốt mô hình lớn hơn nhiều — thay vì 6 nhóm mật CỐ ĐỊNH (`contact/private/social/finance/iddoc/org_fee`) và 1 quyền `org_fee` duy nhất, hệ thống sẽ có bảng cấu hình `field_visibility` mà **Admin tự bật/tắt public/private theo từng field**, không hard-code trong `rbac.js`. Registry ở file này (§A/§C) **không mất giá trị** — nó trở thành **danh sách GIÁ TRỊ KHỞI TẠO mặc định** để seed vào bảng `field_visibility` khi triển khai (mặc định `private` cho mọi field liệt kê ở đây), Admin chỉnh lại sau qua màn hình quản lý mới. `org_fee` không còn là 1 quyền riêng — chỉ là 1 nhóm field trong cơ chế chung.
 
 ## A. Nhóm `org_fee` — trường tiền persisted (mặc định đề nghị)
 
