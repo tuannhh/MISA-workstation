@@ -1,5 +1,7 @@
 # 08 — Ma trận Permission × Surface × Runtime (G0.4)
 
+> **⚠ Đây là ma trận HIỆN TRẠNG (hệ 2 vai trò `super_admin`/`pr_staff` đang chạy trong code).** Sau owner-decision D13 (2026-08-24, `02-decisions.md` §D), hệ vai trò sẽ được **viết lại thành 4 cấp** (Viewer/Nhân viên thực thi/Admin/Super Admin) + visibility field-level cấu hình được + ownership (created_by/owner_id). **Ma trận ĐÍCH theo 4 vai trò sẽ được dựng khi W1.RBAC land** (`04-ROADMAP.md` Wave 1) — KHÔNG dựng lại lúc này, vì file này đúng vai trò documenting **current-state** để làm baseline characterization (Gate 1). Đọc file này để hiểu hệ ĐANG chạy; đọc `02-decisions.md` §D để hiểu hệ SẼ có.
+>
 > **Sửa lần 2 sau Codex re-audit round 2 (F1, vẫn FAIL/P0 MDS ở lần 1).** Lỗi lần 1 đã sửa đúng 1 phần (bỏ `N/A` cho admin, tách 5 trục runtime) nhưng vẫn **chưa machine-checkable**: dùng range liên tục che lấp route thật (`R038-R061` cho reminders "nuốt" luôn interactions/bookings/reports; `R096` gán chồng cả events và reminders), **lọt 9 route** (`R001,R046-R049,R097,R143-R145`) khỏi Section A, và `partners` vẫn ghi `N/A` cho OS-permission dù có 2 route upload file thật (`R016`,`R017`).
 >
 > **Nguyên tắc sửa lần này:** dùng **một phân hoạch (partition) DUY NHẤT** — theo `requirePerm(module,action)` thật đọc trực tiếp từ cột `auth` của `07-route-catalog.md` (không nhập tay lại, không suy đoán theo UI view) — cho **cả 3 section A/B/C**. Đã tự-verify tổng = 145, không trùng, không lọt (lệnh chạy lại được ở cuối §A).
