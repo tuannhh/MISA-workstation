@@ -54,14 +54,12 @@ Chỉ **G0.7 (F10 secret) PASS** ở round 1.
 
 **G0.2 — đã bổ sung (round 3, cùng đợt):** thêm 8 file `09-16` phủ đủ mục 2 của `BackEnd.SKILL/20-memory-bank-mandate.md` — [09-db-schema.md](09-db-schema.md) (34 bảng, phát hiện thêm: `CREATE INDEX` bị `translate()` bỏ hoàn toàn trên MySQL — 21 index chỉ tồn tại ở SQLite, production không có), [10-api-contract.md](10-api-contract.md), [11-business-flows.md](11-business-flows.md), [12-frontend-architecture.md](12-frontend-architecture.md) (xác nhận trực tiếp: `app.js` có 0 class `mds-*`, MDS chỉ áp dụng ~5% diện tích UI — khung ngoài), [13-deployment-runbook.md](13-deployment-runbook.md) (2 điểm UNVERIFIED tự khai báo: volume bền cho uploads trên Cloud Run, quy trình migration Railway→Cloud SQL không có trong repo), [14-known-traps.md](14-known-traps.md), [15-changelog.md](15-changelog.md), [16-coding-rules.md](16-coding-rules.md). Đã tự kiểm chứng nhiều claim trọng yếu (CREATE INDEX bị bỏ, MASK định nghĩa độc lập 2 nơi, `notify_opt_in` tắt cả 2 kênh, mds-* = 0) trực tiếp qua source trước khi chấp nhận.
 
-**Owner-decisions 2026-08-24 (sau round 3): phần lớn quyết định đã chốt trực tiếp.**
-- **D13 RBAC v2** (4 vai trò + visibility field-level + created_by/owner_id) + **D14 Voice vision** — xem `02-decisions.md` §D/§E. Đây là thay đổi kiến trúc lớn nhất từ đầu dự án.
-- O6 APPROVED ($200); O2/O7 SUPERSEDED bởi D13; O4/O5 DEFERRED-TO-DEVOPS; O1 mặc định `private`.
+**Owner-decisions 2026-08-24 (sau round 3): TẤT CẢ đã chốt.**
+- **D13 RBAC v2** (4 vai trò + visibility field-level + created_by/owner_id) + **D14 Voice** (giữ human-in-the-loop — người dùng xác nhận trước khi AI ghi) + **D15 AMIS Mobile = cầu nối WebView** (không build native riêng — làm nhẹ toàn bộ khối native) — xem `02-decisions.md` §D/§E/§F. Thay đổi kiến trúc lớn nhất từ đầu dự án.
+- O6 APPROVED ($200); O2/O7 SUPERSEDED; **O3/O4/O5 DEFERRED-TO-DEVOPS**; **O8 PROVISIONAL** (cho phép gửi Gemini tạm — dữ liệu test); O1 mặc định `private`.
 - Dữ liệu Cloud Run = **test, bỏ được** → R1 migration chuỗi bỏ, target `browser-production` lùi thời điểm.
-- `04-ROADMAP.md` viết lại **v3** theo các quyết định này (Wave 1 quanh RBAC v2, R1 bỏ, thêm track voice).
+- `04-ROADMAP.md` viết lại **v3** theo tất cả các quyết định này.
 
-**Còn treo, là việc của owner (Claude không có kênh):**
-- **O3** (gửi team AMIS Mobile — contract auth native) + **O8** (gửi Security/Legal — chính sách data/voice/AI-tự-ghi). Chưa `SUBMITTED` → exit G0.1 chờ 2 cái này.
-- **3 câu hỏi thiết kế D14.2** (voice: giữ human-in-the-loop hay AI tự ghi? xử lý match sai entity? quy tắc đổi relationship_score?) — cần owner/BA trả lời trước khi thiết kế W3.VOICE.
+**Không còn owner-action nào treo.** O3 giờ là việc DevOps; O8 đã có quyết định tạm; D14.2 đã chốt. Còn phụ thuộc bên ngoài duy nhất: **bridge contract AMIS Mobile** (DevOps + team AMIS làm rõ khi tới W2.5/W4.1) — KHÔNG chặn đóng G0.
 
-**Gate 0 gần đóng** — phần Claude làm được đã xong hết (G0.2-G0.8), owner-decisions phần lớn đã có. Chờ: (a) Codex re-audit round 3 xác nhận sửa G0.4/G0.5/G0.8/G0.2 đạt; (b) owner gửi O3/O8. **CHƯA mở Gate 1** cho tới khi Codex re-audit round 3 xong.
+**Điều kiện đóng Gate 0 duy nhất còn lại: Codex re-audit round 3** xác nhận sửa G0.4/G0.5/G0.8 + G0.2 coverage đạt. **CHƯA mở Gate 1** cho tới khi đó.
