@@ -12,8 +12,11 @@ Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,actio
    │
    ├─► MySQL/SQLite (server/db.js, mysql-sync.js) ── dữ liệu nghiệp vụ + tiền + PII
    ├─► Filesystem uploads (UPLOAD_DIR) ── ảnh/PDF/giấy tờ, phục vụ qua /files/:id
-   ├─► Outbound network — Gemini (KHÔNG qua 1 cổng chung — 6 callsite rời rạc trong server/ai.js
-   │     + 3 callsite trong server/monitor.js, xem §D đầy đủ)
+   ├─► Outbound network — Gemini (KHÔNG qua 1 cổng chung — 12 luồng logic / 13 lời gọi trực tiếp,
+   │     6 trong server/ai.js + 6 trong server/monitor.js, xem §D đầy đủ)
+   ├─► Outbound network — HTTP/RSS/user-URL (KHÔNG qua Gemini) — `resolveLink()` fetch URL do
+   │     Gemini grounding trả về (monitor.js:170), `detectFeed()` fetch nguồn RSS user khai báo
+   │     (monitor.js:40), và fetch URL user dán ở award-extract (ai.js:174) — boundary SSRF, xem §E
    └─► Outbound network — SMTP (server/mailer.js, gọi từ server/scheduler.js:51-61)
          ── gửi tên sự kiện/subject_name/note (nội dung nghiệp vụ) + email người nhận (PII)
             tới SMTP provider ngoài (Brevo theo DEPLOY.md) — boundary egress riêng,
@@ -41,23 +44,32 @@ Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,actio
 | Denial of service | `Atomics.wait` khóa event loop toàn instance dưới tải | F7 |
 | Elevation of privilege | SSRF tới metadata server → lấy token service account → leo thang credential cloud | F3 |
 
-## D. Gemini egress map — ĐẦY ĐỦ 9 callsite (6 trong `ai.js` + 3 trong `monitor.js`), sửa sau Codex G0-audit tìm ra 3 route thiếu + 1 mô tả sai
+## D. Gemini egress map — 12 LUỒNG LOGICAL (13 lời gọi trực tiếp), sửa sau Codex re-audit round 2 (F2)
 
-> Trước đây bảng này chỉ có 5 dòng (thiếu card-text/card-image/award-advice, và mô tả `evaluateCampaign` sai). Đã sửa đủ callsite theo evidence Codex: `rg -n 'gen(Text|JSON|Image)|groundedSearch' server/ai.js server/monitor.js`.
+> **Lần sửa thứ 2.** Round 1 sửa từ 5 dòng lên "9 callsite" — vẫn SAI. Codex đối chiếu máy: `rg -n 'genJSON|genText|genImage|groundedSearch' server/ai.js server/monitor.js` → **`ai.js` có 6 lời gọi, `monitor.js` có 7 lời gọi trực tiếp** (dòng `:141,:191,:192,:218,:259,:276,:304`) = **13 lời gọi trực tiếp, không phải 9**. Gộp `:191`+`:192` (cùng 1 hàm `groundIngest`, gọi lần 2 chỉ khi lần 1 rỗng chunk — cùng 1 luồng logic, 2 lời gọi) → **12 luồng logic** (`ai.js`=6, `monitor.js`=6). Bảng dưới dùng ID ổn định `AI-E001..AI-E012` theo khuyến nghị Codex, để test deny-by-default sau này trỏ đúng 1:1.
 
-| # | Route/hàm | file:line | Dữ liệu gửi Gemini thực tế | Tier đề xuất |
-|---|---|---|---|---|
-| 1 | `POST /ai/interaction-voice` | `ai.js:48-82`, gọi Gemini `:63` | **voice/audio** — file ghi âm base64 gửi thẳng | **Confidential/Restricted** — cần consent, chặn bởi O8 |
-| 2 | `POST /ai/card-text` | `ai.js:87-100`, gọi Gemini `:95` | text — `title`, `date_type`, `subject_name` (tên người/tổ chức đối tác), `idea` (user nhập) | Internal (tên đối tác không phải bí mật nhưng là dữ liệu quan hệ nội bộ) |
-| 3 | `POST /ai/card-image` | `ai.js:110-129`, gọi Gemini `:124` | image — logo tĩnh + `text` (nội dung lời chúc, thường do card-text sinh ra) | Internal, không PII mới ngoài #2 |
-| 4 | `POST /ai/award-extract` | `ai.js:160-187`, gọi Gemini `:180` | text/image/excel — file upload (**arbitrary MIME, xem cảnh báo uploader dưới**) hoặc text dán hoặc fetch URL rồi stripHtml | Internal/Confidential tùy nội dung file thật (chưa kiểm soát được vì fileFilter thiếu) |
-| 5 | `POST /ai/award-advice` | `ai.js:200-211`, gọi Gemini `:207` | text — `a.name`,`a.organizer`,`a.criteria`,`a.prize_structure`,`a.products` (client tự nhập/form data); **KHÔNG gửi `a.cost`** | Internal |
-| 6 | `POST /ai/event-extract` | `ai.js:244-273`, gọi Gemini `:265` | excel/text — có `redactTextForAi()` (điểm mạnh, giữ nguyên) + rate-limit 8/phút/user | Internal, đã redact |
-| 7 | `monitor.js` sentiment/highlight | `monitor.js` `analyzeBatch`/`aiMisaHighlights` | Tiêu đề/link tin tức công khai | Public |
-| 8 | `monitor.js` grounding | `monitor.js:186-232` | Nội dung web do `groundedSearch` trả về | Public, nhưng KHÔNG tin cậy nội dung — cần tách instruction/data trong prompt (prompt injection risk) |
-| 9 | `monitor.js evaluateCampaign` | `monitor.js:280-305` | **SỬA LẠI (mô tả cũ SAI):** prompt gửi **`cp.name`, `cp.message`, `cp.content`, `cp.audience`, `keywords`** (field chiến dịch nội bộ, có thể chứa thông điệp truyền thông chưa công bố) **CỘNG** số liệu tổng hợp từ `mentions` (title/content/source/sentiment) đã lưu — KHÔNG chỉ dùng dữ liệu đã lưu như mô tả cũ | **Internal** (thông điệp chiến dịch chưa công bố — không phải Public như 3 dòng monitor khác) |
+| ID | Route/hàm (trigger) | file:line | Gemini method | Dữ liệu gửi thực tế (input, không phải output nhận về) | Tier đề xuất |
+|---|---|---|---|---|---|
+| AI-E001 | `POST /ai/interaction-voice` (HTTP) | `ai.js:48-82`, gọi `:63` | `genJSON` | **voice/audio** — file ghi âm base64 gửi thẳng | **Confidential/Restricted** — cần consent, chặn bởi O8 |
+| AI-E002 | `POST /ai/card-text` (HTTP) | `ai.js:87-100`, gọi `:95` | `genText` | text — `title`, `date_type`, `subject_name` (tên người/tổ chức đối tác), `idea` (user nhập) | Internal |
+| AI-E003 | `POST /ai/card-image` (HTTP) | `ai.js:110-129`, gọi `:124` | `genImage` | image — logo tĩnh + `text` (nội dung lời chúc, thường do AI-E002 sinh ra) | Internal |
+| AI-E004 | `POST /ai/award-extract` (HTTP) | `ai.js:160-187`, gọi `:180` | `genJSON` | text/image/excel — file upload (base64 buffer, KHÔNG phải "file path" — xem cảnh báo uploader dưới) hoặc text dán hoặc fetch URL (`:174`) rồi `stripHtml` | Internal/Confidential tùy nội dung file thật (fileFilter thiếu — chưa kiểm soát được) |
+| AI-E005 | `POST /ai/award-advice` (HTTP) | `ai.js:200-211`, gọi `:207` | `genJSON` | text — `a.name`,`a.organizer`,`a.criteria`,`a.prize_structure`,`a.products` (client tự nhập); **KHÔNG gửi `a.cost`** | Internal |
+| AI-E006 | `POST /ai/event-extract` (HTTP) | `ai.js:244-273`, gọi `:265` | `genJSON` | excel/text — có `redactTextForAi()` (điểm mạnh, giữ nguyên) + rate-limit 8/phút/user | Internal, đã redact |
+| AI-E007 | `analyzeBatch` — nền cho `analyzePending` (background job, không phải HTTP route) | `monitor.js:131-141`, gọi `:141` | `genJSON` | **`title` + 400 ký tự đầu `content`** của tối đa 8 mention/lần (KHÔNG chỉ "tiêu đề/link" như mô tả round 1) | Public (nội dung tin tức đã crawl công khai) |
+| AI-E008 | `groundIngest` (background job, chạy trong `/monitor/scan`) | `monitor.js:186-201`, gọi `:191` + fallback `:192` (2 lời gọi, cùng 1 luồng) | `groundedSearch` | `q.include`/`q.name` — **bộ từ khóa theo dõi đã cấu hình nội bộ** | Internal (chiến lược từ khóa giám sát, không phải Public) |
+| AI-E009 | `siteGroundIngest` (background job) | `monitor.js:213-221`, gọi `:218` | `groundedSearch` | host, `source.name`, và `q.include`/`q.name` — cùng loại dữ liệu nội bộ như AI-E008, thêm tên nguồn cụ thể | Internal |
+| AI-E010 | `aiMisaHighlights` — "AI (1)" (background job/on-demand `/monitor/highlights`) | `monitor.js:255-260`, gọi `:259` | `groundedSearch` | Chỉ prompt tìm tin công khai về MISA — **không có dữ liệu nội bộ nào trong prompt** | Public — đây là luồng DUY NHẤT trong nhóm monitor thực sự Public |
+| AI-E011 | `aiCompetitorAnalysis` — "AI (2)" (`/monitor/competitor-brief`) | `monitor.js:263-277`, gọi `:276` | `groundedSearch` | **Danh sách tên đối thủ từ DB (`competitors`) + toàn bộ từ khóa scan đang enable (`scan_queries.include`)** — chiến lược giám sát đối thủ, KHÔNG phải Public | **Internal** — sửa lại (round 1 gộp nhầm vào "Public grounding") |
+| AI-E012 | `evaluateCampaign` (`/monitor/campaigns/:id/evaluate`) | `monitor.js:281-305`, gọi `:304` | `groundedSearch` | `cp.name`,`cp.message`,`cp.content`,`cp.audience`,`kws` (field chiến dịch nội bộ, có thể chứa thông điệp truyền thông chưa công bố) **cộng** số liệu tổng hợp từ `mentions` đã lưu (title/content/source/sentiment) | **Internal** (thông điệp chiến dịch chưa công bố) |
 
-**Cảnh báo uploader (#4):** `uploadAudio` (dùng chung tên gây nhầm cho cả audio VÀ file award-extract) là `multer.memoryStorage()`, **KHÔNG có `fileFilter`**, giới hạn 25MB (`server/uploads.js:39-43`) — khác hẳn mô tả trước đây "ảnh/PDF". Route `/ai/award-extract` thực tế **chấp nhận MIME tùy ý tới 25MB, lưu RAM, gửi thẳng Gemini** nếu là file path. Đây là input cho Wave 1 upload-security, không chờ owner quyết.
+**Đối chiếu số lượng (tự-verify, chạy lại được):**
+```text
+Direct call expressions: ai.js=6, monitor.js=7 (141,191,192,218,259,276,304), total=13
+Logical flows: ai.js=6, monitor.js=6 (191+192 gộp 1 luồng groundIngest), total=12
+```
+
+**Cảnh báo uploader (AI-E004, sửa lại mô tả sai round 1):** `uploadAudio` (dùng chung tên gây nhầm cho cả audio VÀ file award-extract) là `multer.memoryStorage()`, **KHÔNG có `fileFilter`**, giới hạn 25MB (`server/uploads.js:39-43`). Route `/ai/award-extract` thực tế nhận file qua `req.file.buffer.toString('base64')` rồi gửi `inlineData` cho Gemini (`server/ai.js:168-170`) — **là buffer base64 trong RAM, KHÔNG phải "gửi thẳng Gemini nếu là file path"** như bản trước ghi sai. MIME tùy ý tới 25MB. Input cho Wave 1 upload-security, không chờ owner quyết.
 
 **Nguyên tắc chưa được enforce (đưa vào W1.AI-POLICY):** hiện KHÔNG có chốt chặn kỹ thuật nào ngăn một route mới trong tương lai vô tình nhét field `Restricted` (CCCD, số tài khoản NH) vào prompt Gemini. Đây là lý do O8 + W1.AI-POLICY cần deny-by-default ở tầng gateway, không dựa vào "lập trình viên nhớ không gửi".
 
@@ -65,7 +77,7 @@ Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,actio
 
 - `server/scheduler.js:51-61` gọi `mailer.send()` với `subject` chứa `r.title` (tên sự kiện/dịp) và `text` chứa `r.title`, `r.subject_name`, `r.note` — nội dung nghiệp vụ, có thể nhạy cảm tùy `note`.
 - `to: u.email` — gửi PII (email nội bộ user) ra ngoài qua SMTP provider thứ 3 (Brevo, theo `DEPLOY.md`).
-- `server/mailer.js:23-33` transporter cấu hình `disableFileAccess/disableUrlAccess` + `tls.rejectUnauthorized:true` (điểm mạnh, giữ). `validateRecipient()` (`:37-42`) chặn header injection cơ bản.
+- `server/mailer.js:24-33` transporter cấu hình `disableFileAccess/disableUrlAccess` + `tls.rejectUnauthorized:true` (điểm mạnh, giữ — sửa lại line số cho đúng, round 1 ghi lệch `:23-33`). `validateRecipient()` (`:39-44`, sửa lại từ `:37-42`) chặn header injection cơ bản.
 - **Chưa có trong policy hiện tại:** retention của email đã gửi (phía Brevo), consent của người nhận nếu `note` chứa thông tin cá nhân bên thứ 3. Đưa vào O8 cùng với Gemini (cùng loại quyết định "dữ liệu nào được ra ngoài").
 
 ## E. SSRF surface (input cho W1.8)
@@ -73,5 +85,5 @@ Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,actio
 - **Tự động, không cần user ác ý:** `resolveLink(ch.uri)` (`monitor.js:167`) fetch URL do chính Gemini grounding trả về — nghĩa là nếu Gemini (hoặc nội dung nó grounding tới) trả một URL nội bộ/metadata, server tự fetch nó. Đây là đường tấn công gián tiếp qua AI output, không chỉ qua form nhập URL.
 
 ## F. Việc cần làm tiếp (không thuộc Gate 0, ghi để không rơi)
-- Threat model này là bản v3 (sau Codex G0-audit sửa 3 route thiếu + evaluateCampaign sai + SMTP boundary bỏ sót + uploader mô tả sai) — cập nhật lại sau khi O8 có chính sách chính thức từ Security/Legal.
+- Threat model này là bản **v4** (sau Codex re-audit round 2, F2: sửa số lượng egress đúng — 12 luồng logic/13 lời gọi trực tiếp, không phải 9; sửa tier `aiCompetitorAnalysis` từ Public → Internal; sửa payload `analyzeBatch`/`groundIngest`/`siteGroundIngest` cho đúng field thật; sửa mô tả uploader từ "file path" → "base64 buffer"; sửa line số `mailer.js`; thêm boundary outbound HTTP/RSS vào data-flow) — cập nhật lại sau khi O8 có chính sách chính thức từ Security/Legal.
 - Còn thiếu (đưa vào Wave sau, không phải Gate 0): retention/consent cho SMTP recipient, threat model cho background job failure mode (nếu scheduler/monitor crash giữa batch).

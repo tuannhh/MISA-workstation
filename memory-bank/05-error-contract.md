@@ -12,12 +12,14 @@
 ## Target envelope — CHỐT (canonical, đã sửa mâu thuẫn roadmap↔spec do Codex phát hiện)
 
 > Trước đây roadmap (`04-ROADMAP.md` G0.5) ghi `{code,message,details,requestId}` còn spec này ghi `{error,code,requestId,details}` (không có `message`) — hai bên KHÔNG khớp. Chốt lại: **`message` là canonical field**, `error` là **compatibility alias** (luôn cùng giá trị với `message`, không phải field độc lập) giữ cho tới khi frontend legacy migrate xong (Wave 3). Roadmap đã cập nhật khớp câu này.
+>
+> **Sửa sau Codex re-audit round 2 (F3):** example bên dưới trước đây có `error !== message` do lỗi chính tả (thiếu chữ "tờ" trong `error`) — tự mâu thuẫn với chính câu "luôn cùng giá trị" ở trên. Đã sửa để 2 chuỗi giống hệt ký tự.
 
 ```json
 {
   "code": "FORBIDDEN_SENSITIVE_GROUP",               // canonical — machine-readable, ổn định qua thời gian
   "message": "Không đủ quyền xem giấy tờ tùy thân", // canonical — message người dùng đọc
-  "error": "Không đủ quyền xem giấy tùy thân",       // DEPRECATED COMPATIBILITY ALIAS — LUÔN = message, xóa sau khi frontend hết đọc field này (Wave 3)
+  "error": "Không đủ quyền xem giấy tờ tùy thân",    // DEPRECATED COMPATIBILITY ALIAS — LUÔN = message ký tự-cho-ký tự, xóa sau khi frontend hết đọc field này (Wave 3)
   "requestId": "req_c8f1...",                        // trace log
   "details": { "group": "iddoc" }                    // optional, không bắt buộc
 }
@@ -43,4 +45,4 @@
 4. **Không đổi field `error`** trong giai đoạn chuyển tiếp — chỉ thêm field mới, tới khi frontend (Wave 3 strangler) chuyển sang đọc `code`.
 
 ## Exit criterion
-Mọi response lỗi mới (từ W1 trở đi) có `code` ổn định + `requestId`; response lỗi cũ (chưa migrate) vẫn có `error` hoạt động bình thường; không response nào lộ stack trace hoặc raw DB error message ra client.
+Mọi response lỗi mới (từ W1 trở đi) có `code` ổn định + `requestId`; response lỗi cũ (chưa migrate) vẫn có `error` hoạt động bình thường; không response nào lộ stack trace hoặc raw DB error message ra client; **test schema bắt buộc `body.error === body.message` ký tự-cho-ký tự** cho mọi response lỗi trong giai đoạn compatibility (thêm vào G1A regression suite).

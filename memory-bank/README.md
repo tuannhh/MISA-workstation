@@ -18,7 +18,7 @@
 
 ## Tổng quan sản phẩm (1 đoạn)
 
-CRM đối ngoại/truyền thông cho phòng PR MISA. Stack: Node 24 + Express + **MySQL là mặc định** (`DB_CLIENT` default `'mysql'`, `server/db.js:15`; SQLite chỉ khi set `DB_CLIENT=sqlite` — **sửa lại: bản trước ghi ngược**). Frontend hybrid: Vue 3 + Vite shell (`frontend/`) **nạp động** legacy SPA `public/app.js` (~2.889 dòng, render bằng HTML-string). **145 endpoint HTTP** (135 `server/routes.js` + 7 `server/ai.js` + 3 auth `server/index.js` — **sửa lại: bản trước ghi ~142, thiếu 3 route auth**). AI: Gemini REST (`server/gemini.js`) — text `gemini-3.5-flash`, ảnh `gemini-3.1-flash-image`, **9 callsite egress** (6 trong `ai.js` + 3 trong `monitor.js`, xem `06-threat-model.md` §D) + SMTP egress riêng (`scheduler.js`→`mailer.js`). Production: Cloud Run + Cloud SQL MySQL (https://misa-workstation-784559735000.asia-southeast1.run.app), **đã có dữ liệu thật migrate từ Railway**.
+CRM đối ngoại/truyền thông cho phòng PR MISA. Stack: Node 24 + Express + **MySQL là mặc định** (`DB_CLIENT` default `'mysql'`, `server/db.js:15`; SQLite chỉ khi set `DB_CLIENT=sqlite` — **sửa lại: bản trước ghi ngược**). Frontend hybrid: Vue 3 + Vite shell (`frontend/`) **nạp động** legacy SPA `public/app.js` (~2.889 dòng, render bằng HTML-string). **145 endpoint HTTP** (135 `server/routes.js` + 7 `server/ai.js` + 3 auth `server/index.js` — **sửa lại: bản trước ghi ~142, thiếu 3 route auth**). AI: Gemini REST (`server/gemini.js`) — text `gemini-3.5-flash`, ảnh `gemini-3.1-flash-image`, **12 luồng egress logic / 13 lời gọi trực tiếp** (6 trong `ai.js` + 6 luồng logic từ 7 lời gọi trong `monitor.js`, xem `06-threat-model.md` §D — sửa lại lần 2, round 1 ghi sai "9 callsite") + SMTP egress riêng (`scheduler.js`→`mailer.js`). Production: Cloud Run + Cloud SQL MySQL (https://misa-workstation-784559735000.asia-southeast1.run.app), **đã có dữ liệu thật migrate từ Railway**.
 
 ## Bối cảnh audit (quan trọng để hiểu severity)
 
@@ -34,10 +34,18 @@ Debate kỹ thuật (5 vòng) đã đóng. Roadmap đã qua review độc lập 
 
 **Gate 0 — ROUND 1: Codex audit (2026-08-22) → FAIL/HOLD GATE 1.** Claude tuyên bố G0.2-G0.5/G0.7/G0.8 "xong" là **sai** — Codex tìm được: (1) ma trận G0.4 vi phạm MDS P0 (gộp theo module, loại admin khỏi native — đã sửa); (2) inventory G0.3 có 47/135 route không xuất hiện literal do bị nén bằng wildcard (đang sửa, agent xây catalog 145-dòng machine-checkable); (3) error contract mâu thuẫn giữa roadmap và spec (đã sửa — `message` canonical, `error` compat alias); (4) Gemini egress map thiếu 3 callsite + mô tả sai `evaluateCampaign` + bỏ sót SMTP (đã sửa); (5) fact drift: DB_CLIENT default sai, đếm endpoint sai ~142 vs 145 thật (đã sửa ở trên); (6) O1-O8 không có Status/Approver/Evidence, O3/O8 chưa hề gửi dù ghi "nên gửi sớm" (đã sửa — decision register giờ trung thực: `NOT SUBMITTED`).
 
-Chỉ **G0.7 (F10 secret) PASS** ở round 1. **Remediation round 2 đã xong phần doc-only** (route catalog 145/145 literal tại `07-route-catalog.md`, ma trận G0.4 rebuild theo route ID với native `FAIL/MISSING` tường minh cho mọi module kể cả admin, 5 trục runtime tách cột riêng). Còn treo trước khi có thể tuyên bố "G0 xong" — **quyết định đó thuộc Codex re-audit, không phải tự Claude tuyên bố**:
-- G0.1 (owner quyết O1-O8) và G0.6 (owner duyệt data-classification) vẫn `PROPOSED`/`BLOCKED` — chưa có phê duyệt/evidence thật từ owner.
-- O3/O8 vẫn `NOT SUBMITTED` — gửi Team AMIS Mobile và Security/Legal là hành động của owner, Claude không có channel để tự gửi.
-- G0.2 (memory-bank mandate coverage theo `BackEnd.SKILL/20-memory-bank-mandate.md`) — còn thiếu tài liệu riêng cho: schema DB đầy đủ, API request/response contract, business flow, frontend architecture/MDS strategy, deployment/runbook, known-traps, changelog, coding-rules. **Chưa đụng tới trong round này** — flag rõ để không rơi.
-- Chưa chạy self-check đối chiếu §7 checklist của audit Codex (route-source-set == catalog-set == 145 ✅ đã tự-verify; nhưng broken-link check, `git diff --check`, và toàn bộ checklist còn lại chưa chạy lại sau khi sửa).
+Chỉ **G0.7 (F10 secret) PASS** ở round 1.
 
-**CHƯA mở Gate 1** — đang chờ Codex re-audit round 2 theo đúng mô hình đã thống nhất (Claude triển khai, Codex audit độc lập từng gate).
+**Gate 0 — ROUND 2: Codex re-audit (2026-08-22) → vẫn HOLD GATE 1.** Ghi nhận G0.3 **PASS** (145/145 route khớp tuyệt đối, đối chiếu máy). Nhưng G0.4 vẫn **FAIL/P0 MDS** (bản round 2 dùng range che lấp route — lọt 9 route, gán chồng R096) và G0.8 vẫn **FAIL** (thực tế 13 lời gọi Gemini trực tiếp / 12 luồng logic, không phải 9; `aiCompetitorAnalysis` bị phân loại sai thành Public). G0.5 **CONDITIONAL PASS** (example tự mâu thuẫn `error !== message` do lỗi chính tả). Phát hiện thêm F4: semantics gate O3/O8 tự mâu thuẫn giữa `02-decisions.md` và `04-ROADMAP.md`.
+
+**Remediation round 3 (doc-only) đã xử lý:**
+- G0.4: bỏ hẳn cách chia theo module tùy ý — dùng **1 phân hoạch duy nhất từ cột `auth` thật của `07-route-catalog.md`** cho cả 3 section (role/UI-state/native), tự-verify tổng = 145 bằng lệnh `awk` chạy lại được, không còn route lọt/chồng; `partners` không còn `N/A` cho file-picker (`R016`,`R017` tách riêng); `reports` 403 sửa từ `N/A` sai → `FAIL/MISSING`.
+- G0.8: egress map viết lại theo **12 luồng logic / 13 lời gọi trực tiếp** (ID `AI-E001..AI-E012`), sửa tier `aiCompetitorAnalysis` Public→Internal, sửa payload thật của `analyzeBatch`/`groundIngest`/`siteGroundIngest`, sửa mô tả uploader (base64 buffer, không phải "file path"), sửa line số `mailer.js`.
+- G0.5: sửa lỗi chính tả khiến `error !== message`, thêm exit-criterion equality test.
+- F4: chốt 1 semantics duy nhất — **SUBMISSION O3/O8 là exit G0.1** (RESOLUTION chỉ chặn W1.AI-POLICY/Wave 3 voice/Wave 4), xoá câu tự mâu thuẫn cũ.
+
+**Còn treo, chưa đụng tới (tự khai báo, không né):**
+- **G0.2** (memory-bank mandate coverage) — Codex xác nhận vẫn thiếu DB schema, API contract, business flow, frontend/MDS architecture, deployment/runbook, known-traps, changelog, coding-rules. Đang xử lý ở agent nền song song, chưa xong tại thời điểm ghi dòng này.
+- G0.1/G0.6 vẫn chờ owner quyết thật (6 quyết định + 2 submission) — không phải việc Claude tự làm được.
+
+**CHƯA mở Gate 1** — chờ hoàn tất G0.2 rồi mới gửi Codex re-audit round 3 (Claude triển khai, Codex audit độc lập từng gate, đúng mô hình đã thống nhất).

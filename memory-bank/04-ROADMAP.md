@@ -56,7 +56,7 @@ Wave 4 release đầy đủ ── chặn bởi: security gate + SLO gate (W2.3 
 
 | # | Task | Evidence Contract |
 |---|---|---|
-| G0.1 | Owner duyệt 8 quyết định (`02-decisions.md` §B); gửi O3 cho team AMIS, O8 cho Security/Legal **ngay** (lead-time dài) | Owner+platform / doc / all / — |
+| G0.1 | Owner duyệt/REJECT 6 quyết định O1/O2/O4/O5/O6/O7 (Approver+Date+Evidence); gửi O3 cho team AMIS, O8 cho Security/Legal **ngay** — **exit G0.1 = O3/O8 đạt tối thiểu `SUBMITTED`** (không cần `RESOLVED` — resolution chỉ chặn W1.AI-POLICY/Wave 3 voice/Wave 4, xem `02-decisions.md` §B semantics đã chốt sau Codex re-audit round 2) | Owner+platform / doc / all / — |
 | G0.2 | Hoàn thiện memory-bank; **commit vào git** (đã untracked tới thời điểm review — Codex xác nhận `git status --short` → `?? memory-bank/`); ghi rõ drift 2-role-code vs 5-role-banner (F11) | Claude / **git commit** / all / — |
 | G0.3 | Inventory 100%: mọi route (`routes.js`,`ai.js`), job (`scheduler`,`monitor`), import/export, AI flow, UI route (`app.js` VIEWS) | code / doc / all / fail nếu còn ô trống |
 | G0.4 | Ma trận mở rộng: `route × surface(desktop/native) × role/permission × UI-state(loading/empty/error/403/masked) × feature-runtime(permission/lifecycle/deep-link/gesture/accessibility-OS)`. Mỗi ô runtime ghi `PASS/FAIL/N-A/UNVERIFIED` | doc / all / — |

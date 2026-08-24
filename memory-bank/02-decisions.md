@@ -34,7 +34,9 @@
 
 **Semantics Status:** `PROPOSED` (khuyến nghị đã viết, chờ owner APPROVED/REJECTED/quyết định khác) → `APPROVED`/`REJECTED` (owner đã quyết, ghi ngày+cách xác nhận ở Evidence — vd "Slack thread", "email 2026-08-25", "họp 2026-08-26") → cho O3/O8: `PROPOSED` → `SUBMITTED` (đã gửi, có recipient/channel/date/tracking) → `RESOLVED` (bên nhận đã trả lời, nội dung contract/policy hết `UNVERIFIED`).
 
-> O3 và O8 không thuộc tầm quyết của owner một mình — cần team AMIS + Security/Legal, nhưng **hành động "gửi" thuộc về owner** vì AI không có kênh liên hệ nội bộ MISA. 6 cái còn lại (O1/O2/O4/O5/O6/O7) owner duyệt trực tiếp được. O3/O8 chặn Wave 4 và W1.AI-POLICY/Wave 3 slice voice, KHÔNG chặn Gate 0/Gate 1.
+> O3 và O8 không thuộc tầm quyết của owner một mình — cần team AMIS + Security/Legal, nhưng **hành động "gửi" thuộc về owner** vì AI không có kênh liên hệ nội bộ MISA. 6 cái còn lại (O1/O2/O4/O5/O6/O7) owner duyệt trực tiếp được.
+>
+> **Semantics gate đã chốt (sửa mâu thuẫn Codex re-audit round 2 tìm ra, F4):** trước đây câu này ghi "KHÔNG chặn Gate 0/Gate 1" trong khi `04-ROADMAP.md` G0.1 lại ghi "gửi O3/O8 ngay" là một phần exit của G0.1 — hai câu tự mâu thuẫn semantics gate. Chốt lại theo khuyến nghị Codex: **SUBMISSION (đã gửi, có recipient/channel/date) là điều kiện exit G0** — vì G0.1 yêu cầu "gửi ngay" đúng nghĩa phải làm trong Gate 0, không phải tùy chọn. **RESOLUTION (bên nhận đã trả lời, policy/contract hết UNVERIFIED) KHÔNG chặn Gate 1** — chỉ chặn `W1.AI-POLICY`, Wave 3 slice voice, và Wave 4 (native auth). Vậy: G0.1 chỉ đóng được khi O3/O8 đạt tối thiểu `SUBMITTED`; hiện tại cả hai đang `NOT SUBMITTED` → **G0.1 vẫn BLOCKED, Gate 1 vẫn HOLD** theo đúng roadmap literal.
 
 ## B.1 — Findings phụ N1-N3 (từ G0.3/G0.4, cần ID + owner riêng — theo yêu cầu Codex)
 

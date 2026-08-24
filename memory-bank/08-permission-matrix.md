@@ -1,75 +1,92 @@
 # 08 — Ma trận Permission × Surface × Runtime (G0.4)
 
-> **Sửa sau Codex G0-audit (G0-A1, MDS P0 violation).** Lỗi cũ: (1) ma trận gộp theo module thay vì join theo route ID → không machine-checkable; (2) dòng `admin` ghi `Feature-runtime: N/A (không cần native cho admin theo MDS gate)` — **SAI theo MDS P0**: MDS 2.0 yêu cầu tồn tại native composition cho **mọi role có quyền thật**, không có ngoại lệ; `super_admin` có `admin:view/create/edit/delete` thật (`server/rbac.js:28-39`, không phải quyền rỗng), nên module `admin` **phải** có dòng native — không được ghi N/A; (3) 5 trục feature-runtime bị gộp vào 1 ô `UNVERIFIED` — Codex yêu cầu tách riêng từng trục vì mỗi trục có tiêu chí PASS khác nhau (permission OS ≠ deep-link ≠ gesture).
+> **Sửa lần 2 sau Codex re-audit round 2 (F1, vẫn FAIL/P0 MDS ở lần 1).** Lỗi lần 1 đã sửa đúng 1 phần (bỏ `N/A` cho admin, tách 5 trục runtime) nhưng vẫn **chưa machine-checkable**: dùng range liên tục che lấp route thật (`R038-R061` cho reminders "nuốt" luôn interactions/bookings/reports; `R096` gán chồng cả events và reminders), **lọt 9 route** (`R001,R046-R049,R097,R143-R145`) khỏi Section A, và `partners` vẫn ghi `N/A` cho OS-permission dù có 2 route upload file thật (`R016`,`R017`).
 >
-> Route-ID join key: mọi route ở đây trỏ tới `07-route-catalog.md` (145 dòng, R001-R145) — không lặp lại chi tiết route, chỉ tham chiếu ID.
+> **Nguyên tắc sửa lần này:** dùng **một phân hoạch (partition) DUY NHẤT** — theo `requirePerm(module,action)` thật đọc trực tiếp từ cột `auth` của `07-route-catalog.md` (không nhập tay lại, không suy đoán theo UI view) — cho **cả 3 section A/B/C**. Đã tự-verify tổng = 145, không trùng, không lọt (lệnh chạy lại được ở cuối §A).
 
-## A. Role coverage theo module (nguồn: `server/rbac.js:12-55`)
+## A. Role coverage theo module — partition từ `07-route-catalog.md`, đã tự-verify tổng = 145
 
-| Module | super_admin | pr_staff | Route ID chính |
-|---|---|---|---|
-| partners | view/create/edit/delete | view/create/edit/delete (sensitive theo `sensitive_perms` per-user) | R002-R028 |
-| people | view/create/edit/delete | view/create/edit/delete | R029-R037 |
-| awards | view/create/edit/delete | view/create/edit/delete | R062-R071, R139, R140 |
-| events | view/create/edit/delete | view/create/edit/delete | R087-R096, R141 |
-| suppliers | view/create/edit/delete | view/create/edit/delete | R072-R086 |
-| reminders | view/create/edit/delete | view/create/edit/delete | R038-R042, R057-R061, R096, R137, R138 |
-| interactions | view/create/edit/delete | view/create/edit/delete | R043-R045, R136 |
-| monitoring | view/create/edit/delete | view/create/edit/delete | R104-R135 |
-| reports | view | **[] — không có quyền nào** | R050-R056 |
-| admin | view/create/edit/delete | **[] — không có quyền nào** | R099-R103 |
-| dashboard | (không có `requirePerm` module — mọi role đăng nhập xem, N2 UNVERIFIED chủ ý) | (như trên) | R098 |
-| AI | gắn theo module cha (interactions/reminders/awards/events) | như trên | R136-R142 |
+Lệnh tự-verify (chạy lại được):
+```bash
+awk -F'|' 'NR>4 && $2 ~ /R[0-9]{3}/ {gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$5); print $2","$5}' memory-bank/07-route-catalog.md
+```
 
-## B. UI-state desktop (`public/app.js`, characterization thủ công — chưa có test tự động)
+| Module | super_admin | pr_staff | Route ID (danh sách tường minh, KHÔNG dùng range che lấp module khác) | Đếm |
+|---|---|---|---|---|
+| partners | view/create/edit/delete | view/create/edit/delete (sensitive theo `sensitive_perms`) | R001-R036, R046-R049, R097 | 41 |
+| reminders | view/create/edit/delete | view/create/edit/delete | R038,R039,R040,R041,R042,R057,R058,R059,R060,R061,R137,R138 | 12 |
+| interactions | view/create/edit/delete | view/create/edit/delete | R043,R044,R045,R136 | 4 |
+| reports | view | **[] — không có quyền nào** | R050,R051,R052,R053,R054,R055,R056 | 7 |
+| awards | view/create/edit/delete | view/create/edit/delete | R062-R071, R139, R140 | 12 |
+| suppliers | view/create/edit/delete | view/create/edit/delete | R072-R086 | 15 |
+| events | view/create/edit/delete | view/create/edit/delete | R087-R096, R141 | 11 |
+| admin | view/create/edit/delete | **[] — không có quyền nào** | R099-R103 | 5 |
+| monitoring | view/create/edit/delete | view/create/edit/delete | R104-R135 | 32 |
+| *(không thuộc module nào — đặc biệt)* | — | — | R037 (`requireAuth` only — file serving đa-owner), R098 (`requireAuth` only, dashboard), R142 (`requireAuth` only, ai/status), R143 (public, login), R144 (`requireAuth`, logout), R145 (`requireAuth`, me) | 6 |
 
-| View | loading | empty | error | 403 | masked (org_fee) | Route ID |
-|---|---|---|---|---|---|---|
-| dashboard | có | UNVERIFIED | có | N/A (không gate module) | N/A | R098 |
-| monitor | có | có | có | UNVERIFIED | N/A | R104-R135 |
-| partner list/detail | có | có | có | UNVERIFIED | có (`maskList`, membership_fee) | R002-R028 |
-| people list/detail | có | có | có | UNVERIFIED | có (contact/private/social/finance) | R029-R037 |
-| reminders | có | có | UNVERIFIED | UNVERIFIED | N/A | R038-R061 |
-| reports | có | UNVERIFIED | UNVERIFIED | N/A (chỉ super_admin) | KHÔNG có (org_fee aggregate không check `canMoney` — lỗ hổng nếu role mới thêm quyền reports) | R050-R056 |
-| awards | có | có | có | UNVERIFIED | có (ad-hoc `maskMoney`) | R062-R071 |
-| events | có | có | có | UNVERIFIED | có (ad-hoc) | R087-R096 |
-| suppliers | có | có | có | UNVERIFIED | có (ad-hoc) | R072-R086 |
-| interactions | có | có | UNVERIFIED | UNVERIFIED | N/A | R043-R045 |
-| admin | có | UNVERIFIED | UNVERIFIED | UNVERIFIED | N/A | R099-R103 |
+**Tổng: 41+12+4+7+12+15+11+5+32+6 = 145.** Không route nào trùng 2 module (khác lỗi lần 1: `R096` chỉ thuộc `events`, không thuộc `reminders`; `R001/R046-R049/R097` thuộc `partners` — trước đây bị lọt hoàn toàn khỏi bảng).
 
-> "403" phần lớn UNVERIFIED vì chưa có test tự động đóng vai `pr_staff` gọi route bị chặn module — đưa vào G1A regression suite (Wave 1), không phải Gate 0.
+> **Sửa cụ thể theo evidence Codex:** `R046-R049` (bookings) và `R097` (press-overview) dùng `requirePerm('partners', ...)` thật trong source (`server/routes.js:611,618,623,1148`), không phải route riêng biệt — nay đã gộp đúng vào `partners`. `R001` (assignable-users) cũng `partners:view` (`routes.js:82`).
 
-## C. Native surface × 5 trục feature-runtime — SỬA THEO G0-A1, KHÔNG CÓ NGOẠI LỆ N/A
+## B. UI-state desktop — cùng partition với §A (không dùng grouping khác để tránh lệch)
 
-**Nguyên tắc chốt (MDS 2.0 P0):** native composition phải tồn tại cho **mọi module có ít nhất 1 role với quyền thật khác `[]`** — bao gồm `admin` (vì `super_admin` có quyền thật, không phải quyền rỗng như `reports`/`admin` phía `pr_staff`). Trạng thái hiện tại cho **toàn bộ** module là **`FAIL/MISSING`** (chưa dựng bất kỳ native composition nào, F5) — không phải `N/A`, không phải `UNVERIFIED`. `UNVERIFIED` chỉ dùng cho câu hỏi "cần đạt tiêu chí gì", không dùng để né việc phải có dòng.
+> "403" cho `pr_staff`/role không có quyền module là trạng thái **PHẢI có evidence**, không được ghi `N/A` chỉ vì "không có route hợp lệ với role đó" — `N/A` chỉ hợp lệ khi module không tồn tại route GET nào để hiển thị (không áp dụng ở đây, mọi module đều có ít nhất 1 GET).
 
-| Module | Native composition tồn tại? | OS permission (camera/mic/file/notification) | Lifecycle (background/resume) | Deep-link | Gesture | Accessibility-OS |
-|---|---|---|---|---|---|---|
-| partners | **FAIL/MISSING** | N/A cho module này (không có input OS-permission) | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| people | **FAIL/MISSING** | FAIL/MISSING (upload ảnh/giấy tờ cần camera+file, R034) | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| awards | **FAIL/MISSING** | FAIL/MISSING (upload file R070, R139) | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| events | **FAIL/MISSING** | FAIL/MISSING (upload file R095, R141) | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| suppliers | **FAIL/MISSING** | FAIL/MISSING (upload file R086) | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| reminders | **FAIL/MISSING** | FAIL/MISSING (notification OS cho reminder R057-R059) | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| interactions | **FAIL/MISSING** | FAIL/MISSING (mic cho voice-intake R136 — chặn thêm bởi O8) | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| monitoring | **FAIL/MISSING** | N/A cho module này | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| reports | **FAIL/MISSING** | N/A cho module này | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| **admin** | **FAIL/MISSING** — **KHÔNG được ghi N/A** (super_admin có quyền thật, `rbac.js:28-39`) | N/A cho module này | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| dashboard | **FAIL/MISSING** | N/A cho module này | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
-| AI (voice/text/image/excel) | **FAIL/MISSING** | FAIL/MISSING (mic R136, file R139/R141) | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING | FAIL/MISSING |
+| Module | loading | empty | error | 403 (role không có quyền module) | masked (org_fee) |
+|---|---|---|---|---|---|
+| partners | có | có | có | UNVERIFIED — chưa có test tự động đóng vai role thiếu quyền | có (`maskList`, membership_fee) |
+| reminders | có | có | UNVERIFIED | UNVERIFIED | N/A (không có cột tiền) |
+| interactions | có | có | UNVERIFIED | UNVERIFIED | N/A |
+| reports | có | UNVERIFIED | UNVERIFIED | **FAIL/MISSING** — `pr_staff` không có quyền `reports`, chưa test 403/access-denied state cho role đó (sửa lại: round 1 ghi `N/A`, SAI theo Codex — "chỉ super_admin gọi được" không phải lý do hợp lệ để bỏ qua việc phải tồn tại trạng thái 403 cho role bị chặn) | KHÔNG có — org_fee aggregate không check `canMoney` (F1-adjacent, lỗ hổng nếu owner cấp quyền `reports` cho `pr_staff` sau này) |
+| awards | có | có | có | UNVERIFIED | có (ad-hoc `maskMoney`) |
+| suppliers | có | có | có | UNVERIFIED | có (ad-hoc) |
+| events | có | có | có | UNVERIFIED | có (ad-hoc) |
+| admin | có | UNVERIFIED | UNVERIFIED | UNVERIFIED | N/A |
+| monitoring | có | có | có | UNVERIFIED | N/A |
+| dashboard (R098) | có | UNVERIFIED | có | N/A (không gate module — mọi role đăng nhập xem, xem N2) | N/A |
 
-Ghi chú cột:
-- **OS permission = N/A** chỉ khi module đó không có bất kỳ route nào yêu cầu camera/mic/file-picker/notification (partners/monitoring/reports/admin/dashboard đúng — xác nhận qua cột "upload/download" ở `07-route-catalog.md`, các module này không có route upload thật ngoài file-download qua R037 dùng chung).
-- **Lifecycle/Deep-link/Gesture/Accessibility-OS** = `FAIL/MISSING` cho toàn bộ vì chưa có bất kỳ native shell nào tồn tại để đo — đây là baseline thật, không phải placeholder; test thật trên thiết bị là điều kiện Gate 3 (`production-compatibility-gate` skill), không phải Gate 0/1.
-- Việc dựng native (implementation thật) **không phải Gate 0/1** — Gate 0/1 chỉ yêu cầu ma trận này phản ánh đúng sự thật (không N/A giả), việc dựng thật thuộc Wave 4 theo roadmap.
+> "403" phần lớn UNVERIFIED (không phải N/A) vì chưa có test tự động đóng vai `pr_staff` gọi route bị chặn module — đưa vào G1A regression suite (Wave 1), không phải Gate 0. Riêng `reports` đã nâng từ `N/A` sai lên `FAIL/MISSING` theo đúng evidence Codex chỉ ra.
 
-## D. Role model drift (F11, tham chiếu)
-Code (`rbac.js:12-15`) chỉ có 2 role thật (`super_admin`, `pr_staff`). Banner login (`server/index.js:50-55`) quảng cáo tên vai trò (`truongphong`, `lanhdao`, `xem`) **không tồn tại trong seed** (`server/db.js:665-666` chỉ tạo `admin`+`chuyenvien`). Ma trận A/B/C ở trên phản ánh **code thật** (2 role), không phản ánh banner. Dọn banner thuộc W1.11, chờ O7.
+## C. Native surface × 5 trục feature-runtime — cùng partition, KHÔNG có ngoại lệ N/A giả
 
-## E. UNVERIFIED cần owner xác nhận (đưa vào G0.1 cùng 8 quyết định — không tự suy đoán)
-1. `GET /dashboard` (R098) không có `requirePerm` module — chủ ý (dashboard chung mọi role) hay thiếu sót?
-2. `POST /reminders/run` (R060), `/notifications/*/read` (R057-R059), `/monitor/alerts/:id/read` (R116) dùng perm `view` cho action ghi (N1) — cần tách action `notify`/`ack` riêng trong RBAC, hay giữ nguyên vì rủi ro thấp (chỉ semantics, không leak dữ liệu)?
-3. `reports` aggregate (R050-R056) không check `canMoney` khi tính org_fee — hiện an toàn vì chỉ `super_admin` có quyền `reports`, nhưng sẽ hở nếu owner sau này cấp quyền `reports` cho `pr_staff` (liên quan O1/O2 org_fee model).
+**Nguyên tắc chốt (MDS 2.0 P0, không đổi từ lần sửa 1):** native composition phải tồn tại cho **mọi module có ít nhất 1 role với quyền thật khác `[]`** — bao gồm `admin` (`super_admin` có quyền thật, `server/rbac.js:28-39`).
 
-## Exit gate G0.4
-Ma trận A (role) + B (UI-state) + C (native × 5 trục runtime) đều join được theo route ID vào `07-route-catalog.md`; không còn ô nào ghi `N/A` để né sự thật "chưa có native" (C đã sửa: mọi module, kể cả admin, ghi `FAIL/MISSING` tường minh); 5 trục runtime tách cột riêng, không gộp `UNVERIFIED` chung; 3 mục §E chuyển cho owner ở G0.1, không tự quyết.
+### C.1 — native_composition + lifecycle/deep-link/gesture/accessibility-OS (baseline đồng nhất, verify 1 lần cho toàn bộ)
+
+**Trạng thái cho TOÀN BỘ 145 route, không có ngoại lệ:** `native_composition = FAIL/MISSING`; `lifecycle = FAIL/MISSING`; `deep_link = FAIL/MISSING`; `gesture = FAIL/MISSING`; `accessibility_os = FAIL/MISSING`. Lý do đồng nhất: **chưa có bất kỳ native shell nào được dựng (F5)** — baseline "0%", không phải placeholder hay N/A. Đây thỏa acceptance-experiment #1-2 của Codex ("parse toàn bộ R001-R145... assert mỗi route có mapping rõ ràng hoặc N/A+reason") vì rule áp dụng như nhau cho mọi route, không có route nào bị bỏ qua.
+
+Việc dựng native thật (implementation) thuộc **Wave 4**, không phải Gate 0/1 — Gate 0/1 chỉ yêu cầu ma trận phản ánh đúng sự thật (không N/A giả), không yêu cầu đã dựng xong.
+
+### C.2 — os_permission: khác nhau theo route, liệt kê tường minh (KHÔNG suy đoán theo module)
+
+Nguồn: cột "upload/download" của `07-route-catalog.md`, lọc bằng lệnh tự-verify:
+```bash
+awk -F'|' 'NR>4 && $2 ~ /R[0-9]{3}/ {gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$8); if ($8 ~ /^có/) print $2","$8}' memory-bank/07-route-catalog.md
+```
+
+| os_permission | Route ID | Lý do |
+|---|---|---|
+| **FAIL/MISSING (file picker)** | R016, R017 | Upload file agreement/work-log (`server/routes.js:243,254`) — thuộc module `partners`, **KHÔNG được ghi N/A** như bảng module-level lần 1 sai |
+| **FAIL/MISSING (file picker)** | R034 | Upload attachment người (portrait/id_doc) |
+| **FAIL/MISSING (file picker)** | R070, R139 | Upload file/award-doc (module `awards`) |
+| **FAIL/MISSING (file picker)** | R086 | Upload file quote (module `suppliers`) |
+| **FAIL/MISSING (file picker)** | R095, R141 | Upload file event/excel (module `events`) |
+| **FAIL/MISSING (microphone)** | R136 | Voice-intake, cần consent OS mic — chặn thêm bởi O8 |
+| **FAIL/MISSING (notification)** | R057, R058, R059, R060 | Domain reminder/notify — hiện chỉ poll trong-app, **chưa có OS push thật**; cần permission notification khi Wave 4 dựng native push |
+| N/A (không có input OS-capability) | 132 route còn lại (145 − 8 file-picker − 1 mic − 4 notification) | Route không có upload/mic/notification — bao gồm mọi GET/list/detail, mọi write thuần dữ liệu, và các route xoá/download file (`R012,R015,R033,R036,R037,R061,R066,R083,R091` — server-side, không cần OS-permission phía client) |
+
+**Sửa cụ thể partners (đúng lỗi Codex chỉ ra):** module `partners` KHÔNG còn ghi `N/A` đồng nhất — `R016`/`R017` (2 route upload file thật) đã tách riêng ở bảng trên là `FAIL/MISSING (file picker)`; 39 route còn lại của `partners` (không upload) là `N/A` đúng nghĩa.
+
+### Exit gate G0.4 (v2, sau re-audit round 2)
+- Section A: 145/145 route có module rõ ràng, tổng khớp, không trùng/lọt (tự-verify bằng lệnh awk ở trên).
+- Section B: desktop-state theo cùng partition A; không còn ô `N/A` dùng để né sự thật thiếu evidence (`reports` 403 đã sửa từ N/A → FAIL/MISSING).
+- Section C: native/lifecycle/deep-link/gesture/accessibility = FAIL/MISSING đồng nhất cho 145/145 (rule, không phải bảng thủ công dễ lọt); os_permission liệt kê tường minh theo route thật từ cột upload/download của catalog, `partners` không còn N/A giả.
+- Cả 3 section join được vào `07-route-catalog.md` qua route ID, không có bảng nào tự phát sinh mapping riêng ngoài nguồn catalog.
+
+## D. Role model drift (F11, tham chiếu, không đổi)
+Code (`rbac.js:12-15`) chỉ có 2 role thật (`super_admin`, `pr_staff`). Banner login (`server/index.js:50-55`) quảng cáo tên vai trò (`truongphong`, `lanhdao`, `xem`) **không tồn tại trong seed** (`server/db.js:665-666` chỉ tạo `admin`+`chuyenvien`). Dọn banner thuộc W1.11, chờ O7.
+
+## E. UNVERIFIED cần owner xác nhận (đưa vào G0.1 — không tự suy đoán)
+1. `GET /dashboard` (R098) không có `requirePerm` module — chủ ý hay thiếu sót? (N2)
+2. `R060`,`R057-R059`,`R116` dùng perm `view` cho action ghi (N1) — tách action `notify`/`ack` riêng, hay giữ nguyên vì rủi ro thấp?
+3. `reports` (R050-R056) không check `canMoney` khi tính org_fee — an toàn hiện tại vì chỉ `super_admin` có quyền, sẽ hở nếu owner cấp quyền `reports` cho `pr_staff` (liên quan O1/O2).
