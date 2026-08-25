@@ -4,9 +4,9 @@
 >
 > **Sửa lần 2 sau Codex re-audit round 2 (F1, vẫn FAIL/P0 MDS ở lần 1).** Lỗi lần 1 đã sửa đúng 1 phần (bỏ `N/A` cho admin, tách 5 trục runtime) nhưng vẫn **chưa machine-checkable**: dùng range liên tục che lấp route thật (`R038-R061` cho reminders "nuốt" luôn interactions/bookings/reports; `R096` gán chồng cả events và reminders), **lọt 9 route** (`R001,R046-R049,R097,R143-R145`) khỏi Section A, và `partners` vẫn ghi `N/A` cho OS-permission dù có 2 route upload file thật (`R016`,`R017`).
 >
-> **Nguyên tắc sửa lần này:** dùng **một phân hoạch (partition) DUY NHẤT** — theo `requirePerm(module,action)` thật đọc trực tiếp từ cột `auth` của `07-route-catalog.md` (không nhập tay lại, không suy đoán theo UI view) — cho **cả 3 section A/B/C**. Đã tự-verify tổng = 145, không trùng, không lọt (lệnh chạy lại được ở cuối §A).
+> **Nguyên tắc bản hiện tại:** giữ hai view độc lập nhưng join được: §A là auth partition theo middleware source; §B là UI/business-flow partition; §C là runtime capability. Cả §A và §B đều phủ đúng 145/145 route, không trùng/lọt, được kiểm bằng `node scripts/verify-g0.mjs`.
 >
-> **Bàn giao 2026-08-25 (Codex `G0-CLOSE-CONTRACT.md` C0.3, owner phân công):** Codex round-3 re-audit xác nhận **Section A (auth partition, 145/145) PASS** — giữ nguyên, không sửa. Nhưng **Section B/C tái dùng nguyên Section A làm ma trận UI** là SAI (vd R046-R049 là luồng booking riêng nhưng dùng chung permission `partners`, bị gộp lẫn vào 1 hàng UI `partners` — mất trạng thái loading/empty/error/403/masked riêng của luồng booking; R097 là luồng tổng quan báo chí, cùng vấn đề). Cần dựng lại Section B/C theo `route/flow × Desktop/Native-Mobile × role`, `flow_id` join `07-route-catalog.md`, tách OS-permission khỏi host-capability (file picker/download/mic/notification/lifecycle/deep-link/Back riêng). **Owner đã giao việc này cho Codex trực tiếp thực hiện** ("phần chỉnh sửa UI/UX sẽ chuyển cho Codex thực hiện") — Section B/C dưới đây **CHƯA được Claude sửa trong đợt remediation này**, chờ Codex cập nhật trực tiếp vào file này.
+> **Codex round 4, 2026-08-25:** C0.3 đã được thực hiện: 34 `flow_id`, bốn cột role/surface, state profiles Desktop, baseline Native-Mobile `FAIL/MISSING`, và host-capability tách khỏi OS permission. Trong lúc verify phát hiện thêm drift R144/R145: route được mount trực tiếp, R144 không có auth middleware còn R145 tự kiểm tra session trong handler; catalog/§A đã sửa đúng source.
 
 ## A. Role coverage theo module — partition từ `07-route-catalog.md`, đã tự-verify tổng = 145
 
@@ -26,71 +26,115 @@ awk -F'|' 'NR>4 && $2 ~ /R[0-9]{3}/ {gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$5
 | events | view/create/edit/delete | view/create/edit/delete | R087-R096, R141 | 11 |
 | admin | view/create/edit/delete | **[] — không có quyền nào** | R099-R103 | 5 |
 | monitoring | view/create/edit/delete | view/create/edit/delete | R104-R135 | 32 |
-| *(không thuộc module nào — đặc biệt)* | — | — | R037 (`requireAuth` only — file serving đa-owner), R098 (`requireAuth` only, dashboard), R142 (`requireAuth` only, ai/status), R143 (public, login), R144 (`requireAuth`, logout), R145 (`requireAuth`, me) | 6 |
+| *(không thuộc module nào — đặc biệt)* | — | — | R037 (`requireAuth` qua router — file serving đa-owner), R098 (`requireAuth` qua router, dashboard), R142 (`requireAuth` qua router, ai/status), R143 (public login), R144 (không auth middleware; logout destroy session nếu có), R145 (handler `auth.me` tự kiểm tra session) | 6 |
 
 **Tổng: 41+12+4+7+12+15+11+5+32+6 = 145.** Không route nào trùng 2 module (khác lỗi lần 1: `R096` chỉ thuộc `events`, không thuộc `reminders`; `R001/R046-R049/R097` thuộc `partners` — trước đây bị lọt hoàn toàn khỏi bảng).
 
 > **Sửa cụ thể theo evidence Codex:** `R046-R049` (bookings) và `R097` (press-overview) dùng `requirePerm('partners', ...)` thật trong source (`server/routes.js:611,618,623,1148`), không phải route riêng biệt — nay đã gộp đúng vào `partners`. `R001` (assignable-users) cũng `partners:view` (`routes.js:82`).
 
-## B. UI-state desktop — cùng partition với §A (không dùng grouping khác để tránh lệch)
+## B. UI-flow matrix — view thứ hai, độc lập với auth partition §A
 
-> "403" cho `pr_staff`/role không có quyền module là trạng thái **PHẢI có evidence**, không được ghi `N/A` chỉ vì "không có route hợp lệ với role đó" — `N/A` chỉ hợp lệ khi module không tồn tại route GET nào để hiển thị (không áp dụng ở đây, mọi module đều có ít nhất 1 GET).
+Section A trả lời “middleware hiện tại kiểm tra module nào”. Section B trả lời “người dùng đang làm luồng gì”. Hai view chỉ join qua `Route ID`; không dùng module permission để giả định rằng booking, press overview hay upload là cùng một UI.
 
-| Module | loading | empty | error | 403 (role không có quyền module) | masked (org_fee) |
+### B.1 Quy ước trạng thái và action hiện tại
+
+- Action: `V/C/E/D` = view/create/edit/delete; `ACK`, `RUN`, `AI`, `UPLOAD`, `DOWNLOAD`, `EXPORT` là side-effect/capability. Action trong bảng là **current-state**; N1 target sẽ thay action `view` đang bảo vệ side-effect bằng action tường minh ở Wave 1.
+- `D-*` là profile Desktop ở B.2; `N-MISSING` là profile Native-Mobile ở B.3. Mỗi flow có đủ hai role hiện tại và hai surface qua bốn cột role/surface.
+- `S0` = không có field mật trong response chính; `S1` = có mask/gate theo `sensitive_perms`; `S2` = tiền/file đang mask ad-hoc hoặc thiếu gate, thuộc F1/F9; `S3` = UI ẩn/hiện control bằng `can(module,action)`, nhưng chưa có access-denied page.
+- `N/A` chỉ dùng khi trạng thái không có ý nghĩa với loại flow và luôn kèm lý do trong profile. Không dùng `N/A` để che surface hoặc capability chưa có.
+
+### B.2 Route → business/UI flow (partition 145/145)
+
+| Flow ID | Business/UI flow | Route IDs (mỗi ID đúng một flow) | Desktop `super_admin` | Desktop `pr_staff` | Native `super_admin` | Native `pr_staff` | Sensitive/disabled evidence |
+|---|---|---|---|---|---|---|---|
+| F001 | Đăng nhập, phiên và hồ sơ hiện tại | R143,R144,R145 | LOGIN/LOGOUT/ME · D-AUTH | LOGIN/LOGOUT/ME · D-AUTH | N-MISSING | N-MISSING | S0 |
+| F002 | Bootstrap lookup/status dùng chung | R001,R142 | V · D-SYSTEM | V · D-SYSTEM | N-MISSING | N-MISSING | S0; caller chịu state |
+| F003 | Dashboard tổng quan | R098 | V · D-DASH | V · D-DASH | N-MISSING | N-MISSING | S0; N2 target `dashboard:view` |
+| F004 | Danh sách/tổng quan cơ quan báo chí | R002,R097 | V · D-LIST | V · D-LIST | N-MISSING | N-MISSING | S1/S2 (`membership_fee`) |
+| F005 | Chi tiết và CRUD cơ quan | R003,R004,R005,R006 | V/C/E/D · D-DETAIL | V/C/E/D · D-DETAIL | N-MISSING | N-MISSING | S1/S2; S3 |
+| F006 | Tài trợ cơ quan | R007,R008,R009 | C/E/D qua `partners:edit` · D-EMBED | C/E/D qua `partners:edit` · D-EMBED | N-MISSING | N-MISSING | S2; S3 |
+| F007 | Thoả thuận và file thoả thuận | R010,R011,R012,R016 | C/E/D/UPLOAD · D-EMBED | C/E/D/UPLOAD · D-EMBED | N-MISSING | N-MISSING | S2 file; S3 |
+| F008 | Nhật ký công việc và file | R013,R014,R015,R017 | C/E/D/UPLOAD · D-EMBED | C/E/D/UPLOAD · D-EMBED | N-MISSING | N-MISSING | S2 file; S3 |
+| F009 | Quà tặng | R018,R019,R020,R021 | C/E/D · D-EMBED | C/E/D · D-EMBED | N-MISSING | N-MISSING | S2 (`value`); S3 |
+| F010 | Sử dụng quyền lợi | R022,R023,R024 | C/E/D · D-EMBED | C/E/D · D-EMBED | N-MISSING | N-MISSING | S0; S3 |
+| F011 | Hội phí và tạo nhắc phí | R025,R026,R027,R028 | C/E/D; REMIND hiện dùng V · D-EMBED | C/E/D; REMIND hiện dùng V · D-EMBED | N-MISSING | N-MISSING | S2 (`amount`); S3 |
+| F012 | Danh bạ người và tạo mới | R029,R031 | V/C · D-LIST | V/C · D-LIST | N-MISSING | N-MISSING | S1; S3 |
+| F013 | Chi tiết người và tệp định danh | R030,R032,R033,R034,R035,R036 | V/E/D/UPLOAD · D-DETAIL | V/E/D/UPLOAD · D-DETAIL | N-MISSING | N-MISSING | S1/S2; S3 |
+| F014 | Tải tệp đính kèm dùng chung | R037 | DOWNLOAD · D-SYSTEM | DOWNLOAD · D-SYSTEM | N-MISSING | N-MISSING | S2: direct-ID gate thiếu org_fee |
+| F015 | Danh sách/CRUD lịch nhắc | R038,R039,R040,R041,R042 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
+| F016 | Tìm entity, lịch sử và voice interaction | R043,R044,R045,R136 | V/C/AI · D-LIST | V/C/AI · D-LIST | N-MISSING | N-MISSING | S0; mic runtime ở C |
+| F017 | Booking truyền thông | R046,R047,R048,R049 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S2; S3 |
+| F018 | Ngân sách kỳ | R050,R051 | V/UPSERT hiện cùng `reports:view` · D-LIST | DENY · D-403 | N-MISSING | N-MISSING | S2; write dùng view hiện tại |
+| F019 | Báo cáo tổng hợp | R052,R053,R054,R055,R056 | V · D-REPORT | DENY · D-403 | N-MISSING | N-MISSING | S2 aggregate/projection |
+| F020 | Notification inbox, acknowledge và chạy nhắc | R057,R058,R059,R060 | V/ACK/RUN hiện cùng `reminders:view` · D-LIST | V/ACK/RUN hiện cùng `reminders:view` · D-LIST | N-MISSING | N-MISSING | S0; N1 target action riêng |
+| F021 | Xuất lịch ICS | R061 | V/EXPORT · D-SYSTEM | V/EXPORT · D-SYSTEM | N-MISSING | N-MISSING | S0; host capability ở C |
+| F022 | Giải thưởng, tham gia, file và AI | R062,R063,R064,R065,R066,R067,R068,R069,R070,R071,R139,R140 | V/C/E/D/UPLOAD/AI · D-LIST | V/C/E/D/UPLOAD/AI · D-LIST | N-MISSING | N-MISSING | S2; S3 |
+| F023 | Nhà cung cấp, liên hệ, giao dịch, báo giá, file | R072,R073,R074,R075,R076,R077,R078,R079,R080,R081,R082,R083,R084,R085,R086 | V/C/E/D/UPLOAD · D-LIST | V/C/E/D/UPLOAD · D-LIST | N-MISSING | N-MISSING | S2; S3 |
+| F024 | Sự kiện, chi phí, file, nhắc và AI import | R087,R088,R089,R090,R091,R092,R093,R094,R095,R096,R141 | V/C/E/D/UPLOAD/AI · D-LIST | V/C/E/D/UPLOAD/AI · D-LIST | N-MISSING | N-MISSING | S2; S3 |
+| F025 | Quản trị người dùng | R099,R100,R101,R102 | V/C/E/D · D-LIST | DENY · D-403 | N-MISSING | N-MISSING | S0; 403 page FAIL |
+| F026 | Audit log | R103 | V · D-LIST | DENY · D-403 | N-MISSING | N-MISSING | dữ liệu privileged; 403 page FAIL |
+| F027 | Monitor dashboard, mentions và bulk actions | R104,R105,R106,R107,R108,R109 | V/E/D · D-LIST | V/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
+| F028 | Scan, runs và AI intelligence | R110,R111,R112,R113 | V/C/AI · D-REPORT | V/C/AI · D-REPORT | N-MISSING | N-MISSING | S0; SSRF/AI findings riêng |
+| F029 | Monitor settings và acknowledge alert | R114,R115,R116 | V/E/ACK hiện cùng `monitoring:view` · D-EMBED | V/E/ACK hiện cùng `monitoring:view` · D-EMBED | N-MISSING | N-MISSING | S0; N1 target action riêng |
+| F030 | Cấu hình scan query | R117,R118,R119,R120 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
+| F031 | Cấu hình nguồn tin | R121,R122,R123,R124 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
+| F032 | Cấu hình đối thủ | R125,R126,R127,R128 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
+| F033 | Chiến dịch monitor và đánh giá AI | R129,R130,R131,R132,R133,R134,R135 | V/C/E/D/AI · D-LIST | V/C/E/D/AI · D-LIST | N-MISSING | N-MISSING | S0; S3 |
+| F034 | AI tạo nội dung/ảnh thiệp nhắc | R137,R138 | AI hiện dùng `reminders:view` · D-EMBED | AI hiện dùng `reminders:view` · D-EMBED | N-MISSING | N-MISSING | S0; action AI chưa tách |
+
+### B.3 State profiles — mọi ô loading/empty/error/403 đều có status
+
+| Profile | loading | empty | error | 403/access denied | Evidence hiện tại |
 |---|---|---|---|---|---|
-| partners | có | có | có | UNVERIFIED — chưa có test tự động đóng vai role thiếu quyền | có (`maskList`, membership_fee) |
-| reminders | có | có | UNVERIFIED | UNVERIFIED | N/A (không có cột tiền) |
-| interactions | có | có | UNVERIFIED | UNVERIFIED | N/A |
-| reports | có | UNVERIFIED | UNVERIFIED | **FAIL/MISSING** — `pr_staff` không có quyền `reports`, chưa test 403/access-denied state cho role đó (sửa lại: round 1 ghi `N/A`, SAI theo Codex — "chỉ super_admin gọi được" không phải lý do hợp lệ để bỏ qua việc phải tồn tại trạng thái 403 cho role bị chặn) | KHÔNG có — org_fee aggregate không check `canMoney` (F1-adjacent, lỗ hổng nếu owner cấp quyền `reports` cho `pr_staff` sau này) |
-| awards | có | có | có | UNVERIFIED | có (ad-hoc `maskMoney`) |
-| suppliers | có | có | có | UNVERIFIED | có (ad-hoc) |
-| events | có | có | có | UNVERIFIED | có (ad-hoc) |
-| admin | có | UNVERIFIED | UNVERIFIED | UNVERIFIED | N/A |
-| monitoring | có | có | có | UNVERIFIED | N/A |
-| dashboard (R098) | có | UNVERIFIED | có | N/A (không gate module — mọi role đăng nhập xem, xem N2) | N/A |
+| D-AUTH | UNVERIFIED | N/A — form auth không phải collection | PASS cho login error | UNVERIFIED cho session hết hạn | `public/app.js` login flow; cần G1 UI characterization |
+| D-DASH | PASS — global route loading | UNVERIFIED | PASS — global route catch | **FAIL/MISSING** — current R098 chỉ requireAuth | `public/app.js:276-284`; N2 là target |
+| D-LIST | PASS — global route loading | PARTIAL — bảng/pager về 0, chưa có empty-state MDS thống nhất | PASS — global route catch | **FAIL/MISSING** — hash router redirect về dashboard, không render 403 | `public/app.js:276-315` |
+| D-DETAIL | PASS — global route loading | UNVERIFIED cho từng collection con | PASS — global route catch | **FAIL/MISSING** — redirect, không có 403 state | `public/app.js:276-284`; detail render riêng |
+| D-EMBED | UNVERIFIED — phụ thuộc parent/detail | UNVERIFIED | UNVERIFIED — toast/inline/catch không đồng nhất | **FAIL/MISSING** — không có 403 component | embedded modal/section trong `public/app.js` |
+| D-REPORT | PASS — global route loading | UNVERIFIED | PASS — global route catch | **FAIL/MISSING** — direct hash redirect, không có 403 state | `public/app.js:276-284` |
+| D-SYSTEM | UNVERIFIED — caller sở hữu state | N/A — không có surface collection độc lập | UNVERIFIED — caller sở hữu error | **FAIL/MISSING** — không có access-denied surface chung | internal lookup/status/download caller |
+| D-403 | N/A — request bị chặn trước flow | N/A — request bị chặn trước flow | N/A — không phải lỗi dữ liệu | **FAIL/MISSING** — current client redirect/ẩn nav, không có 403 page | `public/app.js:266,276-284` |
+| N-MISSING | **FAIL/MISSING** | **FAIL/MISSING** | **FAIL/MISSING** | **FAIL/MISSING** | Không có Native-Mobile composition cho bất kỳ role/flow nào (F5/P0 MDS) |
 
-> "403" phần lớn UNVERIFIED (không phải N/A) vì chưa có test tự động đóng vai `pr_staff` gọi route bị chặn module — đưa vào G1A regression suite (Wave 1), không phải Gate 0. Riêng `reports` đã nâng từ `N/A` sai lên `FAIL/MISSING` theo đúng evidence Codex chỉ ra.
+> Disabled/masked: Desktop hiện có `can(module,action)` để ẩn nav/nút ở một số nơi và có nhiều cơ chế mask song song. Đây là current evidence, **không** chứng minh chống direct request. Những flow gắn S1/S2 phải có test field-level và disabled/masked riêng ở G1; mọi flow D-403 phải có access-denied acceptance state khi slice UI được nâng cấp.
 
-## C. Native surface × 5 trục feature-runtime — cùng partition, KHÔNG có ngoại lệ N/A giả
+## C. Native/WebView runtime capability — tách host capability khỏi OS permission
 
-**Nguyên tắc chốt (MDS 2.0 P0, không đổi từ lần sửa 1):** native composition phải tồn tại cho **mọi module có ít nhất 1 role với quyền thật khác `[]`** — bao gồm `admin` (`super_admin` có quyền thật, `server/rbac.js:28-39`).
+### C.1 Baseline Native-Mobile áp dụng 145/145 route
 
-### C.1 — native_composition + lifecycle/deep-link/gesture/accessibility-OS (baseline đồng nhất, verify 1 lần cho toàn bộ)
+| Trục | Current status | Target evidence trước khi PASS |
+|---|---|---|
+| Native-Mobile composition riêng | **FAIL/MISSING** | Cây trình bày mobile riêng trong AMIS WebView cho mọi flow/role |
+| Lifecycle background/restore | **FAIL/MISSING** | device test resume/restore không mất hoặc ghi lặp state |
+| Deep-link | **FAIL/MISSING** | contract + device test route hợp lệ/không hợp lệ/không quyền |
+| Back/gesture | **FAIL/MISSING** | Android Back, iOS gesture, modal-stack và unsaved-change test |
+| Accessibility OS | **FAIL/MISSING** | Dynamic Type/font scaling, screen reader, touch target và focus test |
 
-**Trạng thái cho TOÀN BỘ 145 route, không có ngoại lệ:** `native_composition = FAIL/MISSING`; `lifecycle = FAIL/MISSING`; `deep_link = FAIL/MISSING`; `gesture = FAIL/MISSING`; `accessibility_os = FAIL/MISSING`. Lý do đồng nhất: **chưa có bất kỳ native shell nào được dựng (F5)** — baseline "0%", không phải placeholder hay N/A. Đây thỏa acceptance-experiment #1-2 của Codex ("parse toàn bộ R001-R145... assert mỗi route có mapping rõ ràng hoặc N/A+reason") vì rule áp dụng như nhau cho mọi route, không có route nào bị bỏ qua.
+### C.2 Capability theo route
 
-Việc dựng native thật (implementation) thuộc **Wave 4**, không phải Gate 0/1 — Gate 0/1 chỉ yêu cầu ma trận phản ánh đúng sự thật (không N/A giả), không yêu cầu đã dựng xong.
+| Capability | Route IDs | WebView-host capability | OS permission | Current decision/evidence |
+|---|---|---|---|---|
+| File/document picker | R016,R017,R034,R070,R086,R095,R139,R141 | **FAIL/MISSING** | **UNVERIFIED** — system picker có thể không cần broad storage permission; phải theo contract host/platform | 8 upload route từ catalog; không gộp thành N/A theo module |
+| Camera capture | R034 | **FAIL/MISSING** | **UNVERIFIED** — cần camera permission nếu host cho chụp trực tiếp; N/A nếu chỉ system file picker | Chờ AMIS bridge contract |
+| Download/share file | R037 | **FAIL/MISSING** | N/A — download/share sheet không mặc định yêu cầu storage permission | Cần bridge download/share contract và device test |
+| Export/share ICS | R061 | **FAIL/MISSING** | N/A — share sheet/calendar handoff không đồng nghĩa quyền calendar write | Cần bridge share/open contract; nếu import trực tiếp calendar thì thêm permission riêng |
+| Microphone/voice | R136 | **FAIL/MISSING** | **FAIL/MISSING** mic consent/runtime permission | O8 chỉ cho phép egress test tạm thời, không thay consent OS |
+| Native notification/push | R057,R058,R059,R060 | **FAIL/MISSING** | **FAIL/MISSING** notification permission | Current chỉ in-app polling; chưa có push/host lifecycle |
+| Server-side physical delete | R012,R015,R033,R036,R066,R083,R091 | N/A — server xử lý file, không phải host input | N/A — không cần OS permission client | Vẫn cần confirm/destructive UX, nhưng không phải runtime permission |
+| Route còn lại | mọi ID không liệt kê ở trên | N/A — không yêu cầu capability chuyên biệt ngoài baseline C.1 | N/A — không có input OS đặc quyền đã biết | Nếu implementation thêm camera/location/calendar phải cập nhật matrix trước khi merge |
 
-### C.2 — os_permission: khác nhau theo route, liệt kê tường minh (KHÔNG suy đoán theo module)
+## D. Machine verification và exit C0.3
 
-Nguồn: cột "upload/download" của `07-route-catalog.md`, lọc bằng lệnh tự-verify:
+Chạy:
+
 ```bash
-awk -F'|' 'NR>4 && $2 ~ /R[0-9]{3}/ {gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$8); if ($8 ~ /^có/) print $2","$8}' memory-bank/07-route-catalog.md
+node scripts/verify-g0.mjs
 ```
 
-| os_permission | Route ID | Lý do |
-|---|---|---|
-| **FAIL/MISSING (file picker)** | R016, R017 | Upload file agreement/work-log (`server/routes.js:243,254`) — thuộc module `partners`, **KHÔNG được ghi N/A** như bảng module-level lần 1 sai |
-| **FAIL/MISSING (file picker)** | R034 | Upload attachment người (portrait/id_doc) |
-| **FAIL/MISSING (file picker)** | R070, R139 | Upload file/award-doc (module `awards`) |
-| **FAIL/MISSING (file picker)** | R086 | Upload file quote (module `suppliers`) |
-| **FAIL/MISSING (file picker)** | R095, R141 | Upload file event/excel (module `events`) |
-| **FAIL/MISSING (microphone)** | R136 | Voice-intake, cần consent OS mic — chặn thêm bởi O8 |
-| **FAIL/MISSING (notification)** | R057, R058, R059, R060 | Domain reminder/notify — hiện chỉ poll trong-app, **chưa có OS push thật**; cần permission notification khi Wave 4 dựng native push |
-| N/A (không có input OS-capability) | 132 route còn lại (145 − 8 file-picker − 1 mic − 4 notification) | Route không có upload/mic/notification — bao gồm mọi GET/list/detail, mọi write thuần dữ liệu, và các route xoá/download file (`R012,R015,R033,R036,R037,R061,R066,R083,R091` — server-side, không cần OS-permission phía client) |
+Script phải xác nhận: catalog 145 unique; Section A phủ 145 unique; Section B.2 map 145 route đúng một flow; đủ 34 flow, mỗi flow có hai role × hai surface; Gemini/schema/error/link facts. Native vẫn `FAIL/MISSING` là kết quả audit đúng, không phải lỗi của script.
 
-**Sửa cụ thể partners (đúng lỗi Codex chỉ ra):** module `partners` KHÔNG còn ghi `N/A` đồng nhất — `R016`/`R017` (2 route upload file thật) đã tách riêng ở bảng trên là `FAIL/MISSING (file picker)`; 39 route còn lại của `partners` (không upload) là `N/A` đúng nghĩa.
+## E. Role model drift và quyết định đã đóng
 
-### Exit gate G0.4 (v2, sau re-audit round 2)
-- Section A: 145/145 route có module rõ ràng, tổng khớp, không trùng/lọt (tự-verify bằng lệnh awk ở trên).
-- Section B: desktop-state theo cùng partition A; không còn ô `N/A` dùng để né sự thật thiếu evidence (`reports` 403 đã sửa từ N/A → FAIL/MISSING).
-- Section C: native/lifecycle/deep-link/gesture/accessibility = FAIL/MISSING đồng nhất cho 145/145 (rule, không phải bảng thủ công dễ lọt); os_permission liệt kê tường minh theo route thật từ cột upload/download của catalog, `partners` không còn N/A giả.
-- Cả 3 section join được vào `07-route-catalog.md` qua route ID, không có bảng nào tự phát sinh mapping riêng ngoài nguồn catalog.
-
-## D. Role model drift (F11, tham chiếu, không đổi)
-Code (`rbac.js:12-15`) chỉ có 2 role thật (`super_admin`, `pr_staff`). Banner login (`server/index.js:50-55`) quảng cáo tên vai trò (`truongphong`, `lanhdao`, `xem`) **không tồn tại trong seed** (`server/db.js:665-666` chỉ tạo `admin`+`chuyenvien`). Dọn banner thuộc W1.11, chờ O7.
-
-## E. UNVERIFIED cần owner xác nhận (đưa vào G0.1 — không tự suy đoán)
-1. `GET /dashboard` (R098) không có `requirePerm` module — chủ ý hay thiếu sót? (N2)
-2. `R060`,`R057-R059`,`R116` dùng perm `view` cho action ghi (N1) — tách action `notify`/`ack` riêng, hay giữ nguyên vì rủi ro thấp?
-3. `reports` (R050-R056) không check `canMoney` khi tính org_fee — an toàn hiện tại vì chỉ `super_admin` có quyền, sẽ hở nếu owner cấp quyền `reports` cho `pr_staff` (liên quan O1/O2).
+- Code hiện tại chỉ có `super_admin`/`pr_staff` (`server/rbac.js:12-56`). D13 target bốn vai trò sẽ được triển khai/test ở W1; không trộn target role vào current-state matrix này.
+- N1 và N2 đã owner APPROVED 2026-08-25 trong `02-decisions.md` §B.1. Bảng trên giữ action current-state để characterization, đồng thời ghi target tường minh.
+- F1/F9 và F5 vẫn là finding mở: ma trận đầy đủ không biến hành vi thiếu an toàn hoặc Native-Mobile còn thiếu thành PASS.

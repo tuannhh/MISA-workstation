@@ -149,8 +149,8 @@
 | R141 | POST | /api/ai/event-extract | requirePerm(events,create) | events (trích xuất, chưa lưu) | excel/text → Gemini (đã redact — điểm mạnh) | có (upload, field `file`, Excel/CSV) | ai.js:244 |
 | R142 | GET | /api/ai/status | requireAuth only | — | — | không | ai.js:275 |
 | R143 | POST | /api/login | **no-auth (public)** | users | — | không | index.js:27 |
-| R144 | POST | /api/logout | requireAuth | — | — | không | index.js:28 |
-| R145 | GET | /api/me | requireAuth | users | — | không | index.js:29 |
+| R144 | POST | /api/logout | **no auth middleware** (`auth.logout` chỉ destroy session nếu có) | — | — | không | index.js:28; auth.js:24 |
+| R145 | GET | /api/me | **handler tự kiểm tra session** (`auth.me`, không gắn `requireAuth` middleware) | users | — | không | index.js:29; auth.js:28 |
 
 ## Background jobs (không phải HTTP endpoint, giữ riêng)
 | Job | Định nghĩa | Nơi gọi lúc boot | Tần suất |

@@ -75,14 +75,21 @@
 | Nhóm resource | Bảng | Nguồn sở hữu | Lý do |
 |---|---|---|---|
 | **14 "hoạt động"** (owner đã chốt 2026-08-24) | bookings, interactions, awards, events, sponsorships, agreements, work_logs, gifts, association_fees, supplier_quotes, supplier_transactions, supplier_contacts, award_participations, benefit_usages | **Direct** — `owner_id` riêng từng bản ghi (D13.4b) | Owner xác nhận rõ: "chỉ áp dụng cho việc/hoạt động của người đó tạo". |
-| **Danh bạ dùng chung** (không phải "hoạt động" — owner xác nhận phạm vi ownership KHÔNG áp cho nhóm này) | organizations, people, suppliers | **Global** — mọi Nhân viên thực thi có quyền `module:edit` đều sửa được, không gate theo `owner_id` (field mật vẫn bị `audience_visibility` chặn như thường) | Đây là danh bạ dùng chung toàn phòng PR, không phải "việc của ai" — khớp phát biểu gốc của owner giới hạn ownership ở "hoạt động". **Đề xuất mặc định — chưa hỏi lại owner riêng, xem nguyên tắc ở cuối §D.** |
-| **Nhắc việc dùng chung** | important_dates | **Global** — cùng lý do trên (lịch nhắc dùng chung, không phải sở hữu cá nhân); `created_by` vẫn ghi để biết ai tạo | Đề xuất mặc định — chưa hỏi lại owner. |
+| **Danh bạ dùng chung** (không phải "hoạt động") | organizations, people, suppliers | **Global** — mọi Nhân viên thực thi có quyền `module:edit` đều sửa được, không gate theo `owner_id` (field mật vẫn bị `audience_visibility` chặn như thường) | **Owner APPROVED 2026-08-25 (D13-P1):** danh bạ dùng chung được sửa theo quyền module; field mật vẫn gate riêng, delete vẫn chỉ Admin/Super Admin, mọi thay đổi phải audit. |
+| **Nhắc việc dùng chung** | important_dates | **Global** — lịch toàn phòng; Nhân viên thực thi có quyền `module:edit` được sửa, `created_by` vẫn ghi để audit | **Owner APPROVED 2026-08-25 (D13-P2):** lịch nhắc dùng chung được sửa theo quyền module; delete vẫn chỉ Admin/Super Admin, mọi thay đổi phải audit. |
 | **Kế hoạch tài chính cấp phòng** | budgets | **Module-admin-only** — chỉ Admin/Super Admin ghi (khớp hiện trạng: `POST /budgets` hiện chỉ gate `reports:view`, do `super_admin` mới có — xem N1 dưới và `14-known-traps.md` #11) | Ngân sách kỳ là quyết định cấp quản lý, không phải việc cá nhân từng nhân viên. |
 | **Chi phí sự kiện** | event_costs | **Inherited** — kế thừa `owner_id` của `events` cha (event_costs không có "người tạo" độc lập với sự kiện chứa nó) | event_costs luôn thuộc 1 event cụ thể, không có vòng đời riêng. |
 | **Cấu hình giám sát truyền thông** | scan_queries, sources, competitors, campaigns, monitor_alerts | **Module-admin-only** — chỉ Admin/Super Admin cấu hình (khớp hiện trạng module `monitoring` chủ yếu `super_admin`) | Cấu hình quét dùng chung toàn phòng, không phải dữ liệu cá nhân tạo ra. |
 | **Tài nguyên quản trị** | users, field_visibility config, API key config, audit_log | **Global theo role** (không dùng `owner_id`) — quyết định hoàn toàn bởi D13.1 (Admin/Super Admin) | Đã có cơ chế phân quyền riêng ở D13.1, không cần lớp ownership thêm. |
 
-> Các dòng đánh dấu "Đề xuất mặc định — chưa hỏi lại owner" áp dụng nguyên tắc ở `02-decisions.md` §C (không tuyên bố xong khi còn suy đoán) nhưng **không chặn Gate 0/Gate 1** — đây là mặc định an toàn nhất quán với phát biểu gốc của owner, Admin/owner chỉnh lại bất kỳ lúc nào qua cùng cơ chế D13.4b nếu sai. Khác nhóm C0.1 (self-claim/N1/N2) đã có evidence owner APPROVED trực tiếp — nhóm này chưa có, nên KHÔNG được ghi `APPROVED`.
+> **Owner approval bổ sung 2026-08-25:** D13-P1/P2 đã được owner duyệt trực tiếp qua câu “ok nhé, tôi nhất trí đề xuất của bạn”, sau khi Codex trình bày rõ hai mặc định và rào chắn đi kèm. Hai rule `Global` trên là expected result chính thức cho G1B target tests; không còn product-decision gap ở C0.2.
+
+> **Thứ tự áp dụng policy:** rule theo resource ở D13.4a là lớp cụ thể và **ưu tiên hơn** mô tả role tổng quát D13.1. Ví dụ Nhân viên thực thi được tạo bản ghi nói chung nhưng không được ghi `budgets` hay monitor configuration vì hai nhóm này là `Module-admin-only`; ngược lại họ được sửa shared-directory theo rule `Global` dù không có `owner_id`.
+
+| Pending ID | Product semantics cần owner chốt | Khuyến nghị hiện tại | Status | Approver/Evidence |
+|---|---|---|---|---|
+| D13-P1 | Nhân viên thực thi có được sửa mọi `organizations`/`people`/`suppliers` dùng chung hay chỉ Admin/owner? | **Global edit** nếu có `module:edit`; field mật vẫn gate riêng | **APPROVED** | Owner, 2026-08-25 — “ok nhé, tôi nhất trí đề xuất của bạn” |
+| D13-P2 | `important_dates` là lịch dùng chung mọi Nhân viên thực thi được sửa hay phải có owner/Admin? | **Global edit**; giữ `created_by` chỉ để audit | **APPROVED** | Owner, 2026-08-25 — “ok nhé, tôi nhất trí đề xuất của bạn” |
 
 **D13.4b — Với nhóm "Direct" (14 hoạt động), đủ ngữ nghĩa CRUD + vòng đời (theo yêu cầu C0.2 mục 4):**
 - **Create**: `owner_id` = chính người tạo, gán tự động (không cần Admin can thiệp lúc tạo mới).

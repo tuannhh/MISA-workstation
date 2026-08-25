@@ -64,20 +64,20 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 
 ## GATE 0 — Quyết định & baseline (chỉ đọc + tạo tài liệu, KHÔNG sửa production code)
 
-**Trạng thái 2026-08-25 (sau Codex round-3 re-audit + `G0-CLOSE-CONTRACT.md`): C0.1 owner APPROVED và đã persist; C0.2/C0.4/C0.5/C0.6/C0.7/C0.8 Claude đã remediate trong đợt này; C0.3 (UI-flow matrix) owner giao Codex trực tiếp làm — KHÔNG phải việc Claude. Còn chờ Codex round-4 verify tập trung (không phải audit lại toàn dự án).**
+**Trạng thái Codex round 4 CLOSE, 2026-08-25:** C0.1-C0.8 đều PASS. Owner đã duyệt D13-P1/P2 (“ok nhé, tôi nhất trí đề xuất của bạn”), đóng product-decision gap cuối của C0.2. **CLOSE GATE 0 / OPEN GATE 1.** Native-Mobile vẫn FAIL/P0 hiện trạng và phải được sửa ở wave UI; việc mở G1 không đổi finding này thành PASS.
 
 | # | Task | Trạng thái |
 |---|---|---|
-| G0.1 | Owner quyết O1-O8 + C0.1 (O1/self-claim/N1/N2) | **XONG.** O6 APPROVED ($200); O2/O7 SUPERSEDED bởi D13; **O3/O4/O5 DEFERRED-TO-DEVOPS**; **O8 PROVISIONAL**; **O1 APPROVED 2026-08-25** (audience default, không hạ classification tier — `02-decisions.md` §B); **D13 self-claim/N1/N2 RESOLVED 2026-08-25** (C0.1, không self-claim; action tường minh `ack`/`notify`/`run`; `dashboard:view` tường minh) — evidence `PR-WORKSTATION-CODEX-G0-CLOSE-CONTRACT.md`. Không còn owner-submission/owner-decision nào ở trạng thái mở. |
+| G0.1 | Owner quyết O1-O8 + C0.1 (O1/self-claim/N1/N2) | **XONG.** O6 APPROVED ($200); O2/O7 SUPERSEDED; O3/O4/O5 DEFERRED-TO-DEVOPS; O8 PROVISIONAL; O1/self-claim/N1/N2 APPROVED. D13-P1/P2 phát sinh từ C0.2 cũng đã owner APPROVED 2026-08-25. |
 | G0.2 | Memory-bank đủ chủ đề mandate, 1:1 với source | **Cấu trúc XONG (file 01-16); source-fidelity đã sửa (C0.4, 2026-08-25):** index 22 (không phải 21), `dropAll()` 28/34 bảng + 6 bảng bị bỏ sót đúng tên, reminder không có UNIQUE (race check-then-insert), partner detail 10 mảng (không phải 7), booking chỉ `award_id` (không có `event_id` — đăng ký F12), %/diện tích UI gắn nhãn ước lượng, MySQL version tách rõ local-Docker vs Cloud-SQL-UNVERIFIED, `16-coding-rules.md` thêm mục DO/DON'T bắt buộc riêng khỏi mô tả legacy — xem `15-changelog.md`. |
 | G0.3 | Inventory 100% route/job/AI/UI | **XONG — Codex round 2+3 xác nhận PASS** (145/145 literal, `07-route-catalog.md`) |
-| G0.4 | Ma trận route/flow × surface × role × state × runtime | **CHUYỂN GIAO CHO CODEX (owner 2026-08-25).** Section A (auth partition, 145/145) Codex xác nhận PASS. Section B/C (UI-flow × role × Desktop/Native, tách OS-permission khỏi host-capability, `flow_id` join `R001-R145`) do Codex trực tiếp dựng lại — **không phải việc Claude trong đợt này.** `08-permission-matrix.md` giữ nguyên Section A làm baseline; Section B/C chờ Codex cập nhật. |
+| G0.4 | Ma trận route/flow × surface × role × state × runtime | **C0.3 XONG bởi Codex round 4 (2026-08-25):** Section A auth partition 145/145; Section B có 34 `flow_id`, map R001-R145 đúng một lần, đủ 2 current role × Desktop/Native; Section C tách host capability khỏi OS permission. Native-Mobile vẫn trung thực `FAIL/MISSING` (F5/P0). Verify: `node scripts/verify-g0.mjs`. |
 | G0.5 | Error contract | **XONG — PASS** (`05-error-contract.md`, `error===message`) |
 | G0.6 | Registry classification | **XONG, redefine theo C0.2:** không còn 1 cờ boolean — `03-data-classification.md` §A/§C giờ là nguồn `classification_tier` (trần bất biến), bảng `field_visibility` (W1.RBAC) là nguồn `audience_visibility` (cấu hình được, chỉ siết không nới dưới trần). O1 APPROVED, không còn block. |
 | G0.7 | F10 secret | **XONG — PASS** (placeholder, không phải key sống) |
 | G0.8 | Threat model + egress map | **XONG — PASS** (Codex round-3 xác nhận core inventory đúng; 2 sửa diễn đạt P2 — AI-E001 wording, AI-E012 payload — đã áp dụng, `06-threat-model.md` v5) |
 
-**Exit gate G0 (cập nhật 2026-08-25):** C0.1/C0.2/C0.4/C0.5/C0.6/C0.7/C0.8 đã remediate trong tài liệu này. **C0.3 (UI-flow matrix) do Codex trực tiếp thực hiện — Gate 0 không đóng cho tới khi C0.3 xong VÀ Codex round-4 verify tập trung xác nhận toàn bộ 8 mục.** Đây không phải "Claude tự tuyên bố xong" — theo đúng mô hình 2 agent, Codex verify trước khi mở Gate 1.
+**Exit gate G0 (Codex round 4 CLOSE, 2026-08-25): PASS.** C0.1-C0.8 đều PASS; `npm run test:security`, `node scripts/verify-g0.mjs --base=5648042` và `git diff --check` đều xanh. **OPEN GATE 1** theo đúng G1A/G1B/G1C dưới đây. O3/O4/O5 và host/device evidence chỉ chặn các wave được ghi tường minh, không chặn G1.
 
 ---
 
