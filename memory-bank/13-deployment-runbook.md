@@ -38,7 +38,7 @@ DB lưu ở `data/pr.db`. Reset dữ liệu mẫu: `DB_CLIENT=sqlite npm run see
 > **Đã trả lời (owner, 2026-08-24): dữ liệu hiện tại trong Cloud Run/Cloud SQL là DỮ LIỆU TEST, không cần giữ.** Đây là fact quan trọng làm giảm mức khẩn cấp của mọi finding thuộc nhóm "phải cẩn thận vì đã có dữ liệu thật" (đặc biệt chuỗi migration R1.0-R1.7 ở `04-ROADMAP.md` — được thiết kế cẩn trọng dual-write/shadow-mode/rollback CHÍNH VÌ giả định có dữ liệu thật đang sống). **Cần rà soát lại `04-ROADMAP.md` khi rewrite theo D13**: có thể đơn giản hoá đáng kể — thay vì migrate tại chỗ, có thể **xoá sạch dữ liệu test + seed lại theo schema/RBAC mới** một lần trước khi đưa production thật vào (do DevOps MISA cấu hình). Không tự động coi mọi Tier-A finding hết giá trị — code vẫn cần đúng từ đầu cho khi dữ liệu thật xuất hiện, chỉ là **không cần retrofit cẩn trọng cho dữ liệu ĐANG có** vì dữ liệu đó bỏ được.
 
 ### B.1 Build & container
-`Dockerfile` (`node:24-alpine`): `npm ci` → copy source → `npm run build:ui` (build Vue vào `public/`) → `EXPOSE 3007` → `CMD ["node", "server/index.js"]`. App đọc `process.env.PORT` (Cloud Run tự cấp `PORT=8080` khi deploy, override giá trị default `3007` trong `server/index.js:15`).
+`Dockerfile` (`node:24-alpine`): `npm ci` → copy source → `npm run build:ui` (build Vue vào `public/`) → `EXPOSE 3007` → `CMD ["node", "server/index.js"]`. App đọc `process.env.PORT` (Cloud Run tự cấp `PORT=8080` khi deploy, override giá trị default `3007` trong `server/index.js:7` — sửa lại 2026-08-25, trước ở `:15` khi chưa tách `server/app.js`).
 
 ### B.2 Kết nối Cloud SQL
 `server/mysql-worker.js:19-24`: nếu có `MYSQL_SOCKET_PATH` → dùng unix socket `/cloudsql/<INSTANCE_CONNECTION_NAME>` (chuẩn Cloud Run + Cloud SQL, không cần Cloud SQL Proxy sidecar riêng — Cloud Run tự mount socket khi khai báo Cloud SQL connection trong config service); nếu không → dùng `MYSQL_HOST`+`MYSQL_PORT` (cho Docker/local). **Ưu tiên `socketPath` nếu có** — 2 cách cấu hình loại trừ nhau qua 1 biến môi trường duy nhất (`MYSQL_SOCKET_PATH`).
@@ -53,10 +53,10 @@ Khác kiến trúc Railway cũ (1 volume bền `/data` cho cả SQLite file + up
 
 | Biến | Bắt buộc? | Mặc định nếu bỏ trống | Ý nghĩa | Nguồn |
 |---|---|---|---|---|
-| `PORT` | không | `3007` | Cổng HTTP; Cloud Run tự set `8080` | `server/index.js:15` |
+| `PORT` | không | `3007` | Cổng HTTP; Cloud Run tự set `8080` | `server/index.js:7` |
 | `DB_CLIENT` | không | **`mysql`** | `mysql`\|`sqlite` — chọn engine DB. **Lưu ý: default là mysql, KHÔNG PHẢI sqlite** | `server/db.js:15` |
 | `DATA_DIR` | không | `<repo>/data` | Thư mục chứa `pr.db` (nếu SQLite) + `uploads/` (mọi engine) | `server/db.js:9` |
-| `SESSION_SECRET` | **nên có trên production** | `'misa-pr-dev-secret-change-me'` | Khoá ký session cookie — KHÔNG fail-fast nếu thiếu, chỉ dùng default không an toàn (F2) | `server/index.js:20` |
+| `SESSION_SECRET` | **nên có trên production** | `'misa-pr-dev-secret-change-me'` | Khoá ký session cookie — KHÔNG fail-fast nếu thiếu, chỉ dùng default không an toàn (F2) | `server/app.js:18` (sửa lại 2026-08-25, trước ở `index.js:20`) |
 | `MYSQL_SOCKET_PATH` | chỉ khi Cloud SQL qua unix socket | — | Đường dẫn socket `/cloudsql/<INSTANCE_CONNECTION_NAME>`; có giá trị này thì bỏ qua `MYSQL_HOST`/`MYSQL_PORT` | `server/mysql-worker.js:19-24` |
 | `MYSQL_HOST` | chỉ khi không dùng socket | `127.0.0.1` | Host MySQL (Docker: tên service `db`) | `mysql-worker.js:22` |
 | `MYSQL_PORT` | chỉ khi không dùng socket | `3306` | | `mysql-worker.js:23` |

@@ -24,13 +24,25 @@ before(async () => {
   const fixtures = require('../test-support/fixtures');
 
   ({ baseUrl, close: closeServer } = await startTestApp(createApp()));
-  fixtureUser = fixtures.createUser('super_admin', { username: `smoke_admin_${Date.now()}` });
+  fixtureUser = fixtures.createPrivilegedUser({ username: `smoke_admin_${Date.now()}` });
 });
 
 after(async () => {
-  if (closeServer) await closeServer();
-  if (isMysql && dbName) await dbHarness.dropMysqlTestDb(dbName);
-  if (sqliteTeardown) sqliteTeardown();
+  // Mỗi bước dọn dẹp chạy độc lập (N2, Codex G1A1-audit): 1 bước lỗi không được cản các bước
+  // sau — nếu không, đóng server lỗi có thể khiến worker MySQL/database tạm bị bỏ sót vĩnh viễn.
+  // Thứ tự: đóng HTTP server -> đóng connection/worker DB (A1, bắt buộc trước khi drop schema)
+  // -> drop schema tạm / xoá thư mục sqlite tạm.
+  const steps = [
+    async () => { if (closeServer) await closeServer(); },
+    async () => { await require('../db').closeDb(); },
+    async () => { if (isMysql && dbName) await dbHarness.dropMysqlTestDb(dbName); },
+    async () => { if (sqliteTeardown) sqliteTeardown(); },
+  ];
+  const errors = [];
+  for (const step of steps) {
+    try { await step(); } catch (error) { errors.push(error); }
+  }
+  if (errors.length) throw new AggregateError(errors, 'teardown gặp lỗi (đã thử hết các bước dọn dẹp)');
 });
 
 test('login + GET /api/me trả đúng session user', async () => {

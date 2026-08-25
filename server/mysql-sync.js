@@ -53,6 +53,38 @@ class MySQLSyncDatabase {
   constructor() {
     this.worker = new Worker(path.join(__dirname, 'mysql-worker.js'), { env: process.env });
     this.worker.on('error', (error) => { this.workerError = error; });
+    this._closed = false;
+  }
+
+  // Đóng connection MySQL trong worker rồi terminate worker thread — thiếu bước này khiến
+  // tiến trình node giữ event loop sống vô hạn (worker + connection vẫn "alive"), test runner
+  // báo assertion xanh nhưng không bao giờ exit (Codex G1A1-audit A1). Luôn gọi trước khi drop
+  // schema test để tránh vừa đóng connection vừa drop DB đang được trỏ tới.
+  close() {
+    if (this._closed) return this._closePromise;
+    this._closed = true;
+    this._closePromise = new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      this.worker.once('exit', finish);
+      this.worker.once('error', finish);
+      try {
+        this.worker.postMessage({ shutdown: true });
+      } catch {
+        finish();
+      }
+      // An toàn: nếu worker không tự thoát sau graceful shutdown (vd connection.end() treo),
+      // terminate cứng để close() không bao giờ treo teardown test.
+      const timer = setTimeout(() => {
+        this.worker.terminate().then(finish, finish);
+      }, 3000);
+    });
+    return this._closePromise;
   }
 
   _call(sql, params = []) {

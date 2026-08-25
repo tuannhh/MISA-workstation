@@ -22,6 +22,15 @@ function createUser(role, overrides = {}) {
   return { username: user.username, password: user.password, role };
 }
 
+// Fixture principal "chế độ privileged" mà G1A.1 yêu cầu (04-ROADMAP.md G1A.1) — dùng để cô lập
+// hành vi non-security (mà G1A.3 đi test) khỏi lỗi RBAC 2-role đã biết, KHÔNG dùng để che giấu
+// lỗ hổng thật. `super_admin` hiện đã có CRUD trên mọi module + canSeeSensitive=true
+// (`server/rbac.js:12-15`), nên tự nhiên thoả vai "privileged" trong model 2-role hiện tại —
+// không cần tạo cơ chế bypass auth riêng. Khi D13 (4 role) lên Wave 1, hàm này phải đổi theo.
+function createPrivilegedUser(overrides = {}) {
+  return createUser('super_admin', overrides);
+}
+
 async function login(baseUrl, { username, password }) {
   const res = await fetch(`${baseUrl}/api/login`, {
     method: 'POST',
@@ -37,4 +46,4 @@ async function login(baseUrl, { username, password }) {
   return { cookie, body: await res.json() };
 }
 
-module.exports = { createUser, login };
+module.exports = { createUser, createPrivilegedUser, login };

@@ -8,7 +8,7 @@
 Browser (session cookie, sameSite=lax)
    │
    ▼
-Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,action) (rbac.js)
+Express (server/app.js, khởi động qua server/index.js) — requireAuth (auth.js) → requirePerm(module,action) (rbac.js)
    │
    ├─► MySQL/SQLite (server/db.js, mysql-sync.js) ── dữ liệu nghiệp vụ + tiền + PII
    ├─► Filesystem uploads (UPLOAD_DIR) ── ảnh/PDF/giấy tờ, phục vụ qua /files/:id

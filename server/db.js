@@ -900,4 +900,10 @@ if (process.env.RESET_DB === '1') {
 init();
 seed();
 
-module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet };
+// Đóng connection/worker (MySQL) hoặc file handle (SQLite) — cần cho test harness teardown
+// (Codex G1A1-audit A1); production không cần gọi, process tự thoát khi container bị kill.
+function closeDb() {
+  return typeof db.close === 'function' ? db.close() : undefined;
+}
+
+module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb };

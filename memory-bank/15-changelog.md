@@ -97,7 +97,9 @@
   `ports: 3306:3306` cho service `db` trong `docker-compose.yml` (trước đó không truy cập được
   từ host). Smoke test `server/test/smoke.test.js` PASS 2/2 cả `test:integration:sqlite` và
   `test:integration:mysql`; đã xác nhận teardown drop sạch database `pr_media_test_*` sau khi
-  chạy (không rò rỉ database tạm). Phát hiện phụ trong lúc dựng harness: `node --test <thư mục>`
+  chạy ở **happy path** (chưa test failure-path lúc này — Codex audit round sau chỉ ra claim
+  "không rò rỉ" ở mức này là quá rộng khi chưa chứng minh cả đường lỗi; xem mục remediation dưới).
+  Phát hiện phụ trong lúc dựng harness: `node --test <thư mục>`
   KHÔNG tự động discover file trên Node 24.15.0 — phải dùng glob rõ ràng
   (`server/test/*.test.js`), đã sửa lại 2 script trong `package.json` cho đúng.
 - **G1A.9 (khung, CHƯA xong):** tạo `memory-bank/gate1-test-mapping.md` — 145/145 route (sinh từ
@@ -106,6 +108,64 @@
   `test_id`/`file`/`status` thật khi G1A.2-G1A.8 lần lượt hoàn thành.
 - Verify: `npm run test:security` vẫn 6/6 PASS (không regression do tách `index.js`/`app.js`),
   `git diff --check` sạch.
+
+## 2026-08-25 — Codex audit G1A.1 round 1: HOLD/PARTIAL → remediation round 2
+
+Codex audit `PR-WORKSTATION-CODEX-G1A1-AUDIT.md` trả G1A.1 **HOLD/PARTIAL** (không phải HOLD toàn
+bộ Gate 1 — G1A.9 scaffold vẫn PASS AS SCAFFOLD) với 5 blocker (A1-A5) + 2 process fix (N1-N2).
+Đã tự tái hiện độc lập trước khi sửa (đúng nề nếp dự án): A1 (process treo) và A3 (port
+`0.0.0.0:3306`) tái hiện y hệt Codex; A2 chỉ tái hiện được đúng cách sau khi phát hiện lỗi trong
+chính failure-path test của Claude (xem dưới).
+
+- **A1 (blocker):** thêm `MySQLSyncDatabase.close()` (`server/mysql-sync.js`) — gửi message
+  `shutdown` cho worker, `worker.postMessage({shutdown:true})` → worker `connection.end()` rồi
+  `process.exit(0)` (`server/mysql-worker.js`), có timeout 3s force-`terminate()` nếu worker không
+  tự thoát. Thêm `closeDb()` ở `server/db.js` (dùng chung cho SQLite qua `DatabaseSync.close()` có
+  sẵn của Node). Gọi `closeDb()` trong teardown TRƯỚC khi drop schema. Verify: đo trực tiếp
+  `npm run test:integration:mysql` từ 3 lần chạy round 1 để lại **3 process/npm zombie** (từ
+  9:24, 9:32, 9:52 sáng) không tự thoát — đã kill tay; sau fix, đo lại bằng `date +%s` trước/sau:
+  exit code 0 thật, ~2 giây, không cần force-exit.
+- **A2 (blocker):** `createMysqlTestDb()` giờ rollback (`DROP DATABASE`) khi `GRANT`/`FLUSH` lỗi
+  sau khi `CREATE DATABASE` đã thành công. Thêm failure-path test
+  `server/test/db-harness-failure.test.js` tái hiện đúng thí nghiệm Codex (`MYSQL_USER` không tồn
+  tại → `GRANT` lỗi `ER_CANT_CREATE_USER_WITH_GRANT`). **Tự bắt được 1 lỗi trong chính test này**:
+  bản đầu so toàn bộ `SHOW DATABASES LIKE 'pr_media_test_%'` trước/sau — false positive vì
+  `smoke.test.js` chạy đồng thời (process riêng) có thể đang có database tạm hợp lệ của riêng nó
+  tại đúng thời điểm kiểm tra. Sửa: `error.attemptedDbName` gắn tên cụ thể vào lỗi, test chỉ kiểm
+  tra đúng tên đó còn tồn tại hay không — độc lập với các file test khác đang chạy song song.
+- **A3 (blocker an toàn):** `dropMysqlTestDb()` validate tên bằng regex
+  `^pr_media_test_\d+_[0-9a-f]{8}$`, từ chối DROP tên không khớp. `GRANT` đổi từ wildcard
+  `pr_media_test_%` sang đúng tên database vừa tạo. Thêm `assertSafeHost()` chặn
+  `MYSQL_HOST` ngoài allowlist `127.0.0.1`/`localhost`/`::1` trừ khi
+  `ALLOW_TEST_DB_REMOTE_HOST=1`. Thêm opt-in bắt buộc `ALLOW_TEST_DB_CREATE=1` (đặt sẵn trong
+  script `test:integration:mysql`). `docker-compose.yml`: đổi `"3306:3306"` → `"127.0.0.1:3306:
+  3306"` — verify bằng `docker port`: trước fix thấy cả `0.0.0.0:3306`+`[::]:3306`, sau fix chỉ
+  còn `127.0.0.1:3306`.
+- **A4 (contract):** thêm `fixtures.createPrivilegedUser()` — dùng `super_admin` sẵn có (đã có
+  CRUD mọi module + `canSeeSensitive`) làm fixture "privileged" đúng nghĩa roadmap G1A.1 yêu cầu,
+  thay vì để roadmap ghi `XONG` khi tự thừa nhận thiếu. Đồng thời đổi trạng thái roadmap G1A.1 từ
+  `XONG` (round 1, bị Codex chỉ ra là premature) thành `PARTIAL — chờ Codex re-audit`, không tự
+  tuyên bố `XONG` lần này dù đã fix hết 5 blocker — chỉ Codex mới đóng gate theo đúng mô hình 2
+  agent của dự án.
+- **A5 (evidence):** sửa 8 file memory-bank có line-number trỏ vào `index.js` cho các phần đã
+  chuyển sang `app.js` (`07-route-catalog.md`, `05-error-contract.md`, `13-deployment-runbook.md`,
+  `README.md`, `01-audit-findings.md`, `14-known-traps.md`, `06-threat-model.md`). Sửa
+  `scripts/verify-g0.mjs`: `sourceRoutes()` không còn hard-code 3 route auth — hàm
+  `parseDirectAppRoutes()` mới parse thật từ `server/app.js` (route + handler), chỉ giữ lại tri
+  thức nghiệp vụ tối thiểu (handler nào → authKind nào) dưới dạng map hằng, fail loudly nếu route
+  bị đổi/xoá/handler lạ. Thêm negative self-test `scripts/verify-g0.selftest.mjs` (script
+  `test:verify-g0-selftest`) chứng minh parser thật sự FAIL khi xoá route `/api/login` hoặc đổi
+  tên handler — trước đây verifier luôn PASS vì hard-code, không phát hiện được chính drift này.
+- **N1/N2 (process):** thêm rule bắt buộc `DATA_DIR` tạm cho manual smoke vào
+  `16-coding-rules.md` §B.8. `app-harness.close()` không còn nuốt lỗi đóng server + có timeout 5s
+  báo lỗi rõ nếu socket còn mở. Thêm self-test cho clock helper
+  (`server/test/clock-selftest.test.js`).
+- Verify cuối round: `npm run test:security` 6/6 PASS, `npm run test:integration:sqlite` 4 pass +
+  1 skip (đúng — test failure-path chỉ chạy ở mysql mode), `npm run test:integration:mysql` 5/5
+  PASS với exit code 0 thật (~2s), `npm run test:verify-g0-selftest` 3/3 PASS,
+  `node scripts/verify-g0.mjs` vẫn PASS toàn bộ (giờ đáng tin hơn vì không còn hard-code auth
+  route), `git diff --check` sạch, `SHOW DATABASES LIKE 'pr_media_test_%'` rỗng và không còn
+  process `node --test` nào sống sau khi chạy xong cả 2 chế độ.
 
 ---
 

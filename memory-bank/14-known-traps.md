@@ -20,7 +20,7 @@ Cả 2 dùng chung 1 instance multer `memoryStorage()`, giới hạn 25MB, **kh�
 
 ## 4. Banner đăng nhập quảng cáo vai trò không tồn tại trong seed (F11)
 
-`server/index.js:50-55` in ra console 5 tài khoản demo (`truongphong`, `lanhdao`, `xem` kèm `admin`/`chuyenvien`) và `README.md` liệt kê tương tự 5 role, nhưng `rbac.js:12-15` chỉ định nghĩa 2 role thật (`super_admin`, `pr_staff`) và `server/db.js:665-666` chỉ seed đúng 2 user (`admin`, `chuyenvien`). Nếu đọc banner/README mà không đọc `rbac.js`+`db.js`, sẽ tưởng hệ thống có 5 vai trò phân quyền chi tiết hơn thực tế — 3 role kia hiện **không đăng nhập được bằng bất kỳ cách nào** (không có user tương ứng trong DB seed sạch). Đừng dựa vào banner/README để hiểu RBAC — luôn đọc `server/rbac.js` trực tiếp.
+`server/index.js:13-18` (sửa lại 2026-08-25, trước ở `:50-55` khi chưa tách `server/app.js`) in ra console 5 tài khoản demo (`truongphong`, `lanhdao`, `xem` kèm `admin`/`chuyenvien`) và `README.md` liệt kê tương tự 5 role, nhưng `rbac.js:12-15` chỉ định nghĩa 2 role thật (`super_admin`, `pr_staff`) và `server/db.js:665-666` chỉ seed đúng 2 user (`admin`, `chuyenvien`). Nếu đọc banner/README mà không đọc `rbac.js`+`db.js`, sẽ tưởng hệ thống có 5 vai trò phân quyền chi tiết hơn thực tế — 3 role kia hiện **không đăng nhập được bằng bất kỳ cách nào** (không có user tương ứng trong DB seed sạch). Đừng dựa vào banner/README để hiểu RBAC — luôn đọc `server/rbac.js` trực tiếp.
 
 ## 5. `stripDisallowed` không đủ ở mọi route — client tưởng ghi thành công nhưng dữ liệu mật bị âm thầm bỏ (F1)
 

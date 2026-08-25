@@ -29,7 +29,16 @@ async function getConnection() {
   return connection;
 }
 
-parentPort.on('message', async ({ shared, sql, params }) => {
+parentPort.on('message', async (msg) => {
+  if (msg && msg.shutdown) {
+    if (connection) {
+      try { await connection.end(); } catch { /* đang thoát, bỏ qua lỗi close */ }
+      connection = null;
+    }
+    process.exit(0);
+    return;
+  }
+  const { shared, sql, params } = msg;
   const state = new Int32Array(shared, 0, 2);
   const output = new Uint8Array(shared, 8);
   try {

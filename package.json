@@ -18,7 +18,8 @@
     "seed": "node server/db.js --reseed",
     "test:security": "DB_CLIENT=sqlite node --test server/security.test.js",
     "test:integration:sqlite": "DB_CLIENT=sqlite node --test server/test/*.test.js",
-    "test:integration:mysql": "DB_CLIENT=mysql node --test server/test/*.test.js"
+    "test:integration:mysql": "DB_CLIENT=mysql ALLOW_TEST_DB_CREATE=1 node --test server/test/*.test.js",
+    "test:verify-g0-selftest": "node --test scripts/verify-g0.selftest.mjs"
   },
   "dependencies": {
     "@tabler/icons-vue": "^3.35.0",

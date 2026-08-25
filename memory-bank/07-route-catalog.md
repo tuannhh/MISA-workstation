@@ -2,7 +2,7 @@
 
 > **Sửa sau Codex G0-audit** (FAIL — 47/135 literal path không xuất hiện nguyên dạng do bản trước nén bằng wildcard). Bản này: **1 route = 1 row, không compress, không wildcard**, tự-verify khớp 100% với source.
 >
-> **Verify:** `rg -o "router\.(get|post|put|patch|delete)\('[^']+'" server/routes.js server/ai.js` → 142 literal path (135 `routes.js` + 7 `ai.js`) khớp 100% thứ tự + cú pháp param (`:id`,`:fid`,`:cid`,`:pid`,`:tid`,`:qid`,`:aid`) với 142 dòng đầu bảng dưới. + 3 route auth (`app.post/get` trực tiếp, không qua `router.`, đọc trực tiếp `server/index.js:27-29`) = **145/145 khớp, 0 lệch**. Router mount: `apiRouter` ở `/api` (`server/index.js:32`), `aiRouter` ở `/api/ai` (`server/index.js:34`) — mọi full path dưới đã cộng prefix đúng.
+> **Verify:** `rg -o "router\.(get|post|put|patch|delete)\('[^']+'" server/routes.js server/ai.js` → 142 literal path (135 `routes.js` + 7 `ai.js`) khớp 100% thứ tự + cú pháp param (`:id`,`:fid`,`:cid`,`:pid`,`:tid`,`:qid`,`:aid`) với 142 dòng đầu bảng dưới. + 3 route auth (`app.post/get` trực tiếp, không qua `router.`, đọc trực tiếp `server/app.js:25-27`) = **145/145 khớp, 0 lệch**. Router mount: `apiRouter` ở `/api` (`server/app.js:30`), `aiRouter` ở `/api/ai` (`server/app.js:32`) — mọi full path dưới đã cộng prefix đúng. **Sửa lại 2026-08-25 (Codex G1A.1-audit A5):** 3 route auth + 2 mount đã chuyển từ `server/index.js` sang `server/app.js` khi tách `createApp()` (commit `2c64b7e`) — line number cập nhật theo file mới, không còn trỏ `index.js`.
 
 | ID | method | full path | auth | entity/table | sensitive_group | upload/download | source |
 |---|---|---|---|---|---|---|---|
@@ -148,15 +148,15 @@
 | R140 | POST | /api/ai/award-advice | requirePerm(awards,view) | awards (input client, không đọc DB) | text → Gemini (không gửi `cost`) | không | ai.js:197 |
 | R141 | POST | /api/ai/event-extract | requirePerm(events,create) | events (trích xuất, chưa lưu) | excel/text → Gemini (đã redact — điểm mạnh) | có (upload, field `file`, Excel/CSV) | ai.js:244 |
 | R142 | GET | /api/ai/status | requireAuth only | — | — | không | ai.js:275 |
-| R143 | POST | /api/login | **no-auth (public)** | users | — | không | index.js:27 |
-| R144 | POST | /api/logout | **no auth middleware** (`auth.logout` chỉ destroy session nếu có) | — | — | không | index.js:28; auth.js:24 |
-| R145 | GET | /api/me | **handler tự kiểm tra session** (`auth.me`, không gắn `requireAuth` middleware) | users | — | không | index.js:29; auth.js:28 |
+| R143 | POST | /api/login | **no-auth (public)** | users | — | không | app.js:25 |
+| R144 | POST | /api/logout | **no auth middleware** (`auth.logout` chỉ destroy session nếu có) | — | — | không | app.js:26; auth.js:24 |
+| R145 | GET | /api/me | **handler tự kiểm tra session** (`auth.me`, không gắn `requireAuth` middleware) | users | — | không | app.js:27; auth.js:28 |
 
 ## Background jobs (không phải HTTP endpoint, giữ riêng)
 | Job | Định nghĩa | Nơi gọi lúc boot | Tần suất |
 |---|---|---|---|
-| Reminder scheduler | `scheduler.js:23-69` (`runOnce`), `:71-76` (`start`) | `server/index.js:47` — `scheduler.start()` trong `app.listen()` | Ngay lúc boot + `setInterval` 6h |
-| Monitor auto-scan | `monitor.js:427-437` (`applySchedule`) | `server/index.js:48` — `monitor.start()` trong `app.listen()` | Tùy `app_meta.autoscan`, mặc định 4h |
+| Reminder scheduler | `scheduler.js:23-69` (`runOnce`), `:71-76` (`start`) | `server/index.js:10` — `scheduler.start()` trong `app.listen()` (sửa lại 2026-08-25, trước ở `:47` khi chưa tách `app.js`) | Ngay lúc boot + `setInterval` 6h |
+| Monitor auto-scan | `monitor.js:427-437` (`applySchedule`) | `server/index.js:11` — `monitor.start()` trong `app.listen()` (sửa lại 2026-08-25) | Tùy `app_meta.autoscan`, mặc định 4h |
 
 ## UI top-level views (`public/app.js`) — join key cho ma trận G0.4
 | VIEWS key | file:line | Route ID chính dùng |

@@ -20,7 +20,7 @@ Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật c
 - Read-bypass xác nhận nguồn gốc **duy nhất**: `GET /files/:id` (`routes.js:467-478`) — phục vụ nội dung mọi loại attachment, chỉ gate `kind==='id_doc'`.
 
 ### F2 — Session store = MemoryStore trên Cloud Run · **High / B / browser-production**
-- `server/index.js:19-24` không khai báo `store` → MemoryStore; cookie thiếu `secure`; không regenerate session sau login (session fixation) — `server/auth.js`.
+- `server/app.js:17-22` (sửa lại 2026-08-25, trước ở `index.js:19-24` khi chưa tách `createApp()`) không khai báo `store` → MemoryStore; cookie thiếu `secure`; không regenerate session sau login (session fixation) — `server/auth.js`.
 - Cloud Run tái chế container / cold-start / scale >1 → **user bị đăng xuất ngẫu nhiên mỗi lần redeploy**. Bug đang xảy ra.
 - Fix: durable store (khuyến nghị bảng Cloud SQL sẵn có), `secure:true`, session regenerate, fail-fast nếu production thiếu `SESSION_SECRET` (`:20` đang có default `'misa-pr-dev-secret-change-me'`).
 
@@ -69,7 +69,7 @@ Wave 1 thêm classification attachment + bật download/write gate fail-closed. 
 Brief Codex §4.4-P1: kiểm tra lịch sử Git; nếu là key thật → **rotate** (không chỉ xóa HEAD). Đưa vào Gate 0.
 
 ### F11 — RBAC drift 2-role vs banner 5-tài-khoản · **Low / — / browser-production**
-`server/rbac.js:12-15` chỉ có `super_admin`+`pr_staff`; seed 2 user (`server/db.js:665-666`); nhưng banner login (`server/index.js:50-55`) quảng cáo 5 tài khoản không tồn tại. Dọn banner + README + đồng bộ 1:1 sau khi owner chốt role model.
+`server/rbac.js:12-15` chỉ có `super_admin`+`pr_staff`; seed 2 user (`server/db.js:665-666`); nhưng banner login (`server/index.js:13-18` — sửa lại 2026-08-25, trước ở `:50-55` khi chưa tách `server/app.js`) quảng cáo 5 tài khoản không tồn tại. Dọn banner + README + đồng bộ 1:1 sau khi owner chốt role model.
 
 ### F12 — Schema/API mismatch: `event_id` không tồn tại trong allowlist ghi của booking · **Medium / B / browser-production** (Codex round-3 re-audit, R3-02D)
 `server/routes.js:584-585` khai `B_COLS` cho phép ghi `award_id` nhưng **không có `event_id`** — trong khi `10-api-contract.md` (bản trước) và ý định nghiệp vụ (booking liên kết được với 1 sự kiện, dùng tính `mediaCost` theo sự kiện tương tự `award_id`) ngụ ý cả 2 field cùng được hỗ trợ. `pick(req.body, B_COLS)` (`routes.js:22-26`) âm thầm loại `event_id` client gửi lên — không lỗi, không log (cùng cơ chế silent-drop ở `16-coding-rules.md` §13). Client tưởng đã liên kết booking với sự kiện nhưng dữ liệu không được lưu.

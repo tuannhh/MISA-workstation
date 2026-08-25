@@ -6,7 +6,7 @@
 
 - Toàn bộ handler trả `res.status(NNN).json({ error: '<message tiếng Việt>' })` — ví dụ `server/routes.js:127,209,364,455,469`. Không có `code` ổn định, không có `requestId`, không có `details`.
 - `server/auth.js:20,29,36,42,45` cùng pattern cho 401/403.
-- Error middleware toàn cục (`server/index.js:37-41`) bắt lỗi multer + lỗi chưa xử lý → luôn trả **400** kèm `err.message` **kể cả khi lỗi là 500 thật** (ví dụ lỗi DB) — message có thể lộ chi tiết implementation.
+- Error middleware toàn cục (`server/app.js:35-39` — sửa lại 2026-08-25, trước ở `index.js:37-41` khi chưa tách `createApp()`) bắt lỗi multer + lỗi chưa xử lý → luôn trả **400** kèm `err.message` **kể cả khi lỗi là 500 thật** (ví dụ lỗi DB) — message có thể lộ chi tiết implementation.
 - **Frontend đọc `data.error` ở khắp nơi** (`public/app.js:14,23,768,2077,2114,...`) — đây là **hợp đồng ngầm hiện tại**, không được phá khi đổi envelope.
 
 ## Target envelope — CHỐT (canonical, đã sửa mâu thuẫn roadmap↔spec do Codex phát hiện)
@@ -39,7 +39,7 @@
 | 500 | Lỗi server thật — **KHÔNG lộ `err.message` thô ra client**, chỉ log server-side + `requestId` | `INTERNAL_ERROR` |
 
 ## Việc cần sửa (đưa vào Wave 1, không phải Gate 0)
-1. Middleware toàn cục (`index.js:37-41`): phân biệt lỗi multer (400 đúng) vs lỗi khác (500, message chung + log chi tiết server-side).
+1. Middleware toàn cục (`server/app.js:35-39`): phân biệt lỗi multer (400 đúng) vs lỗi khác (500, message chung + log chi tiết server-side).
 2. `requirePerm`/PolicyEngine (W1.2/W1.3) trả `code` ổn định thay vì chỉ message tiếng Việt tự do.
 3. Thêm `requestId` middleware (uuid mỗi request, gắn vào log + response) — nền cho audit W1.7/W1.AI-POLICY.
 4. **Không đổi field `error`** trong giai đoạn chuyển tiếp — chỉ thêm field mới, tới khi frontend (Wave 3 strangler) chuyển sang đọc `code`.

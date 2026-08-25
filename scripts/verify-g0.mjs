@@ -40,6 +40,25 @@ function assertPartition(actual, expected, label) {
     `${label}: missing=[${missing}] duplicate=[${duplicate}] unknown=[${unknown}]`);
 }
 
+// authKind cho 3 route auth trực tiếp (không qua router. nào) — đây vẫn là tri thức nghiệp vụ
+// phải hard-code (route nào công khai/route nào tự check session), NHƯNG chính route đó
+// (method+path+handler) được PARSE THẬT từ server/app.js, không hard-code khống — nếu route bị
+// đổi/xoá/đổi tên handler, hàm này FAIL thay vì im lặng báo PASS (Codex G1A1-audit A5).
+const DIRECT_AUTH_ROUTE_KIND = { login: 'public', logout: 'no-middleware', me: 'handler-session-check' };
+
+function parseDirectAppRoutes(appSource = read('server/app.js')) {
+  const regex = /app\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]\s*,\s*auth\.(\w+)\)/g;
+  const routes = [];
+  for (const match of appSource.matchAll(regex)) {
+    const [, method, fullPath, handler] = match;
+    const authKind = DIRECT_AUTH_ROUTE_KIND[handler];
+    ok(authKind, `server/app.js có route auth.${handler} chưa khai báo authKind trong DIRECT_AUTH_ROUTE_KIND — cập nhật verify-g0.mjs`);
+    routes.push({ method: method.toUpperCase(), fullPath, module: null, authKind });
+  }
+  ok(routes.length === 3, `server/app.js phải có đúng 3 route auth trực tiếp (login/logout/me), parse được ${routes.length}`);
+  return routes;
+}
+
 function sourceRoutes() {
   const routes = [];
   for (const [file, prefix] of [['server/routes.js', '/api'], ['server/ai.js', '/api/ai']]) {
@@ -55,11 +74,7 @@ function sourceRoutes() {
       });
     }
   }
-  routes.push(
-    { method: 'POST', fullPath: '/api/login', module: null, authKind: 'public' },
-    { method: 'POST', fullPath: '/api/logout', module: null, authKind: 'no-middleware' },
-    { method: 'GET', fullPath: '/api/me', module: null, authKind: 'handler-session-check' },
-  );
+  routes.push(...parseDirectAppRoutes());
   return routes;
 }
 
@@ -195,15 +210,24 @@ function verifyRemediationScope() {
   pass(`remediation scope from ${base}: memory-bank + verification script only (${scoped.length} files; unrelated .DS_Store ignored)`);
 }
 
-try {
-  verifyRoutesAndMatrices();
-  verifyGemini();
-  verifySchema();
-  verifyErrorExample();
-  verifyMarkdownLinks();
-  verifyRemediationScope();
-  console.log('\nG0 verification checks passed.');
-} catch (error) {
-  console.error(`FAIL  ${error.message}`);
-  process.exitCode = 1;
+// Export để scripts/verify-g0.selftest.mjs có thể import và chứng minh parser thật sự FAIL
+// khi route auth bị đổi/xoá (Codex G1A1-audit A5, "negative test chống false-positive") —
+// guard khối chạy-thật dưới đây để import không tự chạy toàn bộ verify.
+export { parseDirectAppRoutes, DIRECT_AUTH_ROUTE_KIND };
+
+function main() {
+  try {
+    verifyRoutesAndMatrices();
+    verifyGemini();
+    verifySchema();
+    verifyErrorExample();
+    verifyMarkdownLinks();
+    verifyRemediationScope();
+    console.log('\nG0 verification checks passed.');
+  } catch (error) {
+    console.error(`FAIL  ${error.message}`);
+    process.exitCode = 1;
+  }
 }
+
+if (import.meta.url === `file://${process.argv[1]}`) main();
