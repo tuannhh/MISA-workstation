@@ -359,4 +359,49 @@ Codex đồng thời báo 1 follow-up không chặn:
 
 ---
 
+## 2026-08-25 — Codex CLOSE G1A.2 (round 2, commit `82d181d`) — OPEN G1A.3
+
+G1A.2 (unit test validation/formatter, SSRF/security, AI redaction/schema, projection/tính toán)
+làm theo đúng 4 commit tách biệt do Codex chỉ đạo: `427eb65` (validation & formatter — rbac.js,
+17 helper mới export từ routes.js, spreadsheet-parser.js#validateSignature, uploads.js file
+filters), `f7f8cde` (SSRF/security utilities — monitor.js/ai.js), `b015251` (AI redaction &
+schema — gemini.js, 5 schema JSON), `47b5c8d` (projection/tính toán — trích 6 hàm thuần khỏi
+routes.js, gộp công thức NSR đang lặp 3 nơi).
+
+**Round 1 audit — CONDITIONAL PASS**, 3 điểm cần remediation:
+
+- 3 dòng gắn `known-red` (`BR-SSRF-010/011`, `BR-AI-015`) thực ra là characterization test ĐANG
+  XANH — contract định nghĩa `known-red` là target test đang đỏ có owner+expiry, không phải test
+  pass mô tả gap hiện có. Sửa: đổi cả 3 sang `green`, thêm quy ước rõ ở đầu
+  `gate1-test-mapping.md` (`green` = đang pass kể cả khi mô tả 1 gap; `known-red` chỉ dùng cho
+  target/guard test thật sự đỏ) — characterization xanh và target đỏ giờ luôn là 2 dòng riêng
+  (`BR-SSRF-016`/`BR-AI-017` giữ vai trò "hàng target thật" cho 2 gap này).
+- Inventory "mọi module" còn thiếu `monitor.parseFeed()`/`matchTerms()` (đã export từ trước,
+  chưa có test) và 6 test có sẵn ở `server/security.test.js` (predate G1A.2) chưa vào mapping.
+  Sửa: thêm 4 test mới (`BR-SSRF-017..020`, gồm 1 đặc tả đáng chú ý — `decodeEntities()` chạy
+  TRƯỚC `stripTags()` trong `parseFeed()`, nên text đã escape dạng `&lt;x&gt;` bị hiểu nhầm thành
+  tag HTML thật và bị xoá nguyên khối); đổi title 6 test cũ trong `security.test.js` để gắn
+  `BR-VAL-035..040` (chỉ đổi chuỗi mô tả, không đổi assert/logic).
+- `test_id` dùng scheme `UT-*` không xuất hiện trong source nên không join máy được. Sửa: bỏ
+  scheme riêng, `test_id` = `business_rule_id` (đã nằm verbatim trong mô tả `test()`) — tự viết
+  script xác nhận cả 83 dòng `green` đều tìm thấy đúng `test_id` trong file nguồn tương ứng.
+
+Cả 3 xử lý trong 1 commit remediation `82d181d`, không mở vòng audit riêng theo từng điểm.
+
+**Round 2 (re-audit remediation) — CLOSE.** Codex kiểm chứng độc lập: mapping 83 `green`/5
+`TODO`/0 `known-red`, 83/83 rule nối được tới test thật; `test:security` 6/6; SQLite 90 pass + 6
+skip; MySQL 95 pass + 1 skip; verifier G0 + self-test đều pass; diff chỉ gồm mapping + test,
+không đổi logic sản phẩm. Còn 1 ghi chú câu chữ không chặn: `BR-VAL-002/003` dùng chung `test()`
+với `BR-VAL-001` nên câu "`test_id` luôn bằng `business_rule_id`" chưa tuyệt đối đúng — sửa lại
+câu chữ trong `gate1-test-mapping.md` cùng lúc mở G1A.3 (không cần vòng remediation riêng).
+
+**Quyết định: G1A.2 = CLOSED. OPEN G1A.3.** Đáng chú ý: đây là gate đầu tiên trong dự án Gate 1
+mà việc characterization (viết test đặc tả hành vi hiện tại, không sửa nghiệp vụ) TỰ nó phát hiện
+2 lỗ hổng an ninh có thực (thiếu SSRF guard ở `resolveLink()`/`detectFeed()`; thiếu redact PII
+trước khi gửi Gemini ở `monitor.js#analyzeBatch()`) — cả hai đã được ghi `green`/`TODO` đúng vai
+trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn vào lúc viết test (đúng chỉ đạo
+"không tranh thủ sửa nghiệp vụ trong characterization").
+
+---
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

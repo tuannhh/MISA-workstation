@@ -16,10 +16,14 @@
 > lọt/trùng, bằng `scripts/verify-g0.mjs`).
 >
 > **Quy ước `business_rule_id`/`test_id` (từ G1A.2, sau remediation round 1 theo audit
-> Codex):** với mọi rule không gắn `route_id` (helper thuần/DI ở G1A.2+), `test_id` LUÔN
-> bằng đúng `business_rule_id` — vì id đó được ghi verbatim ngay trong chuỗi mô tả của
-> `test(...)` tương ứng trong file nguồn, nên `grep <id> server/test/*.test.js
-> server/security.test.js` join thẳng ra đúng test, không cần bảng ánh xạ số riêng.
+> Codex; câu chữ sửa lại theo CLOSE round 2, 2026-08-25):** với mọi rule không gắn
+> `route_id`, `test_id` chỉ bằng đúng `business_rule_id` của CHÍNH nó khi rule đó có
+> `test()` riêng. Một số rule liên quan (nhiều nhánh của cùng 1 hàm) chia sẻ 1 khối
+> `test()` duy nhất — ví dụ `BR-VAL-002`/`BR-VAL-003` đều được assert trong khối
+> `test('BR-VAL-001: ...')` — khi đó `test_id` của các rule này trỏ tới id của test CHỨA
+> nó (đã ghi rõ ở cột `note`), không phải bằng chính `business_rule_id` của rule. Quy tắc
+> chung: `test_id` LUÔN xuất hiện verbatim trong chuỗi mô tả `test(...)` nguồn — `grep
+> <test_id> server/test/*.test.js server/security.test.js` luôn join ra đúng test.
 > **Quy ước `green` vs `known-red`:** `green` = test ĐANG PASS, kể cả khi nó đặc tả một
 > lỗ hổng/gap đang tồn tại trong hành vi hiện tại (characterization test) — pass nghĩa là
 > mô tả đúng thực trạng, không phải "đã an toàn". `known-red` CHỈ dùng cho target/guard
