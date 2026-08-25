@@ -892,13 +892,27 @@ if (require.main === module && process.argv.includes('--reseed')) {
 
 // Khi khởi động server: nếu đặt RESET_DB=1 (env) thì XÓA SẠCH + seed lại rồi tiếp tục chạy.
 // Dùng để làm sạch dữ liệu trên môi trường live: đặt RESET_DB=1, redeploy, sau đó gỡ về 0.
-if (process.env.RESET_DB === '1') {
-  console.log('⚠ RESET_DB=1 → đang xóa sạch & seed lại dữ liệu…');
-  dropAll();
+//
+// Bọc try/catch quanh dropAll()/init()/seed() (Codex re-audit round 3, R3-01): connection/worker
+// MySQL đã được tạo xong ở dòng khởi tạo `db` phía trên TRƯỚC khi các hàm này chạy — nếu một
+// trong số chúng throw (vd MYSQL_DATABASE trỏ tới schema chưa tồn tại), phải đóng worker NGAY tại
+// đây trước khi rethrow, vì sau khi throw thì `require('./db')` không hoàn tất và không ai ở tầng
+// gọi nhận được `closeDb()` để tự đóng — worker mồ côi đó giữ event loop sống vô hạn, khiến một
+// `before()` hook trong `node:test` gọi require() này không bao giờ tự thoát process (phải
+// SIGKILL). Không `await` vì đây là code đồng bộ ở module-scope, nhưng worker/timer mà close()
+// tạo ra vẫn giữ process sống đủ lâu để tự thoát sạch (graceful hoặc force-terminate sau 3s)
+// trước khi phần còn lại của chương trình kết thúc — không cần chờ đồng bộ tại đây.
+try {
+  if (process.env.RESET_DB === '1') {
+    console.log('⚠ RESET_DB=1 → đang xóa sạch & seed lại dữ liệu…');
+    dropAll();
+  }
+  init();
+  seed();
+} catch (error) {
+  if (typeof db.close === 'function') db.close().catch(() => {});
+  throw error;
 }
-
-init();
-seed();
 
 // Đóng connection/worker (MySQL) hoặc file handle (SQLite) — cần cho test harness teardown
 // (Codex G1A1-audit A1); production không cần gọi, process tự thoát khi container bị kill.

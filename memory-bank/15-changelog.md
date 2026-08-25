@@ -246,4 +246,71 @@ privileged fixture, doc line-reference) nhưng vẫn giữ `HOLD/PARTIAL` vì 3 
 
 ---
 
+## 2026-08-25 — Codex re-audit G1A.1 round 3: HOLD/PARTIAL (2 blocker sâu hơn) → remediation round 4
+
+Codex re-audit round 3 (`PR-WORKSTATION-CODEX-G1A1-REAUDIT-ROUND-3.md`) xác nhận R2-01/R2-02/R2-03
++ S1/S2 của round 3 đều đúng hướng và CLOSE (resource-stack, CREATE/DROP guard đầy đủ, router-mount
+verifier, loopback bind, restore-env) — nhưng phát hiện 2 blocker MỚI, sâu hơn, nằm ngay trong đúng
+2 mảng vừa sửa, cộng 1 mục Codex tự đề xuất hạ từ blocker xuống backlog:
+
+- **R3-01 (treo thật trong `before()` node:test):** test cũ cho "DB init failure sau worker spawn"
+  dùng semantics của MỘT SCRIPT THƯỜNG (uncaught exception làm process chết ngay) — khác hẳn hành
+  vi thật của `before()` trong `node:test`, nơi test runner BẮT exception và tiếp tục chạy `after()`
+  mà KHÔNG tự crash process. Codex tái hiện đúng bằng `before(() => require('../db'))` trong 1 file
+  `node:test` thật, trỏ `MYSQL_DATABASE` tới schema chưa tồn tại: `after()` chạy xong nhưng process
+  không tự thoát — phải `SIGKILL` sau 6 giây, vì worker MySQL spawn trước `init()`/`seed()` mồ côi
+  hoàn toàn (không handle nào để đóng) khi `init()` throw trước khi `module.exports` của `db.js`
+  từng chạy tới. **Sửa:** bọc `try/catch` quanh `dropAll()/init()/seed()` ngay trong `server/db.js`
+  — nếu throw, gọi `db.close()` (không `await`, vì đây là code đồng bộ module-scope) TRƯỚC khi
+  rethrow lỗi gốc. Vì `db` (và worker của nó) đã được construct xong ở dòng trước `init()`/`seed()`,
+  `db.close()` luôn có handle hợp lệ để gọi — worker tự đóng graceful hoặc bị force-terminate sau
+  3s, và vì đây vẫn là các async operation có ref, event loop tiếp tục sống ĐỦ LÂU để tự dọn sạch
+  rồi mới thoát — không cần `await` đồng bộ tại đây, không cần ai ở tầng gọi phải nhớ đóng gì thêm.
+  Thêm fixture `server/test-support/db-init-hang-fixture.js` (1 file `node:test` thật, có
+  `before()`/`after()`/`test()` với sentinel qua `console.log`) + test mới trong
+  `server/test/smoke-failure.test.js` spawn `node --test <fixture>` (không phải script thường) và
+  đo elapsed time, xác nhận: không bị `SIGKILL` (`result.signal === null`), tự thoát trong < 4s,
+  `after()` có chạy (đúng thứ tự thật node:test), `test()` bên trong không chạy (đúng vì `before()`
+  lỗi). **Phát hiện thêm 1 bug trong lúc viết chính test này** (không phải do Codex chỉ ra): khi
+  test nằm bên trong MỘT `node --test` khác (`npm run test:integration:mysql`), Node tự set
+  `NODE_TEST_CONTEXT`/`NODE_TEST_WORKER_ID` trong `process.env` của process hiện tại — kế thừa 2
+  biến này vào env của `node --test` con (`...process.env`) khiến con tưởng nó đang chạy đệ quy bên
+  trong 1 test file, tự in cảnh báo "run() is being called recursively" và SKIP toàn bộ fixture (exit
+  0, stdout rỗng) — làm test tưởng nhầm là xanh trong khi chẳng chạy gì cả. Đã xoá 2 biến này khỏi
+  env trước khi spawn con, chạy lại xác nhận test thật sự tái hiện đúng kịch bản và pass vì fix
+  thật, không phải vì bị skip ngầm.
+- **R3-02 (`close()` false-success + TDZ che lỗi gốc):** `server/mysql-sync.js`'s `close()` cũ có
+  2 lỗi: (1) TDZ — `timer` được khai báo bằng `const` SAU nhánh `catch` của `postMessage()`; nếu
+  `postMessage()` throw đồng bộ, nhánh catch gọi `clearTimeout(timer)` trong khi `timer` còn ở
+  temporal dead zone → `ReferenceError` che mất lỗi worker gốc; (2) false-success — listener
+  `worker.once('exit', ...)` chỉ dựa vào "có nhận được `shutdownAck` báo lỗi hay không", bỏ qua
+  hẳn exit code; Codex chứng minh bằng fake worker: exit code 1 mà không gửi `shutdownAck` (ack bị
+  mất/worker crash trước khi kịp gửi) vẫn được `close()` coi là thành công (`resolve()`). **Sửa:**
+  tách state machine thành hàm thuần `closeWorker(worker, timeoutMs)` (export cùng
+  `MySQLSyncDatabase`) — khai báo VÀ gán `timer` TRƯỚC khi gọi `postMessage()` (hết TDZ hoàn toàn,
+  không còn thứ tự khai báo nào có thể gây ReferenceError); chỉ `resolve()` khi ĐỦ CẢ HAI: đã nhận
+  đúng 1 `shutdownAck` KHÔNG lỗi VÀ exit code === 0 — mọi tổ hợp khác (ack báo lỗi, exit khác 0 dù
+  có/không có ack, exit trước khi từng nhận ack, worker phát `error`, `postMessage()` throw đồng
+  bộ, hoặc phải force-terminate sau timeout) đều `reject()`. Thêm 8 unit test bằng fake worker
+  (EventEmitter, `server/test/mysql-sync-close.test.js`) phủ đúng từng nhánh: success, ack-error,
+  exit-non-zero-không-ack (repro chính xác false-success Codex phát hiện), exit-0-trước-ack,
+  worker error, `postMessage()` throw đồng bộ (xác nhận lỗi gốc được giữ nguyên, không còn bị TDZ
+  che), timeout/force-terminate, và lỗi ngay trong `terminate()`.
+- **R3-03 (nhận diện Docker test vs Cloud SQL Proxy) — Codex tự hạ từ MUST-FIX xuống SHOULD-FIX:**
+  sau khi trao đổi lại tiêu chí đánh giá (chỉ giữ blocker nếu có thể gây treo CI/mất dữ liệu/hở bảo
+  mật/regression thực tế), Codex xác nhận guard hiện tại (`assertSafeHost`, opt-in, regex tên DB,
+  namespace `TEST_MYSQL_*`) đã đủ để tiếp tục làm việc trong môi trường local kiểm soát — kịch bản
+  "Cloud SQL Proxy chiếm đúng `127.0.0.1:3306`" là rủi ro hiếm, không đáng giữ gate G1A.1. Chuyển
+  thành backlog DevOps ghi rõ trong `04-ROADMAP.md` dòng `G1A.10` (pin Docker test sang cổng riêng
+  + sentinel identity check khi làm CI/deploy hardening thật) — KHÔNG implement trong round này.
+- **Verify cuối round 4:** `npm run test:security` 6/6 PASS; `npm run test:integration:sqlite` 14
+  pass + 6 skip (6 test mysql-only), exit 0; `npm run test:integration:mysql` **20/20 PASS**, exit
+  code 0 thật, `real ~1,8-2,0s`; `npm run test:verify-g0-selftest` 6/6 PASS; `node scripts/verify-g0.mjs`
+  PASS toàn bộ; `git diff --check` sạch; `SHOW DATABASES LIKE 'pr_media_test_%'` rỗng sau suite;
+  `ps aux` xác nhận không còn process `node --test`/`mysql-worker` nào sống.
+- Cập nhật roadmap G1A.1 (`04-ROADMAP.md`) sang PARTIAL round 4, liệt kê đủ R3-01/R3-02 đã
+  remediate + R3-03 chuyển backlog `G1A.10` — vẫn KHÔNG tự ghi `XONG`, chờ Codex re-audit lần 4.
+
+---
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

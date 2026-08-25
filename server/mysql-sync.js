@@ -49,6 +49,77 @@ function translate(sql) {
   return out;
 }
 
+// Tách state machine shutdown thành hàm thuần nhận vào bất kỳ object giống worker_threads.Worker
+// (on/once/postMessage/terminate) — Codex re-audit round 3, R3-02, cho phép test dùng fake worker
+// (EventEmitter) để kiểm mọi nhánh lỗi mà không cần spawn worker thread thật. `timeoutMs` cho
+// phép test rút ngắn nhánh force-terminate (mặc định 3000ms cho production).
+//
+// Sửa 2 lỗi Codex phát hiện trong bản trước:
+// (1) TDZ: `timer` từng được `const` khai báo SAU nhánh `catch` của `postMessage()` — nếu
+//     postMessage() throw đồng bộ, nhánh catch gọi settle() -> clearTimeout(timer) trong khi
+//     `timer` còn ở temporal dead zone -> ReferenceError che mất lỗi worker gốc. Ở đây `timer`
+//     được khai báo và gán TRƯỚC khi gọi postMessage(), nên clearTimeout() luôn hợp lệ.
+// (2) False-success: bản trước chỉ dựa vào "có nhận được shutdownAck báo lỗi hay không" để quyết
+//     định resolve/reject ở event 'exit', bỏ qua hẳn exit code — worker exit code 1 (hoặc bất kỳ
+//     code khác 0) mà thông báo shutdownAck bị mất/chưa kịp gửi vẫn được coi là thành công. Ở đây
+//     chỉ resolve khi: đã nhận đúng 1 shutdownAck KHÔNG lỗi VÀ exit code === 0; mọi tổ hợp khác
+//     (ack lỗi, exit khác 0, exit trước khi có ack, worker 'error', postMessage throw đồng bộ,
+//     hoặc phải force-terminate) đều reject.
+function closeWorker(worker, timeoutMs = 3000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let ackError = null;
+    let ackReceived = false;
+
+    const settle = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) reject(error instanceof Error ? error : new Error(String(error)));
+      else resolve();
+    };
+
+    worker.on('message', (msg) => {
+      if (msg && msg.shutdownAck) {
+        ackReceived = true;
+        if (msg.error) {
+          ackError = new Error(`mysql-worker: lỗi khi đóng connection lúc shutdown: ${msg.error.message}`);
+        }
+      }
+    });
+
+    worker.once('exit', (code) => {
+      if (ackError) return settle(ackError);
+      if (code !== 0) {
+        return settle(new Error(`mysql-worker: thoát với exit code ${code} khi shutdown — không nhận được shutdownAck thành công.`));
+      }
+      if (!ackReceived) {
+        return settle(new Error('mysql-worker: thoát trước khi gửi shutdownAck — không xác nhận được connection đã đóng sạch.'));
+      }
+      settle(null);
+    });
+
+    worker.once('error', (error) => settle(error));
+
+    // Đặt timer TRƯỚC khi gọi postMessage() (xem chú thích TDZ ở trên) — an toàn nếu worker
+    // không tự thoát sau graceful shutdown (vd connection.end() treo): force-terminate cứng để
+    // close() không bao giờ treo teardown test, nhưng vẫn báo lỗi vì đây là shutdown không sạch
+    // (R2-02: "phải reject/report nếu graceful close lỗi hoặc terminate lỗi").
+    const timer = setTimeout(() => {
+      worker.terminate().then(
+        () => settle(new Error(`mysql-sync: worker không tự thoát sau shutdown message trong ${timeoutMs}ms — đã force-terminate.`)),
+        (terminateError) => settle(terminateError)
+      );
+    }, timeoutMs);
+
+    try {
+      worker.postMessage({ shutdown: true });
+    } catch (error) {
+      settle(error);
+    }
+  });
+}
+
 class MySQLSyncDatabase {
   constructor() {
     this.worker = new Worker(path.join(__dirname, 'mysql-worker.js'), { env: process.env });
@@ -60,55 +131,10 @@ class MySQLSyncDatabase {
   // tiến trình node giữ event loop sống vô hạn (worker + connection vẫn "alive"), test runner
   // báo assertion xanh nhưng không bao giờ exit (Codex G1A1-audit A1). Luôn gọi trước khi drop
   // schema test để tránh vừa đóng connection vừa drop DB đang được trỏ tới.
-  //
-  // Không nuốt lỗi cleanup (Codex re-audit round 2, R2-02): nếu worker báo shutdownAck kèm lỗi
-  // (connection.end() thất bại) hoặc phải force-terminate vì worker không tự thoát, close() phải
-  // reject để caller (smoke.test.js after(), dùng AggregateError) thấy được sự cố thay vì coi
-  // như đã dọn sạch. Vẫn luôn thử hết mọi bước cleanup còn lại của caller — reject ở đây chỉ báo
-  // lỗi, không ném ngoại lệ đồng bộ chặn các bước sau.
   close() {
     if (this._closed) return this._closePromise;
     this._closed = true;
-    this._closePromise = new Promise((resolve, reject) => {
-      let settled = false;
-      let shutdownAckError = null;
-      const finishOk = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve();
-      };
-      const finishError = (error) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      };
-      this.worker.on('message', (msg) => {
-        if (msg && msg.shutdownAck && msg.error) {
-          shutdownAckError = new Error(`mysql-worker: lỗi khi đóng connection lúc shutdown: ${msg.error.message}`);
-        }
-      });
-      this.worker.once('exit', () => {
-        if (shutdownAckError) finishError(shutdownAckError);
-        else finishOk();
-      });
-      this.worker.once('error', finishError);
-      try {
-        this.worker.postMessage({ shutdown: true });
-      } catch (error) {
-        finishError(error);
-      }
-      // An toàn: nếu worker không tự thoát sau graceful shutdown (vd connection.end() treo),
-      // terminate cứng để close() không bao giờ treo teardown test — nhưng vẫn báo lỗi vì đây là
-      // shutdown không sạch (R2-02: "phải reject/report nếu graceful close lỗi hoặc terminate lỗi").
-      const timer = setTimeout(() => {
-        this.worker.terminate().then(
-          () => finishError(new Error('mysql-sync: worker không tự thoát sau shutdown message trong 3s — đã force-terminate.')),
-          finishError
-        );
-      }, 3000);
-    });
+    this._closePromise = closeWorker(this.worker);
     return this._closePromise;
   }
 
@@ -148,4 +174,4 @@ class MySQLSyncDatabase {
   }
 }
 
-module.exports = { MySQLSyncDatabase, translate };
+module.exports = { MySQLSyncDatabase, translate, closeWorker };

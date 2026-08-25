@@ -3,6 +3,12 @@
 // R2-01): "after() không được tự require() DB mới; phải có failure test cho create/grant failure
 // trước require, DB init failure sau worker spawn, và HTTP listen/start failure sau khi DB đã
 // load — tất cả phải chứng minh không chạm DB mặc định và không sót schema/worker."
+//
+// Round 3 re-audit (R3-01) chỉ ra 2 test cũ ở đây có failure semantics khác thật: "listen/start
+// failure" chỉ throw giả (không đụng DB/app/listen() thật) và "DB init failure" chạy như script
+// thường (uncaught exception crash) chứ không phải before() hook thật của node:test, nơi test
+// runner bắt exception và tiếp tục — đúng nơi mới lộ ra process treo thật. Giữ 2 test cũ làm bằng
+// chứng bổ sung, thêm test mới dùng đúng `node --test` thật làm bằng chứng chính cho R3-01.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
@@ -103,14 +109,18 @@ test(
 );
 
 test(
-  'DB init failure sau khi worker đã spawn: require("../db") phải crash rõ ràng (exit khác 0), không âm thầm seed nhầm',
+  'DB init failure sau khi worker đã spawn (script thường): require("../db") phải crash rõ ràng (exit khác 0), không âm thầm seed nhầm',
   { skip: !isMysql },
   () => {
     // Chạy trong process con riêng (không phải test process chính): server/db.js có side-effect
     // module-scope (spawn worker + init() + seed() ngay khi require), nếu chạy trong process test
     // hiện tại sẽ làm hỏng module cache/worker cho các test khác trong cùng file. Trỏ MYSQL_DATABASE
     // tới một schema CHƯA TỪNG được tạo (không qua createMysqlTestDb()) để buộc init() thất bại
-    // đúng lúc worker đã tồn tại — đây là kịch bản Codex nêu ("DB init failure sau worker spawn").
+    // đúng lúc worker đã tồn tại. LƯU Ý (Codex re-audit round 3, R3-01): test này dùng semantics
+    // "uncaught exception làm process chết" của MỘT SCRIPT THƯỜNG — không đại diện cho hành vi
+    // thật của một before() hook trong node:test (nơi test runner BẮT exception và tiếp tục chạy,
+    // không tự crash process). Giữ lại làm bằng chứng bổ sung; bằng chứng CHÍNH cho R3-01 là test
+    // kế tiếp dưới đây, dùng đúng `node --test` thật.
     const fixture = path.join(__dirname, '..', 'test-support', 'require-db-fixture.js');
     const result = spawnSync(process.execPath, [fixture], {
       encoding: 'utf8',
@@ -130,11 +140,49 @@ test(
     assert.notEqual(result.status, 0, 'require("../db") với database chưa tồn tại phải làm process thoát khác 0, không âm thầm PASS');
     assert.ok(!result.stdout.includes('DB_LOADED_OK'), 'không được in DB_LOADED_OK khi init() thất bại');
     assert.match(result.stderr, /Unknown database/i, 'lỗi phải nêu rõ nguyên nhân (database không tồn tại), không phải lỗi mơ hồ');
-    // Ghi nhận rủi ro còn lại (đã trao đổi với Codex, chấp nhận là residual risk trong changelog):
-    // worker thread bị "leak" trong kịch bản này không có handle để đóng graceful (module.exports
-    // của db.js chưa từng chạy tới vì init() throw trước dòng đó) — nhưng vì toàn bộ kịch bản chạy
-    // trong MỘT process con độc lập, worker đó chỉ sống trong vòng đời process con này và bị dọn
-    // sạch bởi hệ điều hành ngay khi process con thoát (đã chứng minh ở trên: result.signal=null,
-    // process tự thoát chứ không bị treo).
+  }
+);
+
+test(
+  'DB init failure NGAY TRONG before() thật của node:test không được làm test-runner treo (Codex re-audit round 3, R3-01)',
+  { skip: !isMysql },
+  () => {
+    // Bằng chứng CHÍNH cho R3-01: Codex tái hiện đúng kịch bản before(() => require('../db'))
+    // trong MỘT file node:test thật, trỏ MYSQL_DATABASE tới schema chưa tồn tại, và phải SIGKILL
+    // process sau 6 giây vì trước round 4, init() throw mà không đóng worker khiến after() chạy
+    // xong nhưng process không tự thoát. Test này spawn `node --test <fixture thật>` — không phải
+    // script thường — để tái hiện đúng semantics đó và chứng minh fix ở server/db.js (đóng worker
+    // trong catch trước khi rethrow lỗi init/seed) khiến process tự thoát nhanh, không cần kill.
+    const fixture = path.join(__dirname, '..', 'test-support', 'db-init-hang-fixture.js');
+    // Bản thân test này ĐANG chạy bên trong một `node --test` khác (npm run test:integration:*) —
+    // Node tự set NODE_TEST_CONTEXT/NODE_TEST_WORKER_ID trong process.env của process hiện tại.
+    // Nếu vô tình kế thừa 2 biến này vào env của node --test con (`...process.env`), con sẽ tưởng
+    // nó đang chạy đệ quy bên trong 1 test file và tự SKIP toàn bộ (in cảnh báo "run() is being
+    // called recursively", không chạy fixture nào, exit code 0) — làm test này tưởng nhầm là xanh
+    // trong khi chẳng chứng minh được gì. Phải loại bỏ 2 biến này trước khi spawn con.
+    const childEnv = { ...process.env };
+    delete childEnv.NODE_TEST_CONTEXT;
+    delete childEnv.NODE_TEST_WORKER_ID;
+    const startedAtMs = Date.now();
+    const result = spawnSync(process.execPath, ['--test', fixture], {
+      encoding: 'utf8',
+      timeout: 6000, // đúng ngưỡng Codex dùng để phải SIGKILL trên bản lỗi — với fix phải xong sớm hơn nhiều
+      env: {
+        ...childEnv,
+        DB_CLIENT: 'mysql',
+        MYSQL_HOST: process.env.TEST_MYSQL_HOST || '127.0.0.1',
+        MYSQL_PORT: process.env.TEST_MYSQL_PORT || '3306',
+        MYSQL_USER: 'pr_media',
+        MYSQL_PASSWORD: 'pr_media',
+        MYSQL_DATABASE: `pr_media_test_never_created_${Date.now()}`,
+      },
+    });
+    const elapsedMs = Date.now() - startedAtMs;
+
+    assert.equal(result.signal, null, `node --test không được bị kill (signal=${result.signal}) — DB-init lỗi trong before() phải tự khiến process thoát, không treo tới timeout`);
+    assert.ok(elapsedMs < 4000, `node --test phải tự thoát nhanh (đo được ${elapsedMs}ms) — worker mồ côi không còn giữ event loop sống`);
+    assert.notEqual(result.status, 0, 'test runner phải báo fail (exit khác 0) vì before() lỗi');
+    assert.ok(result.stdout.includes('DB_INIT_HANG_FIXTURE_AFTER_RAN'), 'after() phải chạy đúng theo hành vi thật của node:test dù before() lỗi (đúng thứ tự thật Codex tái hiện)');
+    assert.ok(!result.stdout.includes('DB_INIT_HANG_FIXTURE_TEST_RAN'), 'test bên trong không được chạy vì before() đã lỗi');
   }
 );
