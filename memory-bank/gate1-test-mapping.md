@@ -71,15 +71,15 @@
 | R026 | R026 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
 | R027 | R027 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
 | R028 | R028 | green | server/test/integration-partners.test.js | happy/invalid(chưa có hạn đóng->400)/not-found(fid lạ rơi cùng nhánh 400 "chưa có hạn đóng")/unauthenticated (forbidden N/A) |
-| R029 | — | TODO | — | — |
-| R030 | — | TODO | — | — |
-| R031 | — | TODO | — | — |
-| R032 | — | TODO | — | — |
-| R033 | — | TODO | — | — |
-| R034 | — | TODO | — | — |
-| R035 | — | TODO | — | — |
-| R036 | — | TODO | — | — |
-| R037 | — | TODO | — | — |
+| R029 | R029 | green | server/test/integration-people.test.js | happy/CHARACTERIZATION invalid(org_id lạ->rows rỗng, không lỗi)/unauthenticated (forbidden N/A — module partners) |
+| R030 | R030 | green | server/test/integration-people.test.js | happy/not-found(404 thật)/unauthenticated (forbidden N/A) |
+| R031 | R031 | green | server/test/integration-people.test.js | happy/invalid(thiếu full_name->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R032 | R032 | green | server/test/integration-people.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R033 | R033 | green | server/test/integration-people.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R034 | R034 | green | server/test/integration-people.test.js | happy(portrait+id_doc)/invalid(không file->400; vượt 5 ảnh->400)/**forbidden THẬT** (pr_staff không có nhóm iddoc, upload id_doc->403)/CHARACTERIZATION not-found(person_id lạ vẫn 200, không kiểm tồn tại)/unauthenticated |
+| R035 | R035 | green | server/test/integration-people.test.js | happy/not-found(404 thật "Không tìm thấy ảnh")/unauthenticated (forbidden N/A — không gate iddoc ở primary) |
+| R036 | R036 | green | server/test/integration-people.test.js | happy/not-found(404 thật)/**forbidden THẬT** (pr_staff xoá attachment kind=id_doc->403)/unauthenticated |
+| R037 | R037 | green | server/test/integration-people.test.js | happy(download, đúng content-type)/not-found(404 thật)/**forbidden THẬT** (pr_staff xem file id_doc->403)/unauthenticated (route requireAuth-only nhưng vẫn tự gate iddoc riêng trong handler) |
 | R038 | — | TODO | — | — |
 | R039 | — | TODO | — | — |
 | R040 | — | TODO | — | — |

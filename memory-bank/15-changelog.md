@@ -450,4 +450,21 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
   `test:integration:sqlite` 204 pass+6 skip, `test:integration:mysql` 209 pass+1 skip,
   `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
 
+## 2026-08-25 — G1A.3 commit 3/~12: integration test nhóm "Nhân sự" (R029-R037)
+- File mới `server/test/integration-people.test.js`, 33 test: people CRUD, upload ảnh chân
+  dung/giấy tờ tùy thân, đặt ảnh chính, xoá attachment (auto-reassign primary), phục vụ file.
+- Đáng chú ý: đây là nhóm ĐẦU TIÊN trong G1A.3 có case "forbidden" THẬT với đúng 2 role hiện có
+  (khác partners/awards/... vốn chỉ có "unauthenticated") — nhóm dữ liệu mật `iddoc` (giấy tờ tùy
+  thân) gate riêng theo `senGroups(req).has('iddoc')` ở R034 (upload)/R036 (xoá)/R037 (tải file);
+  `pr_staff` có `canSeeSensitive=false` nên không có nhóm này khi không override `sensitive_perms`
+  — dùng trực tiếp, không cần vai trò giả lập.
+- 2 route có 404 thật hiếm gặp trong hệ thống (khác đa số CRUD lồng cấp-con ở commit 2): R035 (PUT
+  primary — 404 "Không tìm thấy ảnh" khi aid/kind không khớp) và R036 (DELETE attachment — 404
+  "Không tìm thấy" khi aid lạ).
+- CHARACTERIZATION: R034 (upload attachment) không kiểm `person_id` có tồn tại trước khi insert —
+  upload cho `person_id` không tồn tại vẫn 200.
+- Mapping: 9 dòng route `TODO`→`green` (100 dòng route còn `TODO`). Verify: `test:security` 6/6,
+  `test:integration:sqlite` 237 pass+6 skip, `test:integration:mysql` 242 pass+1 skip,
+  `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
