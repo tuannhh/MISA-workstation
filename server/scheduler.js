@@ -25,7 +25,7 @@ function runOnce() {
   const dates = db.prepare('SELECT * FROM important_dates').all();
   const users = db.prepare("SELECT id, full_name, email, notify_opt_in FROM users WHERE active=1").all();
   const optedUsers = users.filter((u) => u.notify_opt_in);
-  const has = db.prepare('SELECT 1 FROM reminder_log WHERE date_id=? AND occur_date=? AND seq=? AND channel=? AND (recipient_user_id IS ? OR recipient_user_id=?)');
+  const has = db.prepare('SELECT 1 FROM reminder_log WHERE date_id=? AND occur_date=? AND seq=? AND channel=? AND recipient_user_id=?');
   const insLog = db.prepare('INSERT INTO reminder_log (date_id, occur_date, seq, channel, recipient_user_id) VALUES (?,?,?,?,?)');
 
   let created = 0, emailed = 0;
@@ -43,7 +43,7 @@ function runOnce() {
       const occStr = ymd(occ);
       // in-app cho từng user opt-in
       for (const u of optedUsers) {
-        if (!has.get(r.date_id ?? r.id, occStr, seq, 'inapp', u.id, u.id)) {
+        if (!has.get(r.date_id ?? r.id, occStr, seq, 'inapp', u.id)) {
           insLog.run(r.id, occStr, seq, 'inapp', u.id);
           created++;
         }
@@ -51,7 +51,7 @@ function runOnce() {
       // email (nếu bật) cho user có email
       if (mailer.enabled()) {
         for (const u of optedUsers.filter((x) => x.email)) {
-          if (!has.get(r.id, occStr, seq, 'email', u.id, u.id)) {
+          if (!has.get(r.id, occStr, seq, 'email', u.id)) {
             insLog.run(r.id, occStr, seq, 'email', u.id);
             const dleft = Math.round((occ - today) / 86400000);
             mailer.send({

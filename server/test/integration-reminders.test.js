@@ -13,8 +13,6 @@ const { createResourceStack } = require('../test-support/resource-stack');
 let baseUrl;
 let cookie;
 let fixtures;
-let db;
-let adminId;
 const resources = createResourceStack();
 
 before(async () => {
@@ -25,8 +23,8 @@ before(async () => {
     const { teardown } = dbHarness.setupSqliteDb();
     resources.acquire(teardown);
   }
-  db = require('../db').db;
-  resources.acquire(require('../db').closeDb);
+  const { closeDb } = require('../db');
+  resources.acquire(closeDb);
   const { createApp } = require('../app');
   fixtures = require('../test-support/fixtures');
   const started = await startTestApp(createApp());
@@ -34,7 +32,6 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `reminders_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
-  adminId = db.prepare('SELECT id FROM users WHERE username=?').get(admin.username).id;
 });
 
 after(async () => {
@@ -138,14 +135,9 @@ test('R042 unauthenticated: không cookie trả 401', async () => {
 // R057/R058/R059/R060 — notifications + chạy thủ công bộ nhắc. Test theo 1 luồng liên tiếp vì
 // notification chỉ sinh ra sau khi R060 (POST /reminders/run) chạy — không có API tạo trực tiếp.
 // ---------------------------------------------------------------------------
-test('R060 happy (SQLite) / F13 CHARACTERIZATION (MySQL): SQLite trả 200 {ok:true, created, emailed} và sinh log in-app cho reminder đến hạn hôm nay; MySQL — scheduler.js dùng cú pháp `recipient_user_id IS ?` chỉ SQLite chấp nhận (MySQL "IS" không nhận placeholder tham số) — runOnce() ném lỗi cú pháp SQL ngay khi có user opt-in đến hạn, route rơi vào error handler chung và trả 400 kèm nguyên message SQL thô. Ghi nhận F13 (`01-audit-findings.md`), KHÔNG sửa scheduler.js ở đây.', async () => {
+test('R060 happy: chạy thủ công bộ nhắc trả 200 {ok:true, created, emailed}, sinh log in-app cho reminder đến hạn hôm nay', async () => {
   await createReminder({ title: 'Đến hạn hôm nay R060' });
   const res = await call('POST', '/api/reminders/run');
-  if (isMysql) {
-    assert.equal(res.status, 400);
-    assert.match((await res.json()).error, /syntax/i);
-    return;
-  }
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.ok, true);
@@ -157,14 +149,9 @@ test('R060 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/reminders/run', { auth: false })).status, 401);
 });
 
-test('R057/R058/R059 happy: notification xuất hiện, đọc 1 rồi đọc tất cả làm unread về 0', async () => {
-  // Seed trực tiếp reminder_log (KHÔNG qua POST /api/reminders/run) — route đó phụ thuộc
-  // scheduler.runOnce() vốn đang lỗi cú pháp trên MySQL (F13, xem test R060 phía trên); seed thẳng
-  // để R057/R058/R059 (bản thân các route notification không dính F13) được đặc tả độc lập ở cả
-  // 2 driver, không bị chặn bởi bug của route khác.
-  const dateId = await createReminder({ title: 'Notif flow R057' });
-  db.prepare("INSERT INTO reminder_log (date_id, occur_date, seq, channel, recipient_user_id) VALUES (?,?,?,?,?)")
-    .run(dateId, todayGMT7(), 1, 'inapp', adminId);
+test('R057/R058/R059 happy: notification xuất hiện sau R060, đọc 1 rồi đọc tất cả làm unread về 0', async () => {
+  await createReminder({ title: 'Notif flow R057' });
+  await call('POST', '/api/reminders/run');
 
   const before1 = await (await call('GET', '/api/notifications')).json();
   assert.ok(before1.rows.length >= 1);

@@ -494,4 +494,24 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
   `test:integration:sqlite` 261 pass+6 skip, `test:integration:mysql` 266 pass+1 skip,
   `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
 
+## 2026-08-25 — G1A.3 commit 5/~12: fix F13 ngay theo yêu cầu owner (chuẩn bị Codex audit)
+- Owner yêu cầu sửa luôn F13 (thay vì chờ Wave riêng) trước khi gửi Codex audit gộp các commit
+  G1A.3. Khác lệ thường của characterization (chỉ đặc tả, không đổi nghiệp vụ) — đây là ngoại lệ
+  có chỉ đạo rõ ràng từ owner cho 1 bug cụ thể đã xác nhận đang ảnh hưởng production.
+- Root cause xác nhận lại: cả 2 call site `has.get(...)` trong `scheduler.js` (`:46` in-app,
+  `:54` email) luôn truyền `u.id` — một số nguyên thật, KHÔNG BAO GIỜ `null` — nên nhánh
+  `recipient_user_id IS ?` chưa từng có tác dụng, chỉ tồn tại làm cú pháp `IS ?` (không hợp lệ
+  trên MySQL) chặn toàn bộ hàm. Fix: xoá hẳn nhánh `IS ?`, giữ lại đúng 1 điều kiện
+  `recipient_user_id=?` với 1 tham số (bỏ luôn tham số trùng thứ 2 ở cả 2 call site) —
+  `server/scheduler.js`.
+- Test `server/test/integration-reminders.test.js` (R060, R057-R059) trở lại dạng đơn giản không
+  cần driver-aware nữa (bỏ nhánh `isMysql ? 400 : 200` và bỏ cách seed trực tiếp DB cho
+  R057-R059) — cả 2 route giờ pass 200 tự nhiên trên SQLite VÀ MySQL bằng đúng luồng HTTP thật
+  (`POST /api/reminders/run`), đúng như ý định ban đầu của test.
+- Cập nhật `01-audit-findings.md` F13 sang trạng thái ĐÃ FIX + `04-ROADMAP.md` bảng Finding→Wave
+  (không còn nằm trong backlog) + `gate1-test-mapping.md` R060 (bỏ ghi chú CHARACTERIZATION).
+- Verify: `test:security` 6/6, `test:integration:sqlite` 261 pass+6 skip, `test:integration:mysql`
+  266 pass+1 skip, `verify-g0.mjs` + self-test PASS, `git diff --check` sạch. Không route/schema
+  nào khác đổi — diff chỉ gồm `scheduler.js` (5 dòng) + test + 3 file memory-bank.
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

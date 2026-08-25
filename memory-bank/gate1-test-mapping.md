@@ -102,7 +102,7 @@
 | R057 | R057 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R058/R059)/unauthenticated (forbidden N/A) |
 | R058 | R058 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R057/R059)/CHARACTERIZATION not-found(200 ok:true, UPDATE 0 dòng)/unauthenticated (forbidden N/A) |
 | R059 | R059 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R057/R058)/unauthenticated (forbidden N/A) |
-| R060 | R060 | green | server/test/integration-reminders.test.js | happy(SQLite 200)/**F13 CHARACTERIZATION driver-aware** (MySQL: `scheduler.js` dùng `recipient_user_id IS ?` — cú pháp chỉ SQLite chấp nhận, MySQL ném lỗi cú pháp SQL -> route trả 400; xem `01-audit-findings.md` F13, KHÔNG sửa ở G1A.3)/unauthenticated (forbidden N/A) |
+| R060 | R060 | green | server/test/integration-reminders.test.js | happy (200 cả 2 driver — F13 đã fix ở commit 5, `scheduler.js` bỏ cú pháp `IS ?` chỉ SQLite chấp nhận; xem `01-audit-findings.md` F13)/unauthenticated (forbidden N/A) |
 | R061 | R061 | green | server/test/integration-reminders.test.js | happy(.ics đúng content-type)/not-found(404 thật)/unauthenticated (forbidden N/A) |
 | R062 | — | TODO | — | — |
 | R063 | — | TODO | — | — |
