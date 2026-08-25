@@ -12,6 +12,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { spawnSync } = require('child_process');
 const { createResourceStack } = require('../test-support/resource-stack');
 
@@ -184,5 +186,34 @@ test(
     assert.notEqual(result.status, 0, 'test runner phải báo fail (exit khác 0) vì before() lỗi');
     assert.ok(result.stdout.includes('DB_INIT_HANG_FIXTURE_AFTER_RAN'), 'after() phải chạy đúng theo hành vi thật của node:test dù before() lỗi (đúng thứ tự thật Codex tái hiện)');
     assert.ok(!result.stdout.includes('DB_INIT_HANG_FIXTURE_TEST_RAN'), 'test bên trong không được chạy vì before() đã lỗi');
+  }
+);
+
+test(
+  'SQLite init failure phải giữ đúng lỗi gốc, không bị che bởi .catch() trên undefined (Codex re-audit round 4 CLOSE, N4-01)',
+  { skip: isMysql },
+  () => {
+    // node:sqlite DatabaseSync.close() trả `undefined` (không phải Promise như MySQL worker's
+    // close()) — nếu code gọi `.catch()` trực tiếp lên đó, TypeError sẽ CHE MẤT lỗi init/seed gốc
+    // (đúng lỗi cần chẩn đoán khi startup thất bại). Ép init() throw bằng cách đặt sẵn 1 file
+    // pr.db KHÔNG hợp lệ (không phải định dạng SQLite) tại DATA_DIR trước khi require('../db').
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sqlite-corrupt-'));
+    fs.writeFileSync(path.join(dir, 'pr.db'), 'không phải file SQLite hợp lệ — cố ý làm hỏng để ép init() throw');
+    try {
+      const fixture = path.join(__dirname, '..', 'test-support', 'require-db-fixture.js');
+      const result = spawnSync(process.execPath, [fixture], {
+        encoding: 'utf8',
+        timeout: 10000,
+        env: { ...process.env, DB_CLIENT: 'sqlite', DATA_DIR: dir },
+      });
+
+      assert.equal(result.signal, null, 'không được bị kill/treo');
+      assert.notEqual(result.status, 0, 'require("../db") với file pr.db hỏng phải làm process thoát khác 0');
+      assert.ok(!result.stdout.includes('DB_LOADED_OK'), 'không được in DB_LOADED_OK khi init() thất bại');
+      assert.match(result.stderr, /file is not a database/i, 'lỗi gốc từ SQLite phải được giữ nguyên, không bị che bởi lỗi gọi .catch() trên undefined');
+      assert.ok(!result.stderr.includes("Cannot read properties of undefined"), 'không được xuất hiện TypeError do .catch() trên undefined (N4-01)');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
 );

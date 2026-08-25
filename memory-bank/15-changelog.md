@@ -313,4 +313,50 @@ verifier, loopback bind, restore-env) — nhưng phát hiện 2 blocker MỚI, s
 
 ---
 
+## 2026-08-25 — Codex CLOSE G1A.1 (round 4) + vá N4-01 (SQLite close() trả undefined)
+
+Codex re-audit round 4 (`PR-WORKSTATION-CODEX-G1A1-REAUDIT-ROUND-4-CLOSE.md`) xác nhận cả R3-01 và
+R3-02 đã sửa đúng và tái kiểm chứng độc lập:
+
+- R3-01: chạy độc lập `node --test db-init-hang-fixture.js` với schema không tồn tại + watchdog
+  6 giây → `code=1, signal=null, killed=false, elapsedMs=241, afterRan=true, testRan=false`. Bản
+  trước phải SIGKILL sau 6 giây; bản này tự thoát trong 241ms.
+- R3-02: fake worker Codex chạy độc lập — success→RESOLVED; exit 1/no ack→REJECTED đúng exit code;
+  `postMessage()` throw đồng bộ→REJECTED đúng lỗi gốc, không còn `ReferenceError`. 8/8 unit test
+  PASS ở cả SQLite và MySQL.
+- R3-03: ACCEPT AS BACKLOG — ghi nhận đúng ở `G1A.10`, không chặn CLOSE.
+
+**Quyết định: G1A.1 = CLOSED. OPEN G1A.2.** Đây là gate đầu tiên trong dự án cần 4 vòng
+audit/remediation liên tiếp mới CLOSE — bài học giữ lại: harness test tưởng đơn giản (chỉ là
+"tạo/xoá DB tạm + đóng connection") hoá ra có rất nhiều đường lỗi (setup fail, cleanup fail, lỗi
+lồng lỗi khi cleanup của cleanup cũng lỗi, semantics khác nhau giữa script thường và hook thật của
+test framework) mà mỗi vòng audit độc lập của Codex lần lượt lật ra — đúng giá trị của mô hình
+2 agent (Claude tự tin đã sửa xong, Codex luôn tìm ra một lớp lỗi sâu hơn) hơn là ngồi tự review.
+
+Codex đồng thời báo 1 follow-up không chặn:
+
+- **N4-01:** `node:sqlite` `DatabaseSync.close()` trả `undefined` (không phải Promise như MySQL
+  worker's `close()`) — dòng `db.close().catch(() => {})` thêm ở round 4 (R3-01) gọi `.catch()`
+  trực tiếp lên `undefined` sẽ ném `TypeError`, CHE MẤT lỗi init/seed gốc khi SQLite khởi động thất
+  bại (chỉ ảnh hưởng chẩn đoán startup-failure, không gây treo CI, không sai nghiệp vụ hiện tại).
+  **Vá ngay cùng lượt** (Codex cho phép ghép vào commit đầu G1A.2, không cần audit riêng — nhưng
+  vá liền vì rẻ và tránh mang nợ kỹ thuật sang G1A.2): `server/db.js` đổi
+  `db.close().catch(() => {})` → `Promise.resolve(db.close()).catch(() => {})` bọc trong
+  `try/catch` (phòng `db.close()` throw đồng bộ) — an toàn cho cả trường hợp `close()` trả
+  `undefined` (SQLite) và trả Promise thật (MySQL). Thêm regression test trong
+  `server/test/smoke-failure.test.js` (chạy khi `DB_CLIENT=sqlite`): đặt sẵn 1 file `pr.db` không
+  hợp lệ tại `DATA_DIR` để ép `init()` throw `"file is not a database"`, xác nhận lỗi gốc này vẫn
+  xuất hiện nguyên vẹn ở `stderr`, không còn bị thay bằng `TypeError: Cannot read properties of
+  undefined`.
+- Verify sau khi vá N4-01: `npm run test:integration:sqlite` 15 pass + 6 skip (tăng 1 test so với
+  round 4); `npm run test:integration:mysql` 20 pass + 1 skip (test N4-01 skip đúng ở mysql mode),
+  exit code 0 thật, `real ~1,8-2s`; `npm run test:security` 6/6; `npm run test:verify-g0-selftest`
+  6/6; `node scripts/verify-g0.mjs` PASS; `git diff --check` sạch; 0 database `pr_media_test_%`
+  sót lại; 0 process còn sống.
+- Roadmap G1A.1 (`04-ROADMAP.md`) đổi trạng thái từ `PARTIAL` sang `XONG` — đây là lần đầu tiên
+  trong dự án roadmap được phép ghi `XONG` cho G1A.1, vì lần này chính Codex xác nhận CLOSE, không
+  phải Claude tự tuyên bố. `G1A.10` giữ nguyên ghi chú backlog R3-03. **G1A.2 chính thức mở.**
+
+---
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

@@ -910,7 +910,17 @@ try {
   init();
   seed();
 } catch (error) {
-  if (typeof db.close === 'function') db.close().catch(() => {});
+  // Không giả định db.close() luôn trả Promise (Codex re-audit round 4 CLOSE, N4-01): SQLite
+  // (node:sqlite DatabaseSync.close()) trả `undefined` — gọi `.catch()` trực tiếp lên đó ném
+  // TypeError và CHE MẤT lỗi init/seed gốc (đúng lỗi cần chẩn đoán). MySQL's close() trả Promise
+  // thật. Bọc qua Promise.resolve(...) để cả hai trường hợp đều an toàn, và try/catch quanh chính
+  // lệnh gọi để phòng db.close() throw đồng bộ — cleanup ở đây luôn là best-effort, không được để
+  // lỗi cleanup thay thế lỗi gốc.
+  if (typeof db.close === 'function') {
+    try {
+      Promise.resolve(db.close()).catch(() => {});
+    } catch { /* best-effort, không che lỗi init/seed gốc */ }
+  }
   throw error;
 }
 
