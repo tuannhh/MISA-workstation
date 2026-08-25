@@ -59,9 +59,33 @@ function parseDirectAppRoutes(appSource = read('server/app.js')) {
   return routes;
 }
 
+// Parse app.use(prefix, routerVar) + const routerVar = require('./file') từ server/app.js — thay
+// vì hard-code cặp [file, prefix] (Codex re-audit round 2, R2-03): nếu mount thật sự đổi (vd
+// '/api' -> '/v2'), hàm này phải phản ánh đúng giá trị đó, để verifyRoutesAndMatrices() bên dưới
+// phát hiện route full path không còn khớp catalog — thay vì âm thầm PASS với prefix cũ hard-code.
+function parseRouterMounts(appSource = read('server/app.js')) {
+  const varToFile = new Map();
+  for (const match of appSource.matchAll(/const\s+(\w+)\s*=\s*require\(\s*['"]\.\/(\w+)['"]\s*\)/g)) {
+    varToFile.set(match[1], `server/${match[2]}.js`);
+  }
+  const mounts = [];
+  for (const match of appSource.matchAll(/app\.use\(\s*['"]([^'"]+)['"]\s*,\s*(\w+)\s*\)/g)) {
+    const file = varToFile.get(match[2]);
+    if (file) mounts.push({ prefix: match[1], file });
+  }
+  return mounts;
+}
+
+function resolveRouterPrefix(file, appSource = read('server/app.js')) {
+  const mount = parseRouterMounts(appSource).find((entry) => entry.file === file);
+  ok(mount, `server/app.js không tìm thấy app.use(prefix, router) cho ${file} — parse mount thất bại`);
+  return mount.prefix;
+}
+
 function sourceRoutes() {
   const routes = [];
-  for (const [file, prefix] of [['server/routes.js', '/api'], ['server/ai.js', '/api/ai']]) {
+  for (const file of ['server/routes.js', 'server/ai.js']) {
+    const prefix = resolveRouterPrefix(file);
     const source = read(file);
     const regex = /router\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]([^\n]*)/g;
     for (const match of source.matchAll(regex)) {
@@ -213,7 +237,7 @@ function verifyRemediationScope() {
 // Export để scripts/verify-g0.selftest.mjs có thể import và chứng minh parser thật sự FAIL
 // khi route auth bị đổi/xoá (Codex G1A1-audit A5, "negative test chống false-positive") —
 // guard khối chạy-thật dưới đây để import không tự chạy toàn bộ verify.
-export { parseDirectAppRoutes, DIRECT_AUTH_ROUTE_KIND };
+export { parseDirectAppRoutes, DIRECT_AUTH_ROUTE_KIND, parseRouterMounts, resolveRouterPrefix };
 
 function main() {
   try {

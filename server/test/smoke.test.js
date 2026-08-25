@@ -5,44 +5,48 @@ const assert = require('node:assert/strict');
 const isMysql = String(process.env.DB_CLIENT || 'mysql').toLowerCase() === 'mysql';
 const dbHarness = require('../test-support/db-harness');
 const { startTestApp } = require('../test-support/app-harness');
+const { createResourceStack } = require('../test-support/resource-stack');
 
-let dbName;
-let sqliteTeardown;
-let closeServer;
 let baseUrl;
 let fixtureUser;
+// Stack tài nguyên đã acquire thành công (Codex re-audit round 2, R2-01): after() KHÔNG BAO GIỜ
+// tự require()/tạo mới resource — chỉ pop đúng những cleanup đã được push tại đúng thời điểm
+// acquire tương ứng thành công. Nếu before() throw giữa chừng (vd tạo database test lỗi trước
+// khi kịp require('../db')), after() vẫn chạy (hành vi thật của node:test) nhưng stack lúc đó
+// chỉ chứa những gì đã thật sự acquire — không có nhánh nào "tiện thể" require lại server/db.js
+// với MYSQL_DATABASE mặc định chỉ để có cái gọi closeDb().
+const resources = createResourceStack();
 
 before(async () => {
   if (isMysql) {
-    dbName = await dbHarness.createMysqlTestDb();
+    const dbName = await dbHarness.createMysqlTestDb();
+    resources.acquire(() => dbHarness.dropMysqlTestDb(dbName));
   } else {
-    ({ teardown: sqliteTeardown } = dbHarness.setupSqliteDb());
+    const { teardown } = dbHarness.setupSqliteDb();
+    resources.acquire(teardown);
   }
 
-  // Chỉ require app/db SAU KHI database tạm đã sẵn sàng (xem ràng buộc ở db-harness.js).
+  // Chỉ require app/db SAU KHI database tạm đã sẵn sàng (xem ràng buộc ở db-harness.js). Lấy
+  // closeDb() NGAY tại đây (không require lại trong after()) và chỉ push cleanup nếu require
+  // thành công.
+  const { closeDb } = require('../db');
+  resources.acquire(closeDb);
+
   const { createApp } = require('../app');
   const fixtures = require('../test-support/fixtures');
 
-  ({ baseUrl, close: closeServer } = await startTestApp(createApp()));
+  const started = await startTestApp(createApp());
+  baseUrl = started.baseUrl;
+  resources.acquire(started.close);
+
   fixtureUser = fixtures.createPrivilegedUser({ username: `smoke_admin_${Date.now()}` });
 });
 
 after(async () => {
-  // Mỗi bước dọn dẹp chạy độc lập (N2, Codex G1A1-audit): 1 bước lỗi không được cản các bước
-  // sau — nếu không, đóng server lỗi có thể khiến worker MySQL/database tạm bị bỏ sót vĩnh viễn.
-  // Thứ tự: đóng HTTP server -> đóng connection/worker DB (A1, bắt buộc trước khi drop schema)
-  // -> drop schema tạm / xoá thư mục sqlite tạm.
-  const steps = [
-    async () => { if (closeServer) await closeServer(); },
-    async () => { await require('../db').closeDb(); },
-    async () => { if (isMysql && dbName) await dbHarness.dropMysqlTestDb(dbName); },
-    async () => { if (sqliteTeardown) sqliteTeardown(); },
-  ];
-  const errors = [];
-  for (const step of steps) {
-    try { await step(); } catch (error) { errors.push(error); }
-  }
-  if (errors.length) throw new AggregateError(errors, 'teardown gặp lỗi (đã thử hết các bước dọn dẹp)');
+  // Thứ tự dọn dẹp = ngược thứ tự acquire (LIFO): đóng HTTP server trước -> đóng connection/
+  // worker DB (A1, bắt buộc trước khi drop schema) -> drop schema tạm / xoá thư mục sqlite tạm.
+  // Mỗi bước chạy độc lập (N2): 1 bước lỗi không được cản các bước sau.
+  await resources.cleanupAll();
 });
 
 test('login + GET /api/me trả đúng session user', async () => {

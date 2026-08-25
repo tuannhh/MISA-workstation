@@ -2,7 +2,9 @@
 
 function startTestApp(app) {
   return new Promise((resolve, reject) => {
-    const server = app.listen(0, () => {
+    // Bind loopback only (Codex re-audit round 2, S1): app.listen(0) không kèm host sẽ bind
+    // 0.0.0.0, mở port test ra mọi network interface dù chỉ cần truy cập từ chính process test.
+    const server = app.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
       resolve({
         baseUrl: `http://127.0.0.1:${port}`,

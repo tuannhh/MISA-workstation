@@ -60,28 +60,53 @@ class MySQLSyncDatabase {
   // tiến trình node giữ event loop sống vô hạn (worker + connection vẫn "alive"), test runner
   // báo assertion xanh nhưng không bao giờ exit (Codex G1A1-audit A1). Luôn gọi trước khi drop
   // schema test để tránh vừa đóng connection vừa drop DB đang được trỏ tới.
+  //
+  // Không nuốt lỗi cleanup (Codex re-audit round 2, R2-02): nếu worker báo shutdownAck kèm lỗi
+  // (connection.end() thất bại) hoặc phải force-terminate vì worker không tự thoát, close() phải
+  // reject để caller (smoke.test.js after(), dùng AggregateError) thấy được sự cố thay vì coi
+  // như đã dọn sạch. Vẫn luôn thử hết mọi bước cleanup còn lại của caller — reject ở đây chỉ báo
+  // lỗi, không ném ngoại lệ đồng bộ chặn các bước sau.
   close() {
     if (this._closed) return this._closePromise;
     this._closed = true;
-    this._closePromise = new Promise((resolve) => {
+    this._closePromise = new Promise((resolve, reject) => {
       let settled = false;
-      const finish = () => {
+      let shutdownAckError = null;
+      const finishOk = () => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         resolve();
       };
-      this.worker.once('exit', finish);
-      this.worker.once('error', finish);
+      const finishError = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+      this.worker.on('message', (msg) => {
+        if (msg && msg.shutdownAck && msg.error) {
+          shutdownAckError = new Error(`mysql-worker: lỗi khi đóng connection lúc shutdown: ${msg.error.message}`);
+        }
+      });
+      this.worker.once('exit', () => {
+        if (shutdownAckError) finishError(shutdownAckError);
+        else finishOk();
+      });
+      this.worker.once('error', finishError);
       try {
         this.worker.postMessage({ shutdown: true });
-      } catch {
-        finish();
+      } catch (error) {
+        finishError(error);
       }
       // An toàn: nếu worker không tự thoát sau graceful shutdown (vd connection.end() treo),
-      // terminate cứng để close() không bao giờ treo teardown test.
+      // terminate cứng để close() không bao giờ treo teardown test — nhưng vẫn báo lỗi vì đây là
+      // shutdown không sạch (R2-02: "phải reject/report nếu graceful close lỗi hoặc terminate lỗi").
       const timer = setTimeout(() => {
-        this.worker.terminate().then(finish, finish);
+        this.worker.terminate().then(
+          () => finishError(new Error('mysql-sync: worker không tự thoát sau shutdown message trong 3s — đã force-terminate.')),
+          finishError
+        );
       }, 3000);
     });
     return this._closePromise;

@@ -169,4 +169,81 @@ chính failure-path test của Claude (xem dưới).
 
 ---
 
+## 2026-08-25 — Codex re-audit G1A.1 round 2: HOLD/PARTIAL (gần CLOSE) → remediation round 3
+
+Codex re-audit round 2 (`PR-WORKSTATION-CODEX-G1A1-REAUDIT-ROUND-2.md`) xác nhận phần lớn root
+cause round 2 đã sửa đúng (MySQL 5/5 exit 0 thật ~2,11s, rollback GRANT đúng, Compose loopback,
+privileged fixture, doc line-reference) nhưng vẫn giữ `HOLD/PARTIAL` vì 3 blocker còn lại:
+
+- **R2-01 (isolation):** `smoke.test.js` `after()` luôn gọi `require('../db').closeDb()` kể cả khi
+  `before()` throw TRƯỚC khi DB module từng được require (vd `createMysqlTestDb()` lỗi ở bước
+  GRANT) — node:test vẫn chạy `after()` sau khi `before()` lỗi, nên nhánh này có thể tự load
+  `server/db.js` với `MYSQL_DATABASE` mặc định và chạy `init()`/`seed()` lên DB dev/kế thừa.
+  **Sửa:** thêm `server/test-support/resource-stack.js` — `acquire(cleanup)` chỉ push cleanup
+  SAU KHI một bước setup thật sự thành công; `cleanupAll()` pop theo LIFO, không bao giờ tự tạo
+  resource mới. `smoke.test.js` đổi hẳn sang pattern này: lấy `closeDb` trực tiếp từ
+  `require('../db')` ngay tại `before()` và `acquire()` ngay lúc đó — không còn require lại trong
+  `after()`. Thêm `server/test/smoke-failure.test.js` với 5 test: 2 test đơn vị cho chính
+  resource-stack (thứ tự LIFO + gộp lỗi thành `AggregateError` + stack rỗng không lỗi) và 3 test
+  tái hiện đúng 3 kịch bản Codex nêu — (1) create/grant failure trước require: xác nhận
+  `MYSQL_DATABASE` không đổi + resource-stack rỗng sau lỗi; (2) listen/start failure SAU khi DB đã
+  load: dùng thật `createMysqlTestDb()` rồi mô phỏng bước kế tiếp throw, xác nhận `cleanupAll()`
+  vẫn drop đúng DB đã tạo; (3) DB init failure SAU khi worker đã spawn: chạy
+  `server/test-support/require-db-fixture.js` trong **process con riêng** (`child_process.spawnSync`)
+  với `MYSQL_DATABASE` trỏ tới schema chưa từng tồn tại — vì `db.js` có side-effect module-scope
+  (spawn worker + `init()`/`seed()` ngay khi require), không thể chạy an toàn trong chính test
+  process mà không làm hỏng module cache cho các test khác. **Residual risk ghi nhận rõ ràng
+  (không che giấu):** ở kịch bản (3), nếu `init()` throw thì `module.exports` của `db.js` chưa
+  từng chạy tới, nên không có handle nào để gọi `closeDb()` graceful cho worker vừa spawn —
+  nhưng vì toàn bộ kịch bản chạy trong 1 process con độc lập, worker đó chỉ sống trong đúng vòng
+  đời process con này; test xác nhận process con thoát với exit code khác 0 (`Unknown database`
+  rõ ràng, không mơ hồ) và **không bị treo** (`result.signal === null`, không cần kill do timeout)
+  — tức là residual leak, nếu có, tự dọn theo vòng đời OS process, không phải leak vĩnh viễn.
+- **R2-02 (DB safety/resilience):** `assertOptIn()` trước đây chỉ áp dụng cho `createMysqlTestDb()`,
+  `dropMysqlTestDb()` chạy DROP với bất kỳ tên hợp regex nào mà không cần opt-in; rollback DROP khi
+  GRANT lỗi và `connection.end()` lúc worker shutdown đều nuốt lỗi (catch rỗng); harness dùng chung
+  `MYSQL_HOST`/`MYSQL_PORT`/`MYSQL_ADMIN_USER`/`MYSQL_ROOT_PASSWORD` của app — không phân biệt được
+  Docker MySQL test với một Cloud SQL Proxy local đang chạy trên cùng `127.0.0.1:3306`; `MYSQL_USER`
+  được nối thẳng vào câu `GRANT` mà chưa validate identifier. **Sửa:** `dropMysqlTestDb()` gọi
+  `assertOptIn()` (có test `db-harness-failure.test.js` xác nhận từ chối đúng thông báo trước khi
+  mở connection); rollback lỗi gắn vào `error.cleanupError` thay vì nuốt; `mysql-worker.js` gửi
+  `shutdownAck` kèm lỗi (nếu có) trước khi `process.exit`, `mysql-sync.js` `close()` reject nếu
+  `shutdownAck` báo lỗi HOẶC phải force-terminate sau 3s (trước đây cả hai trường hợp đều
+  `resolve()` êm xuôi); bootstrap admin connection đổi sang namespace biến riêng
+  `TEST_MYSQL_HOST/PORT/ADMIN_USER/ADMIN_PASSWORD` — không còn đọc `MYSQL_HOST`/`MYSQL_ADMIN_*`/
+  `MYSQL_ROOT_PASSWORD` của app; thêm `assertNoProductionSocket()` từ chối chạy nếu
+  `MYSQL_SOCKET_PATH` đang được set (Cloud SQL production); thêm `assertSafeAppUser()` validate
+  `MYSQL_USER` bằng regex `^[A-Za-z0-9_]{1,32}$` trước khi dùng trong `GRANT`.
+- **R2-03 (evidence/false-positive):** `scripts/verify-g0.mjs` đã parse thật 3 route auth trực
+  tiếp từ round 2, nhưng `sourceRoutes()` vẫn hard-code cặp `['server/routes.js', '/api']` và
+  `['server/ai.js', '/api/ai']` — nếu mount thật đổi (vd `/api` → `/v2`), verifier vẫn dùng `/api`
+  hard-code và có thể báo PASS sai (đúng loại false-positive A5 round 1 vốn đã yêu cầu loại bỏ).
+  **Sửa:** thêm `parseRouterMounts()`/`resolveRouterPrefix()` — parse `const routerVar =
+  require('./file')` + `app.use(prefix, routerVar)` từ `server/app.js` thật, `sourceRoutes()`
+  dùng `resolveRouterPrefix()` thay vì hard-code. Thêm 3 self-test mới trong
+  `scripts/verify-g0.selftest.mjs`: positive xác nhận `/api`→routes.js, `/api/ai`→ai.js đúng thật;
+  negative đổi mount `/api`→`/v2` xác nhận hàm phản ánh đúng `/v2` (không còn kẹt ở `/api`); negative
+  xoá hẳn dòng `app.use('/api', apiRouter)` xác nhận parser FAIL thay vì âm thầm dùng giá trị mặc
+  định.
+- **S1/S2 (nên sửa cùng round, Codex xếp "SHOULD FIX"):** `app-harness.js` đổi
+  `app.listen(0, ...)` → `app.listen(0, '127.0.0.1', ...)` — trước đây bind mọi interface dù chỉ
+  cần truy cập từ chính process test. Sửa restore env dùng "delete nếu ban đầu chưa set, gán lại
+  nếu đã có giá trị" thay vì luôn gán — **phát hiện đây KHÔNG phải rủi ro lý thuyết**: khi tự chạy
+  lại `npm run test:integration:mysql` sau khi thêm test mới (`smoke-failure.test.js`), một test
+  fail thật với lỗi `GRANT ... TO 'undefined'@'%'` vì một test trước đó trong cùng file process đã
+  gán `MYSQL_USER` rồi restore bằng `process.env.MYSQL_USER = originalUser` với `originalUser`
+  là `undefined`, khiến Node ghi chuỗi literal `'undefined'`. Sửa cả `db-harness-failure.test.js`
+  và `smoke-failure.test.js` dùng đúng pattern "delete nếu chưa từng có key", chạy lại xác nhận
+  xanh.
+- **Verify cuối round 3:** `npm run test:security` 6/6 PASS (0,79s); `npm run test:integration:sqlite`
+  6 pass + 5 skip đúng (5 test mysql-only skip khi `DB_CLIENT=sqlite`), exit 0; `npm run
+  test:integration:mysql` 11/11 PASS, exit code 0 thật, `real 1,90s`; `npm run
+  test:verify-g0-selftest` 6/6 PASS; `node scripts/verify-g0.mjs` PASS toàn bộ; `git diff --check`
+  sạch; `SHOW DATABASES LIKE 'pr_media_test_%'` rỗng sau suite; `ps aux` xác nhận không còn process
+  `node --test`/`mysql-worker` nào sống sau khi cả 2 chế độ test chạy xong.
+- Cập nhật roadmap G1A.1 (`04-ROADMAP.md`) sang trạng thái PARTIAL round 3, liệt kê đủ R2-01/R2-02/
+  R2-03 đã remediate — vẫn KHÔNG tự ghi `XONG`, chờ Codex re-audit lần 3 theo đúng mô hình 2 agent.
+
+---
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
