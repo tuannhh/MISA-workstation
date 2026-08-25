@@ -63,6 +63,14 @@ function stripDisallowed(entity, data, set) {
   }
   return data;
 }
+// Kỳ ngân sách phải dạng YYYY-MM (POST /budgets)
+function isValidBudgetPeriod(period) { return /^\d{4}-\d{2}$/.test(period || ''); }
+// Thông tin tối thiểu để tạo tài khoản mới (POST /admin/users)
+function isValidNewUserPayload({ username, password, full_name, role }) {
+  return !!(username && password && full_name && rbac.ROLES[role]);
+}
+// Chỉ giữ tên nhóm dữ liệu mật hợp lệ (POST/PUT /admin/users) — chống ghi nhóm lạ vào sensitive_perms
+function sanitizeSensitivePerms(list) { return list.filter((g) => rbac.ALL_GROUPS.includes(g)); }
 // ----- Phân công người chăm sóc (assignments) -----
 function getCaretakers(type, id) {
   return db.prepare(`SELECT u.id, u.full_name, u.role FROM assignments a JOIN users u ON u.id=a.user_id
@@ -634,7 +642,7 @@ router.get('/budgets', requirePerm('reports', 'view'), (req, res) => {
 });
 router.post('/budgets', requirePerm('reports', 'view'), (req, res) => {
   const { period, amount, note } = req.body || {};
-  if (!/^\d{4}-\d{2}$/.test(period || '')) return res.status(400).json({ error: 'Kỳ phải dạng YYYY-MM' });
+  if (!isValidBudgetPeriod(period)) return res.status(400).json({ error: 'Kỳ phải dạng YYYY-MM' });
   db.prepare(`INSERT INTO budgets (period, amount, note) VALUES (?,?,?)
     ON CONFLICT(period) DO UPDATE SET amount=excluded.amount, note=excluded.note`).run(period, Number(amount) || 0, note || null);
   logEdit(req, 'EDIT', 'budget', null, `${period}: ${amount}`);
@@ -1235,9 +1243,9 @@ router.get('/admin/users', requirePerm('admin', 'view'), (req, res) => {
 });
 router.post('/admin/users', requirePerm('admin', 'create'), (req, res) => {
   const { username, password, full_name, role, email, sensitive_perms } = req.body || {};
-  if (!username || !password || !full_name || !rbac.ROLES[role]) return res.status(400).json({ error: 'Thiếu thông tin hợp lệ' });
+  if (!isValidNewUserPayload({ username, password, full_name, role })) return res.status(400).json({ error: 'Thiếu thông tin hợp lệ' });
   if (db.prepare('SELECT 1 FROM users WHERE username=?').get(username)) return res.status(409).json({ error: 'Tài khoản đã tồn tại' });
-  const sp = Array.isArray(sensitive_perms) ? JSON.stringify(sensitive_perms.filter((g) => rbac.ALL_GROUPS.includes(g))) : null;
+  const sp = Array.isArray(sensitive_perms) ? JSON.stringify(sanitizeSensitivePerms(sensitive_perms)) : null;
   const r = db.prepare('INSERT INTO users (username,password_hash,full_name,role,email,sensitive_perms) VALUES (?,?,?,?,?,?)')
     .run(username, bcrypt.hashSync(String(password), 10), full_name, role, email || null, sp);
   logEdit(req, 'CREATE', 'user', r.lastInsertRowid, username);
@@ -1250,7 +1258,7 @@ router.put('/admin/users/:id', requirePerm('admin', 'edit'), (req, res) => {
   if (role && rbac.ROLES[role]) { fields.push('role=?'); vals.push(role); }
   if (email != null) { fields.push('email=?'); vals.push(email || null); }
   if (notify_opt_in != null) { fields.push('notify_opt_in=?'); vals.push(Number(notify_opt_in) ? 1 : 0); }
-  if (Array.isArray(sensitive_perms)) { fields.push('sensitive_perms=?'); vals.push(JSON.stringify(sensitive_perms.filter((g) => rbac.ALL_GROUPS.includes(g)))); }
+  if (Array.isArray(sensitive_perms)) { fields.push('sensitive_perms=?'); vals.push(JSON.stringify(sanitizeSensitivePerms(sensitive_perms))); }
   if (active != null) { fields.push('active=?'); vals.push(Number(active) ? 1 : 0); }
   if (password) { fields.push('password_hash=?'); vals.push(bcrypt.hashSync(String(password), 10)); }
   if (fields.length) { db.prepare(`UPDATE users SET ${fields.join(',')} WHERE id=?`).run(...vals, req.params.id); }
@@ -1579,5 +1587,14 @@ router.get('/monitor/campaigns/:id/evaluate', requirePerm('monitoring', 'view'),
   try { res.json(await monitor.evaluateCampaign(campOut(cp))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Expose các helper thuần (không đụng DB/request thật) để unit test (G1A.2) gọi trực tiếp —
+// KHÔNG đổi hành vi router, chỉ thêm 1 property lên object router (Express Router bỏ qua property
+// lạ, chỉ quan tâm .get/.post/.use/stack nội bộ).
+router.testables = {
+  pageParams, pick, jsonField, senGroups, senVisible, canMoney, maskMoney, stripDisallowed,
+  isValidBudgetPeriod, isValidNewUserPayload, sanitizeSensitivePerms,
+  nextOccurrence, decorateDates, deadlineInfo, jarr, periodOf, campOut,
+};
 
 module.exports = router;

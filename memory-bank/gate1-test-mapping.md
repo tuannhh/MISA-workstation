@@ -164,3 +164,37 @@
 | R145 | — | TODO | — | — |
 | JOB-REMINDER | — | TODO | — | scheduler.js runOnce() — G1A.4 (race hiện tại)/G1A.8 |
 | JOB-MONITOR-SCAN | — | TODO | — | monitor.js runScan()/applySchedule() — G1A.8 |
+| BR-VAL-001 | UT-VAL-001 | green | server/test/unit-validation-formatter.test.js | rbac.js can() — matrix lookup + role/action lạ -> false |
+| BR-VAL-002 | UT-VAL-001 | green | server/test/unit-validation-formatter.test.js | rbac.js can() — module có nhưng action không nằm trong danh sách |
+| BR-VAL-003 | UT-VAL-001 | green | server/test/unit-validation-formatter.test.js | rbac.js can() — role không tồn tại trong MATRIX |
+| BR-VAL-004 | UT-VAL-002 | green | server/test/unit-validation-formatter.test.js | rbac.js canSeeSensitive() theo role, false khi role lạ |
+| BR-VAL-005 | UT-VAL-003 | green | server/test/unit-validation-formatter.test.js | rbac.js allowedGroups() — sensitive_perms override, lọc nhóm lạ |
+| BR-VAL-006 | UT-VAL-004 | green | server/test/unit-validation-formatter.test.js | rbac.js allowedGroups() — fallback theo role khi null/JSON hỏng |
+| BR-VAL-007 | UT-VAL-005 | green | server/test/unit-validation-formatter.test.js | rbac.js allowedGroups() — user null / role không canSeeSensitive -> rỗng |
+| BR-VAL-008 | UT-VAL-006 | green | server/test/unit-validation-formatter.test.js | rbac.js canSeeGroup() bọc allowedGroups() |
+| BR-VAL-009 | UT-VAL-007 | green | server/test/unit-validation-formatter.test.js | rbac.js fieldGroup() — tra nhóm theo entity+field, null khi không thuộc |
+| BR-VAL-010 | UT-VAL-008 | green | server/test/unit-validation-formatter.test.js | rbac.js maskRecord() — allowed===true không che gì |
+| BR-VAL-011 | UT-VAL-009 | green | server/test/unit-validation-formatter.test.js | rbac.js maskRecord() — che field mật thiếu nhóm (giá trị truthy), giữ null/rỗng |
+| BR-VAL-012 | UT-VAL-010 | green | server/test/unit-validation-formatter.test.js | rbac.js maskRecord() — entity không có field mật / record null |
+| BR-VAL-013 | UT-VAL-011 | green | server/test/unit-validation-formatter.test.js | rbac.js maskList() áp maskRecord cho từng bản ghi |
+| BR-VAL-014 | UT-VAL-012 | green | server/test/unit-validation-formatter.test.js | rbac.js permissionSummary() — string/object user, canSeeSensitive suy từ số nhóm |
+| BR-VAL-015 | UT-VAL-013 | green | server/test/unit-validation-formatter.test.js | routes.js pageParams() — clamp page/pageSize, mặc định 1/20 |
+| BR-VAL-016 | UT-VAL-014 | green | server/test/unit-validation-formatter.test.js | routes.js pick() — chỉ giữ field allowed, '' -> null |
+| BR-VAL-017 | UT-VAL-015 | green | server/test/unit-validation-formatter.test.js | routes.js jsonField() — stringify non-string, bỏ qua null/thiếu/đã-là-string |
+| BR-VAL-018 | UT-VAL-016 | green | server/test/unit-validation-formatter.test.js | routes.js senGroups()/senVisible() |
+| BR-VAL-019 | UT-VAL-017 | green | server/test/unit-validation-formatter.test.js | routes.js canMoney()/maskMoney() — che field tiền theo nhóm org_fee, hỗ trợ single+array |
+| BR-VAL-020 | UT-VAL-018 | green | server/test/unit-validation-formatter.test.js | routes.js stripDisallowed() — xoá field mật không thuộc nhóm khỏi payload cập nhật |
+| BR-VAL-021 | UT-VAL-019 | green | server/test/unit-validation-formatter.test.js | routes.js isValidBudgetPeriod() — chỉ nhận YYYY-MM |
+| BR-VAL-022 | UT-VAL-020 | green | server/test/unit-validation-formatter.test.js | routes.js isValidNewUserPayload() — bắt buộc username/password/full_name + role hợp lệ |
+| BR-VAL-023 | UT-VAL-021 | green | server/test/unit-validation-formatter.test.js | routes.js sanitizeSensitivePerms() — lọc nhóm lạ khỏi ALL_GROUPS |
+| BR-VAL-024 | UT-VAL-022 | green | server/test/unit-validation-formatter.test.js | routes.js nextOccurrence() — một lần vs lặp lại, tự cộng năm khi đã qua |
+| BR-VAL-025 | UT-VAL-023 | green | server/test/unit-validation-formatter.test.js | routes.js decorateDates() — dueSoon theo lead_days, null khi thiếu ngày |
+| BR-VAL-026 | UT-VAL-024 | green | server/test/unit-validation-formatter.test.js | routes.js deadlineInfo() — null khi thiếu/sai ngày, tính theo giờ VN (UTC+7) |
+| BR-VAL-027 | UT-VAL-025 | green | server/test/unit-validation-formatter.test.js | routes.js jarr() — mảng/JSON string/parse lỗi -> [] |
+| BR-VAL-028 | UT-VAL-026 | green | server/test/unit-validation-formatter.test.js | routes.js periodOf() — mặc định 30 ngày; "from" mặc định KHÔNG phụ thuộc "to" đã truyền (đặc tả hiện trạng) |
+| BR-VAL-029 | UT-VAL-027 | green | server/test/unit-validation-formatter.test.js | routes.js campOut() — bọc keywords/competitors qua jarr() |
+| BR-VAL-030 | UT-VAL-028 | green | server/test/unit-validation-formatter.test.js | spreadsheet-parser.js validateSignature() — quá MAX_FILE_BYTES |
+| BR-VAL-031 | UT-VAL-029 | green | server/test/unit-validation-formatter.test.js | spreadsheet-parser.js validateSignature() — CSV chứa byte NUL |
+| BR-VAL-032 | UT-VAL-030 | green | server/test/unit-validation-formatter.test.js | spreadsheet-parser.js validateSignature() — signature ZIP(xlsx)/OLE(xls) hợp lệ/không hợp lệ |
+| BR-VAL-033 | UT-VAL-031 | green | server/test/unit-validation-formatter.test.js | uploads.js fileFilter() — mimetype ngoài ALLOWED bị từ chối |
+| BR-VAL-034 | UT-VAL-032 | green | server/test/unit-validation-formatter.test.js | uploads.js aiDocumentFileFilter() — yêu cầu ĐỒNG THỜI mimetype + đuôi file hợp lệ |
