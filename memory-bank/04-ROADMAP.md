@@ -82,14 +82,14 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 ---
 
 ## GATE 1 — Test net (hybrid theo Codex C0.6: characterization-core phủ ĐỦ 145 route, không thu hẹp; target RBAC/security spec-first riêng; thêm lớp acceptance E2E)
-**Hiện trạng:** chỉ 6 test hẹp (`server/security.test.js`). **Ước lượng:** 2,5-4 tuần (điều chỉnh tăng so với bản trước — Codex round-3 re-audit R3-07/C0.6 bác bỏ cách thu hẹp "chỉ phần giữ nguyên", yêu cầu characterization-core phủ TOÀN BỘ 145 route + mọi job/business-flow, không chỉ nhóm module không đổi).
+**Hiện trạng 2026-08-25:** G1A.1 (harness) XONG + G1A.9 khung mapping XONG (xem dưới); còn G1A.2-G1A.8 + G1B/G1C. **Ước lượng:** 2,5-4 tuần (điều chỉnh tăng so với bản trước — Codex round-3 re-audit R3-07/C0.6 bác bỏ cách thu hẹp "chỉ phần giữ nguyên", yêu cầu characterization-core phủ TOÀN BỘ 145 route + mọi job/business-flow, không chỉ nhóm module không đổi).
 
 > **Yêu cầu bắt buộc (C0.6, không thương lượng ở Gate 1):** phải có 1 bảng ánh xạ machine-readable `route_id/business_rule_id → test_id → trạng thái (green | known-red | manual-host)` phủ đủ 145/145 route + mọi job/scheduler/monitor flow **trước khi bắt đầu implementation Wave 1** — ước lượng thời gian chỉ đáng tin sau khi bảng này tồn tại, không phải trước.
 
 ### G1A — Characterization-core (GREEN) — **TOÀN BỘ 145 route + job/scheduler/monitor/business-flow, không thu hẹp theo "phần giữ nguyên"**
 | # | Task | Evidence Contract |
 |---|---|---|
-| G1A.1 | Harness: MySQL ephemeral + fixtures/factories + deterministic clock; **fixture principal có thể chạy ở chế độ privileged** để cô lập hành vi non-security khỏi lỗi RBAC đã biết (không dùng để che giấu lỗ hổng, chỉ để test được phần nghiệp vụ không liên quan quyền) | test / all / — |
+| G1A.1 | **XONG 2026-08-25.** Harness: `server/app.js` (`createApp()` tách khỏi `index.js`, không đổi hành vi — đã verify login/logout/scheduler/monitor start vẫn chạy đúng), `server/test-support/{app-harness,db-harness,clock,fixtures}.js` (MySQL ephemeral database tạo/xoá theo từng file test qua bootstrap `root` connection — `docker-compose.yml` đã thêm `ports: 3306:3306`; SQLite dùng `DATA_DIR` tạm), `t.mock.timers` cho clock giả (không cần sửa `scheduler.js`/`monitor.js`). Smoke test `server/test/smoke.test.js` PASS cả 2 chế độ (`npm run test:integration:sqlite`, `npm run test:integration:mysql`). **Chưa có** fixture principal chế độ privileged (viết khi G1A.3 cần) | test / all / PASS 2/2 cả sqlite+mysql |
 | G1A.2 | Unit: validation, formatter, SSRF, AI redaction/schema, projection tính toán (mọi module, không chỉ phần "giữ nguyên") | test / all / — |
 | G1A.3 | Integration API cho **ĐỦ 145 route** (không giới hạn nhóm module) — request/response shape, validate, not-found/conflict, side-effect DB, tính toán, audit, file/download, side-effect job nền; case tối thiểu mỗi route: happy + invalid + unauthenticated + not-found | test / — / — |
 | G1A.4 | Concurrency/idempotency đã biết là lỗi hiện tại (reminder check-then-insert — `11-business-flows.md` §E, R3-02C) — viết test **xác nhận hành vi HIỆN TẠI có race** (không phải test hành vi đích), gắn cờ để Wave 1 thay bằng test hành vi đích khi sửa unique key | test / — / characterization, không phải target |
@@ -97,7 +97,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 | G1A.6 | UI characterization smoke — mọi module (không chỉ phần giữ) | test / — / — |
 | G1A.7 | AI golden set: extraction/summary/report + malformed/timeout/quota, cả 12 luồng egress Gemini | test / — / — |
 | G1A.8 | Scheduler/monitor background job: `runOnce()` reminder, `monitor.applySchedule()` auto-scan — verify side-effect (log/email/mention) không chỉ verify route HTTP | test / — / — |
-| G1A.9 | Machine-readable mapping `route_id/business_rule_id → test_id → green|known-red|manual-host` phủ 145/145 + job/scheduler/monitor flow — **exit criterion của toàn Gate 1**, không phải optional | test / all / mapping file trong repo, kiểm tra được bằng script |
+| G1A.9 | **Khung XONG 2026-08-25, chưa XONG hoàn toàn.** `memory-bank/gate1-test-mapping.md` đã có đủ 145/145 route + `JOB-REMINDER`/`JOB-MONITOR-SCAN`, mọi dòng `status=TODO` — đây là khung rỗng, KHÔNG được coi là exit criterion đã đạt. Phải điền `test_id`/`file`/`status` thật khi G1A.2-G1A.8 lần lượt hoàn thành; Gate 1 chỉ đóng khi không còn dòng `TODO` | test / all / khung mapping tồn tại, nội dung thật chưa xong |
 | G1A.10 | CI `regression` xanh; `npm audit` 3 lỗ (nanoid/postcss/body-parser) vá kèm test, không `audit fix` mù | deploy / all / job `regression` xanh |
 
 ### G1B — Target RBAC v2 + security suite (KNOWN-RED, allowlist) — spec-first cho phần VIẾT LẠI (D13/F1/F2/F3/F9)

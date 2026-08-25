@@ -85,6 +85,28 @@
 - **Thêm D14.4 (secure proposal/confirmation contract cho voice, R3-08):** server tạo proposal opaque/có hạn/gắn principal + optimistic concurrency + re-check PolicyEngine lúc xác nhận — chống tampering/replay/TOCTOU mà D14.2 (human-in-the-loop) một mình chưa đủ chặn.
 - Chạy lại `git diff --check` (sạch) + `npm run test:security` (6/6 PASS) sau khi remediate — đúng yêu cầu Codex mục 4 của `G0-CLOSE-CONTRACT.md`.
 
+## 2026-08-25 — Gate 1 mở: G1A.1 harness + khung G1A.9
+
+- **G1A.1 (harness):** tách `server/app.js` (`createApp()`) khỏi `server/index.js` — thuần
+  extract, không đổi hành vi (đã verify thủ công: login/logout/`/api/me`, log khởi động
+  scheduler/monitor giống hệt trước). Thêm `server/test-support/{app-harness,db-harness,clock,
+  fixtures}.js`: MySQL ephemeral database tạo/xoá riêng theo từng file test qua bootstrap
+  connection `root` (không dùng `dropAll()` — đúng quyết định C0.5), `t.mock.timers` của
+  `node:test` giả lập `Date` cho scheduler/monitor mà không cần sửa code nguồn (đã đọc trực tiếp
+  `scheduler.js`/`monitor.js` xác nhận mọi lời gọi `Date`/`Date.now()` đều ở call-time). Thêm
+  `ports: 3306:3306` cho service `db` trong `docker-compose.yml` (trước đó không truy cập được
+  từ host). Smoke test `server/test/smoke.test.js` PASS 2/2 cả `test:integration:sqlite` và
+  `test:integration:mysql`; đã xác nhận teardown drop sạch database `pr_media_test_*` sau khi
+  chạy (không rò rỉ database tạm). Phát hiện phụ trong lúc dựng harness: `node --test <thư mục>`
+  KHÔNG tự động discover file trên Node 24.15.0 — phải dùng glob rõ ràng
+  (`server/test/*.test.js`), đã sửa lại 2 script trong `package.json` cho đúng.
+- **G1A.9 (khung, CHƯA xong):** tạo `memory-bank/gate1-test-mapping.md` — 145/145 route (sinh từ
+  `07-route-catalog.md`, không lọt/trùng) + `JOB-REMINDER`/`JOB-MONITOR-SCAN`, mọi dòng
+  `status=TODO`. Đây chỉ là khung rỗng, KHÔNG phải exit criterion Gate 1 đã đạt — còn phải điền
+  `test_id`/`file`/`status` thật khi G1A.2-G1A.8 lần lượt hoàn thành.
+- Verify: `npm run test:security` vẫn 6/6 PASS (không regression do tách `index.js`/`app.js`),
+  `git diff --check` sạch.
+
 ---
 
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
