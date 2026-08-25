@@ -96,6 +96,51 @@ test('BR-SSRF-009: hostOf() tự thêm https:// khi thiếu scheme, bỏ www., f
   assert.equal(monitor.hostOf('::://khong-hop-le'), '::://khong-hop-le'); // không parse được -> trả nguyên (đã strip www. nếu có)
 });
 
+test('BR-SSRF-017: parseFeed() trích item RSS đầy đủ, decode entity &amp;/&#39;, loại tag HTML thật ở title/desc', () => {
+  const xml = `<rss><channel><item>
+    <title>Tin t&#39;s &amp; <b>MISA</b></title>
+    <link>https://baochinews.vn/bai-1</link>
+    <description>Mô tả <i>chi tiết</i></description>
+    <pubDate>Mon, 25 Aug 2026 00:00:00 GMT</pubDate>
+    <source>Báo Chí News</source>
+  </item></channel></rss>`;
+  const items = monitor.parseFeed(xml);
+  assert.deepEqual(items, [{
+    title: "Tin t's & MISA",
+    link: 'https://baochinews.vn/bai-1',
+    desc: 'Mô tả chi tiết',
+    pub: 'Mon, 25 Aug 2026 00:00:00 GMT',
+    src: 'Báo Chí News',
+  }]);
+});
+
+test('BR-SSRF-018: parseFeed() lấy link từ <link href> (Atom) khi không có <link>text</link>, bỏ item thiếu title hoặc link', () => {
+  const xml = `<feed>
+    <entry><title>Bài Atom</title><link href="https://example.com/atom-1"/><updated>2026-08-20T00:00:00Z</updated></entry>
+    <entry><title>Thiếu link</title></entry>
+    <entry><link>https://example.com/no-title</link></entry>
+  </feed>`;
+  const items = monitor.parseFeed(xml);
+  assert.deepEqual(items, [{ title: 'Bài Atom', link: 'https://example.com/atom-1', desc: '', pub: '2026-08-20T00:00:00Z', src: '' }]);
+});
+
+test('BR-SSRF-019 (đặc tả thứ tự xử lý hiện tại, không phải lỗi cần sửa ở G1A.2): parseFeed() decode HTML entity TRƯỚC khi strip tag — text đã escape dạng "&lt;x&gt;" bị hiểu nhầm thành tag thật và bị xoá nguyên khối', () => {
+  const xml = `<rss><channel><item>
+    <title>Giá &lt;10 triệu&gt; đồng</title>
+    <link>https://example.com/gia</link>
+  </item></channel></rss>`;
+  const items = monitor.parseFeed(xml);
+  assert.equal(items[0].title, 'Giá đồng');
+});
+
+test('BR-SSRF-020: matchTerms() — OR giữa nhóm AND, exclude thắng include, so khớp không phân biệt dấu tiếng Việt', () => {
+  assert.equal(monitor.matchTerms('Tin về MISA hôm nay', [], []), true); // include rỗng -> khớp tất cả
+  assert.equal(monitor.matchTerms('Chuyển đổi số doanh nghiệp', [['chuyen doi so']], []), true); // bỏ dấu để so khớp
+  assert.equal(monitor.matchTerms('MISA ra mắt sản phẩm mới', [['misa', 'tuyen dung']], []), false); // thiếu 1 từ trong nhóm AND
+  assert.equal(monitor.matchTerms('MISA tuyển dụng nhân sự mới', [['misa', 'tuyen dung']], []), true); // đủ cả nhóm AND
+  assert.equal(monitor.matchTerms('MISA tuyển dụng nhân sự mới', [['misa', 'tuyen dung']], ['nhan su']), false); // exclude thắng include
+});
+
 test('BR-SSRF-010 (đặc tả lỗ hổng hiện có, KHÔNG fix ở đây — target guard xem G1B.4): resolveLink() gọi fetch thẳng tới host nội bộ/metadata do caller truyền, không có allowlist/denylist nào chặn', async (t) => {
   const calledUrls = [];
   t.mock.method(globalThis, 'fetch', async (url) => { calledUrls.push(url); return fakeResponse({ url, text: '' }); });
