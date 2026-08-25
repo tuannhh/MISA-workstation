@@ -404,4 +404,27 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
 
 ---
 
+## 2026-08-25 — G1A.3 commit 1/~12: integration test auth + admin (R143,R144,R145,R099-R103)
+- Khởi động G1A.3 (integration test mức HTTP cho đủ 145 route) theo kế hoạch chia commit theo
+  module, mirroring nhóm view đã có ở `07-route-catalog.md` (auth/admin → partners → people →
+  reminders → interactions → reports/bookings/budgets → awards → suppliers → events/dashboard →
+  monitor (2 commit) → ai). Chọn auth+admin làm commit đầu vì `fixtures.login()`/`createUser()`
+  (hạ tầng G1A.1) phụ thuộc trực tiếp vào các route này — xác nhận đúng hành vi trước khi mọi
+  commit sau tái dùng.
+- File mới `server/test/integration-auth-admin.test.js`, 28 test, dùng lại đúng harness G1A.1
+  (`app-harness`/`db-harness`/`fixtures`/`resource-stack`, pattern gốc ở `smoke.test.js`). Case
+  tối thiểu mỗi route: happy/invalid/unauthenticated/forbidden(403 theo RBAC 2-role)/not-found;
+  route không có `:id`/body thì bỏ case tương ứng có ghi chú lý do (quy ước mới ghi ở
+  `gate1-test-mapping.md`, mục "Quy ước riêng cho dòng route_id").
+- 2 CHARACTERIZATION đáng chú ý (test xanh, không sửa hành vi): (1) `PUT`/`DELETE
+  /admin/users/:id` với id không tồn tại vẫn trả `200 {ok:true}` — không có 404, chỉ là no-op
+  lặng lẽ; (2) `POST /logout` không có middleware `requireAuth` nên gọi không cookie vẫn `200`.
+  Không phải lỗ hổng an ninh (không rò dữ liệu), chỉ là gap UX/API-contract — không định tuyến
+  sang G1B, giữ nguyên `green` ở G1A.3.
+- Mapping `gate1-test-mapping.md`: 8 dòng route chuyển `TODO`→`green` (137 dòng route còn `TODO`).
+  Verify đủ: `test:security` 6/6, `test:integration:sqlite` 118 pass+6 skip, `test:integration:mysql`
+  123 pass+1 skip, `verify-g0.mjs` + self-test đều PASS, `git diff --check` sạch.
+- Chưa gửi Codex audit — theo quy mô ~12 commit của G1A.3, gộp báo cáo sau vài commit thay vì
+  từng commit một (khác G1A.2 vốn chỉ 4 commit rồi audit 1 lần).
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

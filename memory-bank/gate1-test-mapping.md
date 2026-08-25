@@ -30,6 +30,16 @@
 > test THẬT SỰ ĐANG ĐỎ có chủ ý (test mong đợi hành vi đã được sửa nhưng code chưa sửa),
 > kèm allowlist `{id, owner, expiry}` theo §G1B.6. Một characterization xanh mô tả gap và
 > target test đỏ cho đúng gap đó là 2 dòng khác nhau trong bảng — không gộp chung 1 dòng.
+>
+> **Quy ước riêng cho dòng `route_id` (G1A.3, khác BR-* của G1A.2):** mỗi route có NHIỀU
+> `test()` (1 test/case: happy/invalid/unauthenticated/forbidden/not-found), không phải 1
+> test duy nhất. Ở đây `test_id` = chính `route_id` (ví dụ `R143`), và quy tắc "verbatim"
+> được thoả vì MỌI test-case của route đó đều mở đầu tiêu đề bằng đúng chuỗi `route_id` —
+> `grep R143 server/test/*.test.js` join ra ĐỦ (không phải đúng 1) các test-case của route.
+> Route không có `:id`/body thì không có case invalid/not-found tương ứng — ghi rõ lý do ở
+> cột `note` thay vì bỏ trống. Route có hành vi không trả 404 khi id không tồn tại (silent
+> no-op) vẫn tính là `green` với ghi chú `CHARACTERIZATION not-found` — đặc tả đúng thực
+> trạng, không phải bug được "test cho qua".
 
 | route_id | test_id | status | file | note |
 |---|---|---|---|---|
@@ -131,11 +141,11 @@
 | R096 | — | TODO | — | — |
 | R097 | — | TODO | — | — |
 | R098 | — | TODO | — | — |
-| R099 | — | TODO | — | — |
-| R100 | — | TODO | — | — |
-| R101 | — | TODO | — | — |
-| R102 | — | TODO | — | — |
-| R103 | — | TODO | — | — |
+| R099 | R099 | green | server/test/integration-auth-admin.test.js | happy/unauthenticated/forbidden (không có :id/body -> không case invalid/not-found) |
+| R100 | R100 | green | server/test/integration-auth-admin.test.js | happy/invalid(thiếu field, username trùng 409)/unauthenticated/forbidden |
+| R101 | R101 | green | server/test/integration-auth-admin.test.js | happy/invalid(role lạ bị bỏ qua lặng lẽ)/CHARACTERIZATION not-found (id lạ vẫn 200 ok:true, không 404)/unauthenticated/forbidden |
+| R102 | R102 | green | server/test/integration-auth-admin.test.js | happy/invalid(tự xoá chính mình 400)/CHARACTERIZATION not-found (id lạ vẫn 200 ok:true, không 404)/unauthenticated/forbidden |
+| R103 | R103 | green | server/test/integration-auth-admin.test.js | happy/unauthenticated/forbidden (không có :id/body -> không case invalid/not-found) |
 | R104 | — | TODO | — | — |
 | R105 | — | TODO | — | — |
 | R106 | — | TODO | — | — |
@@ -175,9 +185,9 @@
 | R140 | — | TODO | — | — |
 | R141 | — | TODO | — | — |
 | R142 | — | TODO | — | — |
-| R143 | — | TODO | — | — |
-| R144 | — | TODO | — | — |
-| R145 | — | TODO | — | — |
+| R143 | R143 | green | server/test/integration-auth-admin.test.js | happy/invalid (không có :id -> không case not-found; đây là route đăng nhập nên "unauthenticated" không áp dụng) |
+| R144 | R144 | green | server/test/integration-auth-admin.test.js | happy + CHARACTERIZATION (route không gắn requireAuth — logout không cookie vẫn 200 ok:true) |
+| R145 | R145 | green | server/test/integration-auth-admin.test.js | happy/unauthenticated (không có :id/body -> không case invalid/not-found) |
 | JOB-REMINDER | — | TODO | — | scheduler.js runOnce() — G1A.4 (race hiện tại)/G1A.8 |
 | JOB-MONITOR-SCAN | — | TODO | — | monitor.js runScan()/applySchedule() — G1A.8 |
 | BR-VAL-001 | BR-VAL-001 | green | server/test/unit-validation-formatter.test.js | rbac.js can() — matrix lookup + role/action lạ -> false |
