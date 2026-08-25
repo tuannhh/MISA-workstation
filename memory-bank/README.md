@@ -8,13 +8,13 @@
 | File | Nội dung |
 |---|---|
 | [01-audit-findings.md](01-audit-findings.md) | Phát hiện audit đã hội tụ (Claude ↔ Codex, 5 vòng), severity theo 2 trục |
-| [02-decisions.md](02-decisions.md) | Quyết định kỹ thuật D1-D12 + **D13 RBAC v2** + **D14 Voice** (owner chốt 2026-08-24) + trạng thái O1-O8 |
-| [03-data-classification.md](03-data-classification.md) | Registry dữ liệu nhạy cảm/tiền (nguồn sự thật cho PolicyEngine) |
-| [04-ROADMAP.md](04-ROADMAP.md) | Kế hoạch Gate 0 → Wave 4 (**v3** — tái cấu trúc quanh RBAC v2 D13, R1 bỏ vì dữ liệu test bỏ được, thêm track voice D14) |
+| [02-decisions.md](02-decisions.md) | Quyết định kỹ thuật D1-D12 + **D13 RBAC v2** (security-complete hoá 2026-08-25: 4 trục classification/visibility/authorization/egress) + **D14 Voice** (+ D14.4 secure proposal/confirmation) + **D15 WebView** + trạng thái O1-O8 (C0.1 owner APPROVED) |
+| [03-data-classification.md](03-data-classification.md) | Registry `classification_tier` (trần bất biến, nguồn cho D13.2a) — KHÔNG còn là nguồn `audience_visibility` |
+| [04-ROADMAP.md](04-ROADMAP.md) | Kế hoạch Gate 0 → Wave 4 (**v3 + remediation C0.1-C0.8, 2026-08-25**: reset preflight W1.RBAC.0, Gate 1 phủ đủ 145 route, D15/D14 wording sửa theo Codex) |
 | [05-error-contract.md](05-error-contract.md) | G0.5 — envelope lỗi target, giữ tương thích `error` field cũ |
-| [06-threat-model.md](06-threat-model.md) | G0.8 — threat model, data-flow, Gemini egress map |
+| [06-threat-model.md](06-threat-model.md) | G0.8 — threat model, data-flow, Gemini egress map (**v5**, PASS — 2 sửa diễn đạt P2 theo Codex C0.8) |
 | [07-route-catalog.md](07-route-catalog.md) | G0.3 — catalog **145/145 route literal 1:1** + 2 job + 13 UI view, `file:line` (thay bản wildcard-compress cũ, đã bị Codex bắt lỗi) |
-| [08-permission-matrix.md](08-permission-matrix.md) | G0.4 — ma trận permission × surface × runtime, join theo route ID (đã sửa lỗi MDS P0 admin=N/A + gộp 5 trục runtime) |
+| [08-permission-matrix.md](08-permission-matrix.md) | G0.4 — Section A (auth partition 145/145) PASS, giữ nguyên. **Section B/C (UI-flow matrix) do Codex trực tiếp rebuild (C0.3, owner giao 2026-08-25)** — chưa xong |
 | [09-db-schema.md](09-db-schema.md) | G0.2 — lược đồ đầy đủ 34 bảng (cột/kiểu/PK/FK/index) + quy tắc dịch SQLite→MySQL + migration idempotent |
 | [10-api-contract.md](10-api-contract.md) | G0.2 — ý nghĩa field request/response theo nhóm resource (không lặp route catalog) |
 | [11-business-flows.md](11-business-flows.md) | G0.2 — luồng nghiệp vụ cốt lõi: đối tác, giải thưởng, sự kiện, nhà cung cấp, nhắc việc, giám sát truyền thông |
@@ -22,7 +22,7 @@
 | [13-deployment-runbook.md](13-deployment-runbook.md) | G0.2 — chạy dev local, deploy Cloud Run + Cloud SQL, biến môi trường đầy đủ |
 | [14-known-traps.md](14-known-traps.md) | G0.2 — bẫy kỹ thuật đã biết (khác audit findings) |
 | [15-changelog.md](15-changelog.md) | G0.2 — lịch sử phát triển theo mốc kiến trúc/tính năng, kèm lý do |
-| [16-coding-rules.md](16-coding-rules.md) | G0.2 — quy tắc code đang thấy trong thực tế, ghi rõ mâu thuẫn/ngoại lệ |
+| [16-coding-rules.md](16-coding-rules.md) | G0.2 — §A quy tắc/pattern legacy (mô tả, không phải chuẩn) + **§B quy tắc BẮT BUỘC cho code mới** (thêm 2026-08-25 theo Codex C0.4.9) |
 
 ## Tổng quan sản phẩm (1 đoạn)
 
@@ -52,14 +52,23 @@ Chỉ **G0.7 (F10 secret) PASS** ở round 1.
 - G0.5: sửa lỗi chính tả khiến `error !== message`, thêm exit-criterion equality test.
 - F4: chốt 1 semantics duy nhất — **SUBMISSION O3/O8 là exit G0.1** (RESOLUTION chỉ chặn W1.AI-POLICY/Wave 3 voice/Wave 4), xoá câu tự mâu thuẫn cũ.
 
-**G0.2 — đã bổ sung (round 3, cùng đợt):** thêm 8 file `09-16` phủ đủ mục 2 của `BackEnd.SKILL/20-memory-bank-mandate.md` — [09-db-schema.md](09-db-schema.md) (34 bảng, phát hiện thêm: `CREATE INDEX` bị `translate()` bỏ hoàn toàn trên MySQL — 21 index chỉ tồn tại ở SQLite, production không có), [10-api-contract.md](10-api-contract.md), [11-business-flows.md](11-business-flows.md), [12-frontend-architecture.md](12-frontend-architecture.md) (xác nhận trực tiếp: `app.js` có 0 class `mds-*`, MDS chỉ áp dụng ~5% diện tích UI — khung ngoài), [13-deployment-runbook.md](13-deployment-runbook.md) (2 điểm UNVERIFIED tự khai báo: volume bền cho uploads trên Cloud Run, quy trình migration Railway→Cloud SQL không có trong repo), [14-known-traps.md](14-known-traps.md), [15-changelog.md](15-changelog.md), [16-coding-rules.md](16-coding-rules.md). Đã tự kiểm chứng nhiều claim trọng yếu (CREATE INDEX bị bỏ, MASK định nghĩa độc lập 2 nơi, `notify_opt_in` tắt cả 2 kênh, mds-* = 0) trực tiếp qua source trước khi chấp nhận.
+**G0.2 — đã bổ sung (round 3, cùng đợt):** thêm 8 file `09-16` phủ đủ mục 2 của `BackEnd.SKILL/20-memory-bank-mandate.md` — [09-db-schema.md](09-db-schema.md) (34 bảng, phát hiện thêm: `CREATE INDEX` bị `translate()` bỏ hoàn toàn trên MySQL — **22** index chỉ tồn tại ở SQLite, MySQL không có — sửa lại 2026-08-25, bản trước đếm sai "21"), [10-api-contract.md](10-api-contract.md), [11-business-flows.md](11-business-flows.md), [12-frontend-architecture.md](12-frontend-architecture.md) (xác nhận trực tiếp: `app.js` có 0 class `mds-*`, MDS chỉ áp dụng 1 phần rất nhỏ diện tích UI — khung ngoài; **con số %/diện tích cụ thể chưa đo**, sửa lại 2026-08-25 vì bản trước gọi ước lượng là "không suy đoán"), [13-deployment-runbook.md](13-deployment-runbook.md) (2 điểm UNVERIFIED tự khai báo: volume bền cho uploads trên Cloud Run, quy trình migration Railway→Cloud SQL không có trong repo), [14-known-traps.md](14-known-traps.md), [15-changelog.md](15-changelog.md), [16-coding-rules.md](16-coding-rules.md). Đã tự kiểm chứng nhiều claim trọng yếu (CREATE INDEX bị bỏ, MASK định nghĩa độc lập 2 nơi, `notify_opt_in` tắt cả 2 kênh, mds-* = 0) trực tiếp qua source trước khi chấp nhận.
 
 **Owner-decisions 2026-08-24 (sau round 3): TẤT CẢ đã chốt.**
-- **D13 RBAC v2** (4 vai trò + visibility field-level + created_by/owner_id) + **D14 Voice** (giữ human-in-the-loop — người dùng xác nhận trước khi AI ghi) + **D15 AMIS Mobile = cầu nối WebView** (không build native riêng — làm nhẹ toàn bộ khối native) — xem `02-decisions.md` §D/§E/§F. Thay đổi kiến trúc lớn nhất từ đầu dự án.
-- O6 APPROVED ($200); O2/O7 SUPERSEDED; **O3/O4/O5 DEFERRED-TO-DEVOPS**; **O8 PROVISIONAL** (cho phép gửi Gemini tạm — dữ liệu test); O1 mặc định `private`.
-- Dữ liệu Cloud Run = **test, bỏ được** → R1 migration chuỗi bỏ, target `browser-production` lùi thời điểm.
+- **D13 RBAC v2** (4 vai trò + visibility field-level + created_by/owner_id) + **D14 Voice** (giữ human-in-the-loop — người dùng xác nhận trước khi AI ghi) + **D15 AMIS Mobile = cầu nối WebView** (không build native riêng — làm nhẹ khối lượng triển khai native) — xem `02-decisions.md` §D/§E/§F. Thay đổi kiến trúc lớn nhất từ đầu dự án.
+- O6 APPROVED ($200); O2/O7 SUPERSEDED; **O3/O4/O5 DEFERRED-TO-DEVOPS**; **O8 PROVISIONAL** (cho phép gửi Gemini tạm — dữ liệu test); O1 (lúc đó) mặc định `private`.
+- Dữ liệu Cloud Run = **test, bỏ được** → R1 migration chuỗi bỏ (có điều kiện preflight, xem dưới), target `browser-production` lùi thời điểm.
 - `04-ROADMAP.md` viết lại **v3** theo tất cả các quyết định này.
 
-**Không còn owner-action nào treo.** O3 giờ là việc DevOps; O8 đã có quyết định tạm; D14.2 đã chốt. Còn phụ thuộc bên ngoài duy nhất: **bridge contract AMIS Mobile** (DevOps + team AMIS làm rõ khi tới W2.5/W4.1) — KHÔNG chặn đóng G0.
+**Gate 0 — Codex round-3 re-audit (2026-08-25): vẫn `HOLD GATE 0`**, ra 8 blocker cụ thể (`PR-WORKSTATION-CODEX-G0-ROUND-3-REAUDIT.md` → `G0-CLOSE-CONTRACT.md`, C0.1-C0.8, đối chiếu ngoài repo trên Desktop). Owner **chuyển C0.3 (rebuild ma trận UI-flow G0.4) cho Codex trực tiếp thực hiện** — lần đầu 1 phần Gate 0 không phải Claude làm. Các mục còn lại Claude đã remediate 2026-08-25:
+- **C0.1 — owner APPROVED trực tiếp** (evidence trong `G0-CLOSE-CONTRACT.md`): O1 → APPROVED chính thức (audience default, không hạ classification tier bất biến); D13 self-claim → **không tự nhận**, chỉ Admin/Super Admin gán; N1 → action tường minh (`ack`/`notify`/`run`) thay `view`; N2 → `dashboard:view` tường minh. Không còn dòng nào ở trạng thái mở.
+- **C0.2 — D13 security-complete hoá** (Codex chỉ ra bản 2026-08-24 gộp classification+visibility vào 1 cờ boolean, có thể khiến Admin lỡ tay công khai hoá tài khoản NH/giấy tờ tùy thân): D13.2 viết lại thành 4 trục tách biệt — `classification_tier` (trần bất biến) / `audience_visibility` (cấu hình, chỉ siết không nới dưới trần) / `authorization` (role×ownership) / `AI-egress`. D13.4 mở rộng ma trận ownership đủ nhóm resource (không chỉ 14 "hoạt động"). D1 RETAINED/AMENDED, D2 SUPERSEDED, D3 RETAINED/AMENDED — xem `02-decisions.md` §D.
+- **C0.4 — sửa lỗi source-fidelity** (tự kiểm chứng lại từng claim bằng parser/grep trước khi sửa): index **22** (không phải 21); `dropAll()` xoá đúng **28/34 bảng**, 6 bảng bị bỏ sót (`agreements`/`work_logs`/`gifts`/`benefit_usages`/`supplier_transactions`/`supplier_contacts`) — `attachments`/`supplier_quotes` THỰC RA có bị xoá (bản cũ ghi sai ngược); reminder không có UNIQUE (chỉ check-then-insert); partner detail trả **10 mảng** (không phải 7); booking chỉ có `award_id`, không có `event_id` (finding mới **F12**); MySQL 8.4 tách rõ local-Docker (xác nhận) vs Cloud-SQL (UNVERIFIED).
+- **C0.5 — reset strategy an toàn**: thay "additive migration + seed sạch" bằng preflight/rollback gate `W1.RBAC.0` (không dùng `dropAll()` hiện tại vì không sạch). O3/O4/O5 liệt kê tường minh là 3 phụ thuộc DevOps song song.
+- **C0.6 — khoá test contract Gate 1**: characterization-core phủ ĐỦ 145 route + job/scheduler (không thu hẹp "phần giữ nguyên"), thêm lớp G1C acceptance E2E, bắt buộc mapping machine-readable `route_id→test_id→trạng thái`.
+- **C0.7 — sửa wording D15**: không dùng "mobile-first responsive" (dễ hiểu lầm) — đổi "composition Native-Mobile RIÊNG BIỆT trong WebView"; D15 **không giảm severity F5** (P0 giữ nguyên); thêm yêu cầu bridge security contract.
+- **C0.8 — 2 sửa diễn đạt threat model**: AI-E001 không còn "chặn bởi O8"; AI-E012 làm rõ mention text chỉ dùng cục bộ, không vào prompt Gemini. `06-threat-model.md` lên v5.
+- Thêm **D14.4** (secure proposal/confirmation contract cho voice — chống tampering/replay/TOCTOU, R3-08).
+- Verify lại: `git diff --check` sạch, `npm run test:security` 6/6 PASS.
 
-**Điều kiện đóng Gate 0 duy nhất còn lại: Codex re-audit round 3** xác nhận sửa G0.4/G0.5/G0.8 + G0.2 coverage đạt. **CHƯA mở Gate 1** cho tới khi đó.
+**Điều kiện đóng Gate 0 còn lại:** (1) Codex hoàn thành C0.3 (rebuild Section B/C của `08-permission-matrix.md`); (2) Codex round-4 verify tập trung xác nhận C0.1-C0.8 đạt (không phải audit lại toàn dự án). **CHƯA mở Gate 1** cho tới khi cả 2 điều kiện trên xong.

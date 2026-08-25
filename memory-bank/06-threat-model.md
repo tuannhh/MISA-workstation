@@ -44,13 +44,13 @@ Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,actio
 | Denial of service | `Atomics.wait` khóa event loop toàn instance dưới tải | F7 |
 | Elevation of privilege | SSRF tới metadata server → lấy token service account → leo thang credential cloud | F3 |
 
-## D. Gemini egress map — 12 LUỒNG LOGICAL (13 lời gọi trực tiếp), sửa sau Codex re-audit round 2 (F2)
+## D. Gemini egress map — 12 LUỒNG LOGICAL (13 lời gọi trực tiếp) — PASS ở Codex round-3 re-audit (2 sửa diễn đạt P2 ở AI-E001/AI-E012)
 
 > **Lần sửa thứ 2.** Round 1 sửa từ 5 dòng lên "9 callsite" — vẫn SAI. Codex đối chiếu máy: `rg -n 'genJSON|genText|genImage|groundedSearch' server/ai.js server/monitor.js` → **`ai.js` có 6 lời gọi, `monitor.js` có 7 lời gọi trực tiếp** (dòng `:141,:191,:192,:218,:259,:276,:304`) = **13 lời gọi trực tiếp, không phải 9**. Gộp `:191`+`:192` (cùng 1 hàm `groundIngest`, gọi lần 2 chỉ khi lần 1 rỗng chunk — cùng 1 luồng logic, 2 lời gọi) → **12 luồng logic** (`ai.js`=6, `monitor.js`=6). Bảng dưới dùng ID ổn định `AI-E001..AI-E012` theo khuyến nghị Codex, để test deny-by-default sau này trỏ đúng 1:1.
 
 | ID | Route/hàm (trigger) | file:line | Gemini method | Dữ liệu gửi thực tế (input, không phải output nhận về) | Tier đề xuất |
 |---|---|---|---|---|---|
-| AI-E001 | `POST /ai/interaction-voice` (HTTP) | `ai.js:48-82`, gọi `:63` | `genJSON` | **voice/audio** — file ghi âm base64 gửi thẳng | **Confidential/Restricted** — cần consent, chặn bởi O8 |
+| AI-E001 | `POST /ai/interaction-voice` (HTTP) | `ai.js:48-82`, gọi `:63` | `genJSON` | **voice/audio** — file ghi âm base64 gửi thẳng | **Confidential/Restricted** — cần chính sách consent/retention trước khi có dữ liệu thật; **hiện PROVISIONAL-PERMIT chỉ cho dữ liệu test** (O8, owner 2026-08-24 — sửa lại, không còn "chặn bởi O8" như bản trước) |
 | AI-E002 | `POST /ai/card-text` (HTTP) | `ai.js:87-100`, gọi `:95` | `genText` | text — `title`, `date_type`, `subject_name` (tên người/tổ chức đối tác), `idea` (user nhập) | Internal |
 | AI-E003 | `POST /ai/card-image` (HTTP) | `ai.js:110-129`, gọi `:124` | `genImage` | image — logo tĩnh + `text` (nội dung lời chúc, thường do AI-E002 sinh ra) | Internal |
 | AI-E004 | `POST /ai/award-extract` (HTTP) | `ai.js:160-187`, gọi `:180` | `genJSON` | text/image/excel — file upload (base64 buffer, KHÔNG phải "file path" — xem cảnh báo uploader dưới) hoặc text dán hoặc fetch URL (`:174`) rồi `stripHtml` | Internal/Confidential tùy nội dung file thật (fileFilter thiếu — chưa kiểm soát được) |
@@ -61,7 +61,7 @@ Express (server/index.js) — requireAuth (auth.js) → requirePerm(module,actio
 | AI-E009 | `siteGroundIngest` (background job) | `monitor.js:213-221`, gọi `:218` | `groundedSearch` | host, `source.name`, và `q.include`/`q.name` — cùng loại dữ liệu nội bộ như AI-E008, thêm tên nguồn cụ thể | Internal |
 | AI-E010 | `aiMisaHighlights` — "AI (1)" (background job/on-demand `/monitor/highlights`) | `monitor.js:255-260`, gọi `:259` | `groundedSearch` | Chỉ prompt tìm tin công khai về MISA — **không có dữ liệu nội bộ nào trong prompt** | Public — đây là luồng DUY NHẤT trong nhóm monitor thực sự Public |
 | AI-E011 | `aiCompetitorAnalysis` — "AI (2)" (`/monitor/competitor-brief`) | `monitor.js:263-277`, gọi `:276` | `groundedSearch` | **Danh sách tên đối thủ từ DB (`competitors`) + toàn bộ từ khóa scan đang enable (`scan_queries.include`)** — chiến lược giám sát đối thủ, KHÔNG phải Public | **Internal** — sửa lại (round 1 gộp nhầm vào "Public grounding") |
-| AI-E012 | `evaluateCampaign` (`/monitor/campaigns/:id/evaluate`) | `monitor.js:281-305`, gọi `:304` | `groundedSearch` | `cp.name`,`cp.message`,`cp.content`,`cp.audience`,`kws` (field chiến dịch nội bộ, có thể chứa thông điệp truyền thông chưa công bố) **cộng** số liệu tổng hợp từ `mentions` đã lưu (title/content/source/sentiment) | **Internal** (thông điệp chiến dịch chưa công bố) |
+| AI-E012 | `evaluateCampaign` (`/monitor/campaigns/:id/evaluate`) | `monitor.js:281-305`, gọi `:304` | `groundedSearch` | `cp.name`,`cp.message`,`cp.content`,`cp.audience`,`kws` (field chiến dịch nội bộ, có thể chứa thông điệp truyền thông chưa công bố) **cộng** số liệu THỐNG KÊ tổng hợp (`stats.total`, số lượng tích cực/trung tính/tiêu cực, `nsr`) — **sửa lại (Codex round-3 re-audit, R3-09):** `title`/`content`/`source_name` của `mentions` chỉ dùng CỤC BỘ trong `matchTerms()` để lọc/đếm (`monitor.js:285-286`), **KHÔNG được đưa vào prompt gửi Gemini** (`monitor.js:292-303` chỉ ghép số liệu đã tổng hợp, không ghép text mention thô) | **Internal** (thông điệp chiến dịch chưa công bố) |
 
 **Đối chiếu số lượng (tự-verify, chạy lại được):**
 ```text
@@ -85,5 +85,5 @@ Logical flows: ai.js=6, monitor.js=6 (191+192 gộp 1 luồng groundIngest), tot
 - **Tự động, không cần user ác ý:** `resolveLink(ch.uri)` (`monitor.js:167`) fetch URL do chính Gemini grounding trả về — nghĩa là nếu Gemini (hoặc nội dung nó grounding tới) trả một URL nội bộ/metadata, server tự fetch nó. Đây là đường tấn công gián tiếp qua AI output, không chỉ qua form nhập URL.
 
 ## F. Việc cần làm tiếp (không thuộc Gate 0, ghi để không rơi)
-- Threat model này là bản **v4** (sau Codex re-audit round 2, F2: sửa số lượng egress đúng — 12 luồng logic/13 lời gọi trực tiếp, không phải 9; sửa tier `aiCompetitorAnalysis` từ Public → Internal; sửa payload `analyzeBatch`/`groundIngest`/`siteGroundIngest` cho đúng field thật; sửa mô tả uploader từ "file path" → "base64 buffer"; sửa line số `mailer.js`; thêm boundary outbound HTTP/RSS vào data-flow) — cập nhật lại sau khi O8 có chính sách chính thức từ Security/Legal.
+- Threat model này là bản **v5** (v4 sau Codex re-audit round 2; **v5 sau Codex round-3 re-audit R3-09**: G0.8 core inventory PASS — 12 luồng logic/13 lời gọi trực tiếp đúng, SMTP boundary đúng — chỉ còn 2 sửa diễn đạt P2: AI-E001 không còn "chặn bởi O8" mà là provisional-permit cho dữ liệu test; AI-E012 làm rõ mention text chỉ dùng cục bộ để lọc/đếm, không vào prompt) — cập nhật lại sau khi O8 có chính sách chính thức từ Security/Legal khi có dữ liệu thật.
 - Còn thiếu (đưa vào Wave sau, không phải Gate 0): retention/consent cho SMTP recipient, threat model cho background job failure mode (nếu scheduler/monitor crash giữa batch).

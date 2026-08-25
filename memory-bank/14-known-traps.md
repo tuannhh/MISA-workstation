@@ -26,9 +26,9 @@ Cả 2 dùng chung 1 instance multer `memoryStorage()`, giới hạn 25MB, **kh�
 
 `stripDisallowed()` (`routes.js:59-65`) xoá field mật khỏi object trước khi ghi nếu user không đủ quyền nhóm đó — nhưng chỉ được gọi ở **2 route**: `PUT /partners/:id` (`routes.js:168`) và `PUT /people/:id` (`routes.js:394`). Mọi route CREATE (bao gồm `POST /partners`, `POST /people`) và toàn bộ route sponsorship/fee/gift/award/supplier/event liên quan tiền **không gọi hàm này** — user thiếu `org_fee` vẫn ghi/sửa được field tiền qua các route đó (ngược hoàn toàn với ý định che dữ liệu). Ở 2 route có gọi, hành vi cũng gây nhầm lẫn UX: server trả `200 {ok:true}` như ghi thành công, nhưng field mật đã bị lặng lẽ loại khỏi payload trước khi UPDATE — **client không có cách nào biết field đó không được lưu** trừ khi tự so sánh lại dữ liệu sau khi gọi GET. Khi thêm entity/route mới có field tiền, đừng copy pattern này — chờ `PolicyEngine` (D1) hoặc tối thiểu trả lỗi rõ ràng thay vì xoá âm thầm.
 
-## 6. `CREATE INDEX` bị bỏ hoàn toàn trên nhánh MySQL — 21 index chỉ tồn tại ở SQLite
+## 6. `CREATE INDEX` bị bỏ hoàn toàn trên nhánh MySQL — 22 index chỉ tồn tại ở SQLite
 
-`mysql-sync.js:29`: `if (/^CREATE\s+INDEX/i.test(out)) return '';` — mọi `CREATE INDEX IF NOT EXISTS` trong `server/db.js` (21 dòng, liệt kê ở [`09-db-schema.md`](09-db-schema.md) §C) bị dịch thành chuỗi rỗng và không chạy khi `DB_CLIENT=mysql`. Ai kiểm tra query plan hoặc lo ngại hiệu năng trên SQLite local sẽ thấy các bảng CÓ index (vd `idx_mention_pub`, `idx_p_org`) — nhưng **production MySQL không có các index này**, chỉ có index ngầm từ `PRIMARY KEY`/`UNIQUE`. Nếu cần index thật trên MySQL, phải tạo tay qua migration/DDL riêng — sửa `db.js` sẽ KHÔNG có tác dụng trên production.
+`mysql-sync.js:29`: `if (/^CREATE\s+INDEX/i.test(out)) return '';` — mọi `CREATE INDEX IF NOT EXISTS` trong `server/db.js` (**22 dòng** — sửa lại, bản trước đếm sai "21", xem [`09-db-schema.md`](09-db-schema.md) §C) bị dịch thành chuỗi rỗng và không chạy khi `DB_CLIENT=mysql`. Ai kiểm tra query plan hoặc lo ngại hiệu năng trên SQLite local sẽ thấy các bảng CÓ index (vd `idx_mention_pub`, `idx_p_org`) — nhưng **MySQL không có các index này**, chỉ có index ngầm từ `PRIMARY KEY`/`UNIQUE`. Nếu cần index thật trên MySQL, phải tạo tay qua migration/DDL riêng — sửa `db.js` sẽ KHÔNG có tác dụng trên MySQL.
 
 ## 7. `translate()` chỉ nhận diện đúng 2 cú pháp `ON CONFLICT` cụ thể — upsert mới sẽ vỡ lặng lẽ trên MySQL, chạy OK trên SQLite
 
@@ -36,7 +36,7 @@ Cả 2 dùng chung 1 instance multer `memoryStorage()`, giới hạn 25MB, **kh�
 
 ## 8. `npm run seed` không tự set `DB_CLIENT` — dễ reseed nhầm engine đang cấu hình
 
-Script `seed` trong `package.json` chỉ chạy `node server/db.js --reseed`, **không kèm** `DB_CLIENT=sqlite` như `start:local`. Nếu máy đang có `.env`/biến môi trường trỏ MySQL (mặc định, xem bẫy #2) và ai đó chạy `npm run seed` với ý định "reset dữ liệu mẫu SQLite", lệnh sẽ **xoá sạch + seed lại MySQL** đang trỏ tới (`dropAll()` xoá 22 bảng nghiệp vụ, xem `09-db-schema.md` §E). Luôn viết rõ `DB_CLIENT=sqlite npm run seed` khi ý định là SQLite, và kiểm tra biến môi trường hiện tại trước khi chạy `npm run seed` trên bất kỳ máy nào có thể trỏ tới DB thật.
+Script `seed` trong `package.json` chỉ chạy `node server/db.js --reseed`, **không kèm** `DB_CLIENT=sqlite` như `start:local`. Nếu máy đang có `.env`/biến môi trường trỏ MySQL (mặc định, xem bẫy #2) và ai đó chạy `npm run seed` với ý định "reset dữ liệu mẫu SQLite", lệnh sẽ **xoá 28/34 bảng rồi seed lại MySQL** đang trỏ tới — **không sạch hoàn toàn**, 6 bảng (`agreements`/`work_logs`/`gifts`/`benefit_usages`/`supplier_transactions`/`supplier_contacts`) không bị xoá, xem `09-db-schema.md` §E. Luôn viết rõ `DB_CLIENT=sqlite npm run seed` khi ý định là SQLite, và kiểm tra biến môi trường hiện tại trước khi chạy `npm run seed` trên bất kỳ máy nào có thể trỏ tới DB thật.
 
 ## 9. `RESET_DB=1` xoá sạch dữ liệu khi khởi động server — không phải chỉ khi seed
 

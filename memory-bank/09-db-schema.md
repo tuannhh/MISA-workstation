@@ -2,7 +2,7 @@
 
 > Nguồn: `server/db.js` (schema SQLite gốc, hàm `init()` `db.js:22-534`, migration idempotent `migrate()` `db.js:572-655`) + `server/mysql-sync.js` (dịch DDL sang MySQL khi `DB_CLIENT=mysql`, mặc định — xem [`README.md`](README.md) và [`13-deployment-runbook.md`](13-deployment-runbook.md)).
 >
-> **Một schema nguồn duy nhất**: toàn bộ `CREATE TABLE`/`CREATE INDEX`/`ALTER TABLE` viết bằng cú pháp SQLite trong `db.js`; khi `DB_CLIENT=mysql`, hàm `translate()` (`mysql-sync.js:15-50`) dịch câu lệnh sang MySQL ngay trước khi chạy — không có file `.sql` MySQL riêng. Vì vậy đọc cột "Ghi chú dịch MySQL" dưới đây để biết type thật trên production (MySQL 8.4).
+> **Một schema nguồn duy nhất**: toàn bộ `CREATE TABLE`/`CREATE INDEX`/`ALTER TABLE` viết bằng cú pháp SQLite trong `db.js`; khi `DB_CLIENT=mysql`, hàm `translate()` (`mysql-sync.js:15-50`) dịch câu lệnh sang MySQL ngay trước khi chạy — không có file `.sql` MySQL riêng. Vì vậy đọc cột "Ghi chú dịch MySQL" dưới đây để biết type khi chạy trên MySQL. **Sửa lại (Codex round-3 re-audit, R3-02E):** "MySQL 8.4" chỉ xác nhận được cho **local Docker** (`docker-compose.yml:3`, `image: mysql:8.4`) — phiên bản engine thật của Cloud SQL production là **UNVERIFIED trong phạm vi repo** (không có artifact nào xác nhận), không suy ra bằng local Docker.
 
 ## A. Quy tắc dịch SQLite → MySQL (áp dụng cho MỌI bảng, đọc 1 lần)
 
@@ -517,7 +517,7 @@ Chiến dịch truyền thông.
 
 ## C. Index chỉ tồn tại trên SQLite — KHÔNG có trên MySQL production
 
-`translate()` bỏ toàn bộ `CREATE INDEX` khi `DB_CLIENT=mysql` (`mysql-sync.js:29`). 21 index khai báo trong `init()` (liệt kê ở mục B, cột "Index") **không tồn tại trên MySQL/Cloud SQL production**. Ngoại lệ: cột `UNIQUE` (`budgets.period`, `mentions.link`, `assignments(user_id,subject_type,subject_id)`) vẫn có index ngầm vì MySQL tự tạo index cho `UNIQUE`/`PRIMARY KEY`. Đây là bẫy hiệu năng — xem [`14-known-traps.md`](14-known-traps.md).
+`translate()` bỏ toàn bộ `CREATE INDEX` khi `DB_CLIENT=mysql` (`mysql-sync.js:29`). **22 index** khai báo trong `init()` (sửa lại — bản trước đếm sai "21"; xác nhận bằng parser trực tiếp trên `server/db.js`: `grep -c "CREATE INDEX IF NOT EXISTS" server/db.js` → 22, Codex round-3 re-audit R3-02A) **không tồn tại trên MySQL/Cloud SQL**. Ngoại lệ: cột `UNIQUE` (`budgets.period`, `mentions.link`, `assignments(user_id,subject_type,subject_id)`) vẫn có index ngầm vì MySQL tự tạo index cho `UNIQUE`/`PRIMARY KEY`. Đây là bẫy hiệu năng — xem [`14-known-traps.md`](14-known-traps.md).
 
 ## D. Idempotent migration — cơ chế và rủi ro
 
@@ -527,6 +527,12 @@ Chiến dịch truyền thông.
 
 ## E. `dropAll()` và biến môi trường phá dữ liệu (đọc trước khi test)
 
-`dropAll()` (`db.js:868-884`) DROP toàn bộ 22 bảng nghiệp vụ cốt lõi (không đụng các bảng giám sát truyền thông thêm sau — `campaigns`, `app_meta`, `sentiment_audit`, `scan_runs`, `monitor_alerts`, `competitors`, `mentions`, `sources`, `scan_queries` bị DROP ở đầu danh sách `db.js:869-872`, nhưng **không DROP** `attachments`, `benefit_usages`, `work_logs`, `agreements`, `supplier_transactions`, `supplier_contacts`, `supplier_quotes` một cách nhất quán với FK CASCADE — đọc kỹ danh sách DROP nếu cần viết lại). Được gọi khi:
+**Sửa lại toàn bộ (Codex round-3 re-audit, R3-02B — bản trước sai và tự mâu thuẫn: nói "22 bảng" rồi liệt kê chính các bảng giám sát bị DROP như bằng chứng "không đụng tới", và nói sai `attachments`/`supplier_quotes` không bị DROP dù thực tế có):**
+
+`dropAll()` (`db.js:868-884`) chứa đúng **28 lệnh `DROP TABLE`** (đếm bằng parser trực tiếp: `grep -o "DROP TABLE IF EXISTS [a-z_]*" server/db.js | wc -l` → 28) trên tổng **34 bảng** khai báo trong `init()`. **6 bảng KHÔNG có trong danh sách DROP** (kiểm tra chéo `CREATE TABLE` vs `DROP TABLE`, không đoán): `agreements`, `work_logs`, `gifts`, `benefit_usages`, `supplier_transactions`, `supplier_contacts`. Ngược với bản trước: `attachments` (`db.js:881`) và `supplier_quotes` (`db.js:875`) **CÓ bị DROP** — không phải ngoại lệ.
+
+**Rủi ro vận hành cụ thể:** nếu dùng `dropAll()`/`RESET_DB=1`/`npm run seed` làm cơ chế "xoá sạch + seed lại" cho W1 (RBAC v2 redesign, xem `04-ROADMAP.md` W1.RBAC.1), 6 bảng trên sẽ **giữ lại dữ liệu cũ** trong khi 28 bảng kia đã sạch — dữ liệu con mồ côi, khả năng vỡ FK khi seed lại theo thứ tự mới trên MySQL, hoặc lẫn dữ liệu cũ/mới không nhất quán. **Không dùng `dropAll()` hiện tại làm cơ chế reset sạch cho W1** — cần chuyển hẳn sang tạo database/schema mới rồi áp migration từ đầu (xem `04-ROADMAP.md` §C0.5 reset strategy).
+
+Được gọi khi:
 - CLI `node server/db.js --reseed [--demo]` (`db.js:887-891`).
-- **Biến môi trường `RESET_DB=1` khi khởi động server** (`db.js:895-898`) — xoá sạch dữ liệu PRODUCTION nếu đặt nhầm trên môi trường live. Xem quy trình an toàn ở [`13-deployment-runbook.md`](13-deployment-runbook.md) và bẫy ở [`14-known-traps.md`](14-known-traps.md).
+- **Biến môi trường `RESET_DB=1` khi khởi động server** (`db.js:895-898`) — xoá 28/34 bảng nếu đặt nhầm trên môi trường có dữ liệu cần giữ (hiện tại Cloud Run/Cloud SQL là môi trường test, dữ liệu bỏ được — xem `13-deployment-runbook.md` §B; nguyên tắc này vẫn phải giữ khi DevOps đưa production thật vào). Xem quy trình an toàn ở [`13-deployment-runbook.md`](13-deployment-runbook.md) và bẫy ở [`14-known-traps.md`](14-known-traps.md).

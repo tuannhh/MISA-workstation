@@ -6,13 +6,13 @@
 
 2 cách, tuỳ có muốn dùng MySQL thật hay SQLite tương thích nhanh:
 
-### A.1 MySQL (khuyến nghị, khớp production)
+### A.1 MySQL (khuyến nghị, đúng engine dùng trên môi trường test/staging)
 ```bash
 cp .env.example .env
 docker compose up --build
 # Mở http://localhost:3007
 ```
-`docker-compose.yml` dựng 2 service: `db` (MySQL 8.4, `utf8mb4_unicode_ci`, volume `mysql_data`) + `app` (build từ `Dockerfile`, đọc biến `MYSQL_HOST=db`). Lần khởi động đầu tự tạo bảng + seed 2 tài khoản (`server/db.js` — `init()`+`seed()` chạy ngay khi `require('./db')`, không cần lệnh riêng).
+`docker-compose.yml` dựng 2 service: `db` (MySQL 8.4 — **chỉ xác nhận cho local Docker**, `utf8mb4_unicode_ci`, volume `mysql_data`) + `app` (build từ `Dockerfile`, đọc biến `MYSQL_HOST=db`). Lần khởi động đầu tự tạo bảng + seed 2 tài khoản (`server/db.js` — `init()`+`seed()` chạy ngay khi `require('./db')`, không cần lệnh riêng). **Sửa lại (Codex round-3 re-audit, R3-02E):** phiên bản engine thật của Cloud SQL (môi trường test hiện tại, xem §B) là **UNVERIFIED** — không có artifact nào trong repo xác nhận Cloud SQL cũng chạy 8.4; không suy ra bằng version local Docker.
 
 ### A.2 SQLite (nhanh, chỉ tương thích — không phải đường chính)
 ```bash
@@ -20,7 +20,7 @@ npm install
 DB_CLIENT=sqlite npm start
 # hoặc: npm run start:local   (tự set DB_CLIENT=sqlite)
 ```
-DB lưu ở `data/pr.db`. Reset dữ liệu mẫu: `DB_CLIENT=sqlite npm run seed` (chạy `node server/db.js --reseed`, xoá sạch + seed lại — **script `seed` trong `package.json` KHÔNG tự set `DB_CLIENT=sqlite`**, phải tự thêm biến môi trường khi gọi trên máy đang cấu hình MySQL, nếu không sẽ reseed nhầm MySQL production — xem [`14-known-traps.md`](14-known-traps.md)).
+DB lưu ở `data/pr.db`. Reset dữ liệu mẫu: `DB_CLIENT=sqlite npm run seed` (chạy `node server/db.js --reseed`, gọi cùng hàm `dropAll()` — xoá **28/34 bảng** rồi seed lại, KHÔNG sạch hoàn toàn, xem `09-db-schema.md` §E — **script `seed` trong `package.json` KHÔNG tự set `DB_CLIENT=sqlite`**, phải tự thêm biến môi trường khi gọi trên máy đang cấu hình MySQL, nếu không sẽ reseed nhầm MySQL đang trỏ tới — xem [`14-known-traps.md`](14-known-traps.md)).
 
 ### A.3 Script khác trong `package.json`
 | Script | Lệnh | Dùng khi |
@@ -75,7 +75,7 @@ Khác kiến trúc Railway cũ (1 volume bền `/data` cho cả SQLite file + up
 | `SMTP_SECURE` | không | `false` | `'true'` mới bật TLS ngay (STARTTLS mặc định qua port 587) | `mailer.js:11` |
 | `MONITOR_AUTOSCAN` | không | tắt | `'1'` bật auto-scan giám sát truyền thông ngay từ env (độc lập với cấu hình `app_meta` qua UI) | `server/monitor.js:429` |
 | `MONITOR_INTERVAL_H` | không | `4` | Chu kỳ auto-scan (giờ) khi bật qua env, chỉ dùng làm giá trị khởi tạo nếu `app_meta` chưa có | `monitor.js:431` |
-| `RESET_DB` | **KHÔNG đặt trên production trừ khi chủ ý xoá sạch** | tắt | `'1'` khi khởi động → xoá sạch 22 bảng nghiệp vụ + seed lại — xem `09-db-schema.md` §E và bẫy ở `14-known-traps.md` | `server/db.js:895-898` |
+| `RESET_DB` | **KHÔNG đặt trên bất kỳ môi trường có dữ liệu cần giữ** | tắt | `'1'` khi khởi động → chạy `dropAll()`: xoá **28/34 bảng** (6 bảng KHÔNG bị xoá — `agreements`/`work_logs`/`gifts`/`benefit_usages`/`supplier_transactions`/`supplier_contacts`) rồi seed lại. **Không phải "xoá sạch" đúng nghĩa** — không dùng làm cơ chế reset cho W1 redesign, xem `09-db-schema.md` §E và bẫy ở `14-known-traps.md` | `server/db.js:895-898` |
 
 Biến KHÔNG dùng nữa nhưng còn nhắc trong `DEPLOY.md` (thuộc Railway, không áp dụng Cloud Run trực tiếp): không có — các biến SMTP/GEMINI_API_KEY dùng chung cho cả 2 hạ tầng.
 

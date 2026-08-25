@@ -71,6 +71,11 @@ Brief Codex §4.4-P1: kiểm tra lịch sử Git; nếu là key thật → **rot
 ### F11 — RBAC drift 2-role vs banner 5-tài-khoản · **Low / — / browser-production**
 `server/rbac.js:12-15` chỉ có `super_admin`+`pr_staff`; seed 2 user (`server/db.js:665-666`); nhưng banner login (`server/index.js:50-55`) quảng cáo 5 tài khoản không tồn tại. Dọn banner + README + đồng bộ 1:1 sau khi owner chốt role model.
 
+### F12 — Schema/API mismatch: `event_id` không tồn tại trong allowlist ghi của booking · **Medium / B / browser-production** (Codex round-3 re-audit, R3-02D)
+`server/routes.js:584-585` khai `B_COLS` cho phép ghi `award_id` nhưng **không có `event_id`** — trong khi `10-api-contract.md` (bản trước) và ý định nghiệp vụ (booking liên kết được với 1 sự kiện, dùng tính `mediaCost` theo sự kiện tương tự `award_id`) ngụ ý cả 2 field cùng được hỗ trợ. `pick(req.body, B_COLS)` (`routes.js:22-26`) âm thầm loại `event_id` client gửi lên — không lỗi, không log (cùng cơ chế silent-drop ở `16-coding-rules.md` §13). Client tưởng đã liên kết booking với sự kiện nhưng dữ liệu không được lưu.
+- **Không tự sửa code ở Gate 0** (đúng nguyên tắc "không đổi nghiệp vụ khi đang audit tài liệu") — chỉ đăng ký finding, chờ owner xác nhận ý định: (a) thêm `event_id` vào `B_COLS` + migration liên kết nếu đây là tính năng còn thiếu, hay (b) bỏ hẳn ý tưởng liên kết booking↔event nếu chưa từng dùng thật.
+- Đưa vào Wave 1 (cùng nhóm sửa contract chính xác, không phải P0 bảo mật).
+
 ## E. Điểm mạnh nên bảo toàn
 - Mô hình nghiệp vụ PR phong phú, liên hệ nhiều thực thể.
 - RBAC server-side + audit + per-user `sensitive_perms` (biểu cảm hơn role cứng).
