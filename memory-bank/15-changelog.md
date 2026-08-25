@@ -467,4 +467,31 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
   `test:integration:sqlite` 237 pass+6 skip, `test:integration:mysql` 242 pass+1 skip,
   `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
 
+## 2026-08-25 — G1A.3 commit 4/~12: integration test nhóm "Nhắc việc & thông báo" (R038-R042,R057-R061)
+- File mới `server/test/integration-reminders.test.js`, 24 test: important_dates CRUD, danh sách
+  nhắc sắp tới, chạy thủ công bộ nhắc (side-effect job nền qua route), notification in-app
+  (đọc 1/đọc tất cả), xuất `.ics`.
+- **Phát hiện nghiêm trọng — F13 (đăng ký đầy đủ ở `01-audit-findings.md` §D):** viết
+  characterization cho `POST /api/reminders/run` (R060) phát hiện `scheduler.js:28` dùng cú pháp
+  `WHERE ... (recipient_user_id IS ? OR recipient_user_id=?)` — SQLite chấp nhận `IS ?` như so
+  sánh tổng quát, **MySQL không cho `IS` nhận placeholder tham số** → `runOnce()` ném lỗi cú pháp
+  SQL (`ER_PARSE_ERROR`) ngay khi có user `notify_opt_in=1` + mốc nhắc đến hạn. Vì
+  `scheduler.start()` bọc `try/catch` chỉ `console.error` rồi tiếp tục lịch 6h/lần, lỗi bị nuốt
+  hoàn toàn — **production Cloud Run chạy `DB_CLIENT=mysql` nên tính năng nhắc việc/thông báo
+  in-app+email nhiều khả năng chưa từng tạo ra bản ghi nào từ lúc deploy**. Route thủ công không
+  có `try/catch` riêng nên rơi vào error handler chung (`app.js:35-39`), trả `400` kèm message SQL
+  thô ra client. Test R060 viết driver-aware (`isMysql ? 400 : 200`, giống pattern `R007` ở commit
+  2) để đặc tả đúng cả 2 nhánh — **KHÔNG sửa `scheduler.js` ở đây**, đúng nguyên tắc không đổi
+  nghiệp vụ khi characterization; đề xuất ưu tiên cao hơn các finding F1-F12 vì đang ảnh hưởng
+  production thật, không chỉ là rủi ro tiềm ẩn.
+- Test R057/R058/R059 (đọc notification) được viết seed trực tiếp `reminder_log` qua `db.prepare`
+  thay vì gọi `POST /api/reminders/run`, để đặc tả 3 route này (bản thân không dính F13) độc lập
+  với bug của scheduler ở cả 2 driver.
+- Xác nhận thêm 2 quy tắc hệ thống đã thấy ở các commit trước vẫn đúng cho nhóm này: `PUT/DELETE
+  /api/reminders/:id` và `POST /api/notifications/:id/read` với id lạ đều trả `200 {ok:true}`
+  no-op lặng lẽ (không 404); `GET /api/reminders/:id/ics` là route hiếm có 404 thật trong hệ thống.
+- Mapping: 10 dòng route `TODO`→`green` (90 dòng route còn `TODO`). Verify: `test:security` 6/6,
+  `test:integration:sqlite` 261 pass+6 skip, `test:integration:mysql` 266 pass+1 skip,
+  `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

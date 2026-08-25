@@ -80,11 +80,11 @@
 | R035 | R035 | green | server/test/integration-people.test.js | happy/not-found(404 thật "Không tìm thấy ảnh")/unauthenticated (forbidden N/A — không gate iddoc ở primary) |
 | R036 | R036 | green | server/test/integration-people.test.js | happy/not-found(404 thật)/**forbidden THẬT** (pr_staff xoá attachment kind=id_doc->403)/unauthenticated |
 | R037 | R037 | green | server/test/integration-people.test.js | happy(download, đúng content-type)/not-found(404 thật)/**forbidden THẬT** (pr_staff xem file id_doc->403)/unauthenticated (route requireAuth-only nhưng vẫn tự gate iddoc riêng trong handler) |
-| R038 | — | TODO | — | — |
-| R039 | — | TODO | — | — |
-| R040 | — | TODO | — | — |
-| R041 | — | TODO | — | — |
-| R042 | — | TODO | — | — |
+| R038 | R038 | green | server/test/integration-reminders.test.js | happy/CHARACTERIZATION invalid(days>365 clamp về 365, không lỗi)/unauthenticated (forbidden N/A) |
+| R039 | R039 | green | server/test/integration-reminders.test.js | happy (không phân trang/filter -> không case invalid/not-found; forbidden N/A) |
+| R040 | R040 | green | server/test/integration-reminders.test.js | happy/invalid(thiếu event_date->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R041 | R041 | green | server/test/integration-reminders.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R042 | R042 | green | server/test/integration-reminders.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
 | R043 | — | TODO | — | — |
 | R044 | — | TODO | — | — |
 | R045 | — | TODO | — | — |
@@ -99,11 +99,11 @@
 | R054 | — | TODO | — | — |
 | R055 | — | TODO | — | — |
 | R056 | — | TODO | — | — |
-| R057 | — | TODO | — | — |
-| R058 | — | TODO | — | — |
-| R059 | — | TODO | — | — |
-| R060 | — | TODO | — | — |
-| R061 | — | TODO | — | — |
+| R057 | R057 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R058/R059)/unauthenticated (forbidden N/A) |
+| R058 | R058 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R057/R059)/CHARACTERIZATION not-found(200 ok:true, UPDATE 0 dòng)/unauthenticated (forbidden N/A) |
+| R059 | R059 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R057/R058)/unauthenticated (forbidden N/A) |
+| R060 | R060 | green | server/test/integration-reminders.test.js | happy(SQLite 200)/**F13 CHARACTERIZATION driver-aware** (MySQL: `scheduler.js` dùng `recipient_user_id IS ?` — cú pháp chỉ SQLite chấp nhận, MySQL ném lỗi cú pháp SQL -> route trả 400; xem `01-audit-findings.md` F13, KHÔNG sửa ở G1A.3)/unauthenticated (forbidden N/A) |
+| R061 | R061 | green | server/test/integration-reminders.test.js | happy(.ics đúng content-type)/not-found(404 thật)/unauthenticated (forbidden N/A) |
 | R062 | — | TODO | — | — |
 | R063 | — | TODO | — | — |
 | R064 | — | TODO | — | — |
