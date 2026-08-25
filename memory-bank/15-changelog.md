@@ -512,6 +512,47 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
   (không còn nằm trong backlog) + `gate1-test-mapping.md` R060 (bỏ ghi chú CHARACTERIZATION).
 - Verify: `test:security` 6/6, `test:integration:sqlite` 261 pass+6 skip, `test:integration:mysql`
   266 pass+1 skip, `verify-g0.mjs` + self-test PASS, `git diff --check` sạch. Không route/schema
-  nào khác đổi — diff chỉ gồm `scheduler.js` (5 dòng) + test + 3 file memory-bank.
+  nào khác đổi — diff chỉ gồm `scheduler.js` (5 dòng) + test + 4 file memory-bank (bản ghi trước ở
+  đây từng nói "3 file" — sai, Codex audit A4 chỉ ra `git show --stat 22dd04d` thực tế là 4 file:
+  `01-audit-findings.md`, `04-ROADMAP.md`, `15-changelog.md`, `gate1-test-mapping.md`).
+
+## 2026-08-25 — G1A.3 (không tính vào ~12 commit module): Codex audit F13 + 2 việc không chặn tiến độ
+- Codex audit độc lập 2 commit `10a981e`+`22dd04d`: **ACCEPTED cả 2, F13 code CLOSED**, không cần
+  vòng remediation riêng. Biên bản đầy đủ trên Desktop user
+  (`PR-WORKSTATION-CODEX-G1A3-F13-AUDIT.md`). Kiểm chứng độc lập của Codex khớp với kết quả đã ghi
+  ở commit 5: reminders 24/24 cả 2 driver, toàn suite SQLite 261 pass+6 skip, security 6/6, G0
+  verifier + diff check sạch; Codex còn tái hiện trực tiếp lỗi cú pháp cũ trên MySQL 8.4 (`SELECT 1
+  WHERE 1 IS 1` → `ERROR 1064`) để xác nhận root cause đúng như mô tả. Mapping xác nhận 55/145
+  route `green`, 90 `TODO`, G1A.3 vẫn OPEN.
+- **2 việc không chặn tiến độ, xử lý ngay trong commit này:**
+  1. **Drift thuật ngữ "production" (Codex A4):** `01-audit-findings.md` F13 và bản ghi changelog
+     trước gọi Cloud Run hiện tại là "production" — nhưng `13-deployment-runbook.md` §B đã ghi rõ
+     (owner xác nhận 2026-08-24): Cloud Run + Cloud SQL hiện tại **CHỈ LÀ MÔI TRƯỜNG TEST**, hạ
+     tầng production MISA thật **CHƯA tồn tại**. Đã sửa `01-audit-findings.md` (severity giữ
+     `High`, đổi ngữ cảnh "đã ảnh hưởng môi trường test MySQL hiện tại + sẽ chặn production
+     tương lai nếu không sửa trước"). Không sửa lại các entry changelog trước đó (giữ nguyên làm
+     bản ghi lịch sử đúng với thời điểm viết — sửa số file ở entry ngay trên thay vì viết lại toàn
+     bộ đoạn).
+  2. **Cách ly `DATA_DIR` cho MySQL integration harness (Codex A3, SHOULD-FIX trước khi đóng
+     G1A.3):** `createMysqlTestDb()` (`server/test-support/db-harness.js`) trước đây chỉ cách ly
+     database, KHÔNG cách ly `DATA_DIR` như `setupSqliteDb()` đã làm — khi chạy
+     `test:integration:mysql` mà quên tự set `DATA_DIR`, mọi test upload (partners/people/...)
+     ghi thẳng vào `data/uploads` thật của máy dev. **Xác nhận bằng chứng thật trong session này:**
+     tìm thấy 88 file rác (1-16 byte, rõ ràng là fixture test, khác hẳn file thật 173KB có sẵn)
+     trong `data/uploads` do các lần chạy `test:integration:mysql` trước khi có fix này — đúng như
+     Codex cảnh báo. Fix: `createMysqlTestDb()` giờ tự tạo 1 `DATA_DIR` tạm (giống
+     `setupSqliteDb()`) và set `process.env.DATA_DIR` trước khi mở connection tạo database;
+     `dropMysqlTestDb()` dọn lại thư mục đó trong `finally`. Dùng 1 biến module-level
+     (`activeMysqlDataDir`) vì `node --test` chạy mỗi file test trong 1 process riêng, không có
+     rủi ro 2 cặp create/drop chạy đồng thời chung process. Không cần sửa 7 file test đang gọi
+     `createMysqlTestDb()`/`dropMysqlTestDb()` — API giữ nguyên chữ ký, chỉ thêm side-effect nội
+     bộ.
+  - Verify lại: chạy `DB_CLIENT=mysql ALLOW_TEST_DB_CREATE=1 node --test server/test/*.test.js`
+    **KHÔNG set `DATA_DIR` thủ công** → 266 pass, 1 skip, 0 fail (trước fix sẽ EPERM/ghi nhầm vào
+    `data/uploads` thật). `test:security` 6/6, `test:integration:sqlite` 261 pass+6 skip,
+    `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
+  - 88 file rác đã phát hiện trong `data/uploads` (thư mục cục bộ, nằm trong `.gitignore`, không
+    phải dữ liệu Git) — CHƯA xoá (lệnh xoá hàng loạt bị chặn bởi permission classifier của harness,
+    cần owner tự xác nhận/xoá tay hoặc cấp quyền).
 
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

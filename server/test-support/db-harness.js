@@ -11,6 +11,14 @@ const TEST_DB_NAME_RE = /^pr_media_test_\d+_[0-9a-f]{8}$/;
 const SAFE_TEST_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 const SAFE_APP_USER_RE = /^[A-Za-z0-9_]{1,32}$/;
 
+// Theo dõi DATA_DIR tạm ứng với database MySQL tạm ĐANG mở, để dropMysqlTestDb() dọn đúng cặp
+// (Codex audit G1A.3-F13, A3, 2026-08-25: createMysqlTestDb() trước đây chỉ cách ly database,
+// KHÔNG cách ly DATA_DIR như setupSqliteDb() — test upload có thể ghi vào data/uploads thật của
+// máy dev khi chạy test:integration:mysql mà quên tự set DATA_DIR trước). An toàn dùng biến
+// module-level vì `node --test` chạy mỗi file test trong 1 process riêng — không có 2 cặp
+// create/drop chạy đồng thời trong cùng process.
+let activeMysqlDataDir = null;
+
 function setupSqliteDb() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-media-test-'));
   process.env.DATA_DIR = dir;
@@ -89,6 +97,8 @@ function bootstrapConfig() {
 
 async function createMysqlTestDb() {
   assertOptIn();
+  activeMysqlDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-media-test-'));
+  process.env.DATA_DIR = activeMysqlDataDir;
   const mysql = require('mysql2/promise');
   const name = `pr_media_test_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   const appUser = process.env.MYSQL_USER || 'pr_media';
@@ -141,6 +151,10 @@ async function dropMysqlTestDb(name) {
     await admin.query(`DROP DATABASE IF EXISTS \`${name}\``);
   } finally {
     await admin.end();
+    if (activeMysqlDataDir) {
+      fs.rmSync(activeMysqlDataDir, { recursive: true, force: true });
+      activeMysqlDataDir = null;
+    }
   }
 }
 
