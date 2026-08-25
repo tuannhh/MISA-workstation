@@ -71,6 +71,35 @@ function isValidNewUserPayload({ username, password, full_name, role }) {
 }
 // Chỉ giữ tên nhóm dữ liệu mật hợp lệ (POST/PUT /admin/users) — chống ghi nhóm lạ vào sensitive_perms
 function sanitizeSensitivePerms(list) { return list.filter((g) => rbac.ALL_GROUPS.includes(g)); }
+// Net Sentiment Ratio = (tích cực - tiêu cực) / (tích cực + tiêu cực), 0 khi mẫu số rỗng — dùng
+// chung cho /monitor/dashboard (tổng + trend 14 ngày) và /monitor/campaigns/:id/mentions (trước
+// đây bị lặp lại 3 nơi với công thức giống nhau, nay gộp 1 hàm để tránh lệch nhau khi sửa sau).
+function nsrOf(positive, negative) {
+  const denom = positive + negative;
+  return denom ? +((positive - negative) / denom).toFixed(2) : 0;
+}
+// Cấp độ rủi ro chăm sóc theo số ngày chưa tương tác (POST /reports — mục careRisk)
+function careRiskLevel(days) {
+  if (days >= 30) return { level: 5, label: 'Cấp 5: Nguy hiểm', action: 'Đối ngoại khẩn cấp' };
+  if (days >= 21) return { level: 4, label: 'Cấp 4: Cảnh báo', action: 'Sắp xếp gặp/gọi ngay' };
+  if (days >= 14) return { level: 3, label: 'Cấp 3: Cần theo dõi', action: 'Lên lịch chăm sóc' };
+  if (days >= 7) return { level: 2, label: 'Cấp 2: Ổn', action: '' };
+  return { level: 1, label: 'Cấp 1: Đồng hành', action: '' };
+}
+// Xếp tin đã lâu-không-chăm-sóc vào mốc 1/3/6/12 tháng (GET /reports/care-alerts), null nếu <30 ngày
+function bucketOf(days) { return days >= 365 ? '12m' : days >= 180 ? '6m' : days >= 90 ? '3m' : days >= 30 ? '1m' : null; }
+// Khủng hoảng truyền thông = số tin tiêu cực về thương hiệu trong 24h vượt ngưỡng (GET /monitor/dashboard)
+function crisisOf(neg24Count) { return neg24Count >= 3; }
+// Sắc thái -> điểm số khi PR sửa tay (PUT /monitor/mentions/:id) — khác thang điểm AI ở monitor.js#analyzeBatch
+function sentimentScore(sentiment) {
+  return sentiment === 'positive' ? 0.6 : sentiment === 'negative' ? -0.6 : sentiment === 'neutral' ? 0 : null;
+}
+// Tổng chi phí 1 giải thưởng = chi phí gốc + ngân sách các lần tham gia + chi phí truyền thông đã booking (GET /reports/awards)
+function awardCostOf(award, participations, mediaCost) {
+  const cost = award.cost || 0;
+  const partBudget = participations.reduce((s, p) => s + (p.budget || 0), 0);
+  return { cost, partBudget, mediaCost, totalCost: cost + partBudget + mediaCost };
+}
 // ----- Phân công người chăm sóc (assignments) -----
 function getCaretakers(type, id) {
   return db.prepare(`SELECT u.id, u.full_name, u.role FROM assignments a JOIN users u ON u.id=a.user_id
@@ -686,12 +715,7 @@ router.get('/reports', requirePerm('reports', 'view'), (req, res) => {
     WHERE p.status!='Ngừng hợp tác'`).all()
     .map((p) => {
       const days = p.last_date ? Math.round((Date.now() - new Date(p.last_date + 'T00:00:00Z')) / 86400000) : 999;
-      let level = 1, label = 'Cấp 1: Đồng hành', action = '';
-      if (days >= 30) { level = 5; label = 'Cấp 5: Nguy hiểm'; action = 'Đối ngoại khẩn cấp'; }
-      else if (days >= 21) { level = 4; label = 'Cấp 4: Cảnh báo'; action = 'Sắp xếp gặp/gọi ngay'; }
-      else if (days >= 14) { level = 3; label = 'Cấp 3: Cần theo dõi'; action = 'Lên lịch chăm sóc'; }
-      else if (days >= 7) { level = 2; label = 'Cấp 2: Ổn'; action = ''; }
-      return { ...p, days, level, label, action };
+      return { ...p, days, ...careRiskLevel(days) };
     }).filter((p) => p.level >= 3).sort((a, b) => b.days - a.days).slice(0, 20);
 
   // Tương tác
@@ -771,11 +795,11 @@ router.get('/reports/awards', requirePerm('reports', 'view'), (req, res) => {
   const awards = db.prepare('SELECT * FROM awards ORDER BY submission_deadline').all();
   const rows = awards.map((a) => {
     const parts = db.prepare('SELECT * FROM award_participations WHERE award_id=? AND year BETWEEN ? AND ? ORDER BY year DESC').all(a.id, yFrom, yTo);
-    const partBudget = parts.reduce((s, p) => s + (p.budget || 0), 0);
     const mediaCost = db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM bookings WHERE award_id=? AND status!='Hủy'`).get(a.id).s;
+    const { cost, partBudget, totalCost } = awardCostOf(a, parts, mediaCost);
     return {
       id: a.id, name: a.name, organizer: a.organizer, status: a.status, scope: a.scope,
-      cost: a.cost || 0, partBudget, mediaCost, totalCost: (a.cost || 0) + partBudget + mediaCost,
+      cost, partBudget, mediaCost, totalCost,
       participations: parts.map((p) => ({ year: p.year, status: p.status, result: p.result, budget: p.budget })),
       caretakers: getCaretakers('award', a.id).map((u) => u.full_name),
     };
@@ -796,7 +820,6 @@ router.get('/reports/care-alerts', requirePerm('reports', 'view'), (req, res) =>
     return [i, b].filter(Boolean).sort().pop() || null;
   };
   const now = Date.now();
-  const bucketOf = (days) => days >= 365 ? '12m' : days >= 180 ? '6m' : days >= 90 ? '3m' : days >= 30 ? '1m' : null;
   const build = (type, id, name, sub) => {
     const last = type === 'person' ? lastActivityPerson(id) : lastActivityOrg(id);
     const days = last ? Math.round((now - new Date(last + 'T00:00:00Z')) / 86400000) : 9999;
@@ -1307,19 +1330,18 @@ router.get('/monitor/dashboard', requirePerm('monitoring', 'view'), (req, res) =
   const sent = { positive: 0, neutral: 0, negative: 0 };
   db.prepare(`SELECT sentiment, COUNT(*) c FROM mentions WHERE category='brand' AND sentiment IS NOT NULL AND ${inP} GROUP BY sentiment`)
     .all(from, to).forEach((r) => { sent[r.sentiment] = r.c; });
-  const denom = sent.positive + sent.negative;
-  const nsr = denom ? +((sent.positive - sent.negative) / denom).toFixed(2) : 0;
+  const nsr = nsrOf(sent.positive, sent.negative);
   // khủng hoảng: tiêu cực thương hiệu 24h
   const since24 = new Date(Date.now() + 7 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
   const neg24 = c(`SELECT COUNT(*) c FROM mentions WHERE category='brand' AND sentiment='negative' AND published_at>=?`, since24);
-  const crisis = neg24 >= 3;
+  const crisis = crisisOf(neg24);
   // trend 14 ngày: volume thương hiệu + NSR ngày
   const days = [];
   for (let i = 13; i >= 0; i--) days.push(new Date(Date.now() + 7 * 3600 * 1000 - i * 86400000).toISOString().slice(0, 10));
   const byDay = {};
   db.prepare(`SELECT published_at d, sentiment, COUNT(*) c FROM mentions WHERE category='brand' AND published_at>=? GROUP BY published_at, sentiment`)
     .all(days[0]).forEach((r) => { (byDay[r.d] = byDay[r.d] || { p: 0, n: 0, z: 0 }); if (r.sentiment === 'positive') byDay[r.d].p = r.c; else if (r.sentiment === 'negative') byDay[r.d].n = r.c; else byDay[r.d].z = r.c; });
-  const trend = days.map((d) => { const x = byDay[d] || { p: 0, n: 0, z: 0 }; const tot = x.p + x.n + x.z; const dn = x.p + x.n; return { date: d, total: tot, nsr: dn ? +((x.p - x.n) / dn).toFixed(2) : 0 }; });
+  const trend = days.map((d) => { const x = byDay[d] || { p: 0, n: 0, z: 0 }; return { date: d, total: x.p + x.n + x.z, nsr: nsrOf(x.p, x.n) }; });
   const alerts = db.prepare(`SELECT * FROM monitor_alerts ORDER BY id DESC LIMIT 10`).all();
   const lastRun = db.prepare(`SELECT * FROM scan_runs ORDER BY id DESC LIMIT 1`).get();
   const sourceCount = c(`SELECT COUNT(*) c FROM sources WHERE enabled=1`);
@@ -1366,7 +1388,7 @@ router.put('/monitor/mentions/:id', requirePerm('monitoring', 'edit'), (req, res
   // sửa sắc thái -> ghi audit + đánh dấu human
   if ('sentiment' in req.body && req.body.sentiment !== cur.sentiment) {
     const ns = req.body.sentiment || null;
-    const score = ns === 'positive' ? 0.6 : ns === 'negative' ? -0.6 : ns === 'neutral' ? 0 : null;
+    const score = sentimentScore(ns);
     db.prepare(`UPDATE mentions SET sentiment=?, sentiment_score=?, sentiment_by='human' WHERE id=?`).run(ns, score, cur.id);
     const u = req.session.user;
     db.prepare(`INSERT INTO sentiment_audit (mention_id, old_sentiment, new_sentiment, user_id, username) VALUES (?,?,?,?,?)`)
@@ -1561,8 +1583,7 @@ router.get('/monitor/campaigns/:id/results', requirePerm('monitoring', 'view'), 
   const bd = { positive: 0, neutral: 0, negative: 0, none: 0 };
   const bySource = {};
   hit.forEach((m) => { bd[m.sentiment || 'none']++; bySource[m.source_type || 'khác'] = (bySource[m.source_type || 'khác'] || 0) + 1; });
-  const denom = bd.positive + bd.negative;
-  const nsr = denom ? +((bd.positive - bd.negative) / denom).toFixed(2) : 0;
+  const nsr = nsrOf(bd.positive, bd.negative);
   // đối thủ trong chiến dịch: tin nhắc TÊN đối thủ KÈM từ khóa chiến dịch (lọc trong 'hit')
   const compRes = comps.map((c) => {
     const name = typeof c === 'string' ? c : (c && c.name) || '';
@@ -1595,6 +1616,7 @@ router.testables = {
   pageParams, pick, jsonField, senGroups, senVisible, canMoney, maskMoney, stripDisallowed,
   isValidBudgetPeriod, isValidNewUserPayload, sanitizeSensitivePerms,
   nextOccurrence, decorateDates, deadlineInfo, jarr, periodOf, campOut,
+  nsrOf, careRiskLevel, bucketOf, crisisOf, sentimentScore, awardCostOf,
 };
 
 module.exports = router;
