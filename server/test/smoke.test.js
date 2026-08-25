@@ -19,6 +19,7 @@ const resources = createResourceStack();
 
 before(async () => {
   if (isMysql) {
+    resources.acquire(dbHarness.setupTestDataDir().teardown);
     const dbName = await dbHarness.createMysqlTestDb();
     resources.acquire(() => dbHarness.dropMysqlTestDb(dbName));
   } else {

@@ -555,4 +555,48 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
     phải dữ liệu Git) — CHƯA xoá (lệnh xoá hàng loạt bị chặn bởi permission classifier của harness,
     cần owner tự xác nhận/xoá tay hoặc cấp quyền).
 
+## 2026-08-25 — G1A.3: remediation harness sau Codex re-audit `cefd6b3` (PARTIAL PASS, R1) + dọn 88 file rác
+- Codex re-audit độc lập `cefd6b3`: **PARTIAL PASS** — F13 vẫn CLOSED, reminders slice vẫn
+  ACCEPTED, không có lỗi sản phẩm mới; nhưng lifecycle `DATA_DIR` của MySQL harness còn 1 blocker
+  hẹp (R1, chỉ ở test harness, không phải code sản phẩm). Biên bản đầy đủ trên Desktop user
+  (`PR-WORKSTATION-CODEX-CEFD6B3-AUDIT.md`).
+- **R1 — Lifecycle `DATA_DIR` MySQL harness:** bản `cefd6b3` tạo `DATA_DIR` NGAY ĐẦU
+  `createMysqlTestDb()`, trước mọi bước có thể throw (`assertSafeAppUser`, `bootstrapConfig`,
+  `createConnection`, CREATE/GRANT/FLUSH) — nếu bước sau đó lỗi, caller không nhận được `dbName`
+  nên không gọi được `dropMysqlTestDb()`, dir bị rò (Codex đo được: chạy lại failure test làm số
+  thư mục tmp tăng từ 7 lên 8). Ngoài ra success path xoá dir nhưng không restore
+  `process.env.DATA_DIR`, để biến trỏ tới đường dẫn đã xoá.
+- Fix theo đúng phương án Codex đề xuất (tách resource độc lập, không giữ state module-level):
+  thêm `setupTestDataDir()` trong `server/test-support/db-harness.js` — trả `{dir, teardown}`,
+  `teardown()` xoá dir VÀ khôi phục đúng `process.env.DATA_DIR` về giá trị trước đó (hoặc xoá hẳn
+  key nếu trước đó chưa từng set, đúng semantics S2 đã áp dụng ở nơi khác trong test-support).
+  `createMysqlTestDb()`/`dropMysqlTestDb()` quay lại nguyên bản trước `cefd6b3` (chỉ quản lý
+  database, không đụng `DATA_DIR`). `setupSqliteDb()` nay chỉ là alias của `setupTestDataDir()`
+  (cùng 1 resource, không có lifecycle database riêng để tách).
+- Cập nhật 5 file test đang gọi `createMysqlTestDb()` trong nhánh `if (isMysql)` để tự
+  `resources.acquire(dbHarness.setupTestDataDir().teardown)` **TRƯỚC** khi gọi
+  `createMysqlTestDb()` — đúng nguyên tắc resource-stack "chỉ dọn đúng những gì đã acquire thành
+  công": `integration-auth-admin.test.js`, `integration-partners.test.js`,
+  `integration-people.test.js`, `integration-reminders.test.js`, `smoke.test.js`. Không cần sửa
+  `smoke-failure.test.js` (2 test ở đó chỉ kiểm lifecycle database, không đụng filesystem/upload).
+- Thêm 3 test mới trong `db-harness-failure.test.js` theo đúng yêu cầu Codex ("test cleanup và
+  restore environment ở cả success/failure path"): 2 test lifecycle `setupTestDataDir()` thành
+  công (khôi phục đúng giá trị `DATA_DIR` trước đó / xoá hẳn key nếu trước đó chưa set), và 1 test
+  tái hiện chính xác thí nghiệm Codex đã đo (`GRANT` lỗi qua `MYSQL_USER` không tồn tại) nhưng với
+  pattern acquire-trước-khi-tạo-DB mới — xác nhận resource dir KHÔNG rò (`stack.size` giữ nguyên
+  qua thất bại, `cleanupAll()` xoá dir thành công).
+- Verify: chạy đúng thí nghiệm Codex lặp lại (đếm thư mục `pr-media-test-*` trước/sau
+  `db-harness-failure.test.js`) → 0/0, không rò. `test:security` 6/6, `test:integration:sqlite`
+  263 pass+7 skip, MySQL không set `DATA_DIR` tay 269 pass+1 skip, `verify-g0.mjs` + self-test
+  PASS, `git diff --check` sạch.
+- **R4 — dọn 88 file rác trong `data/uploads`:** theo đúng phương án Codex (KHÔNG xoá theo tiêu
+  chí kích thước — 1 trong 5 file cũ prefix `1781862...` cũng chỉ 8 byte, dễ xoá nhầm nếu lọc theo
+  size). Xác nhận đúng 88 file có prefix timestamp `>=1787640000000` khớp fixture test (72 file
+  `x`, 8 file `noi-dung`, 8 file `noi-dung-pdf-gia`), KHÁC hẳn 5 file cũ (4 JPG 173-544KB + 1 PDF
+  8 byte, giữ nguyên không đụng). Đã **MOVE** (không xoá) 88 file vào
+  `data/_quarantine-2026-08-25-mysql-test-leak/` kèm `MANIFEST.md` + `FILE-LIST.txt` (danh sách
+  đầy đủ tên+size+mtime gốc) — thư mục này nằm trong `data/` (đã `.gitignore`), không phải dữ liệu
+  Git, owner tự xoá quarantine sau khi xác nhận không thiếu gì. `data/uploads/` nay chỉ còn đúng 5
+  file cũ.
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

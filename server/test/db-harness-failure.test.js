@@ -1,6 +1,8 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const { createResourceStack } = require('../test-support/resource-stack');
 
 const isMysql = String(process.env.DB_CLIENT || 'mysql').toLowerCase() === 'mysql';
 
@@ -71,4 +73,78 @@ test('dropMysqlTestDb() từ chối chạy khi thiếu ALLOW_TEST_DB_CREATE — 
     if (hadFlag) process.env.ALLOW_TEST_DB_CREATE = originalFlag;
     else delete process.env.ALLOW_TEST_DB_CREATE;
   }
+});
+
+// Codex re-audit `cefd6b3` (R1, 2026-08-25): setupTestDataDir() phải là resource ĐỘC LẬP khỏi
+// lifecycle database — teardown phải xoá dir VÀ khôi phục đúng process.env.DATA_DIR (không để
+// trỏ tới đường dẫn đã xoá), cả khi có giá trị DATA_DIR trước đó lẫn khi không.
+test('setupTestDataDir() success: xoá dir + khôi phục DATA_DIR (có giá trị trước đó)', () => {
+  const dbHarness = require('../test-support/db-harness');
+  const hadPrev = Object.prototype.hasOwnProperty.call(process.env, 'DATA_DIR');
+  const prevValue = process.env.DATA_DIR;
+  process.env.DATA_DIR = '/tmp/gia-lap-data-dir-truoc-do';
+  try {
+    const { dir, teardown } = dbHarness.setupTestDataDir();
+    assert.ok(fs.existsSync(dir), 'setupTestDataDir() phải tạo dir thật');
+    assert.equal(process.env.DATA_DIR, dir, 'DATA_DIR phải trỏ đúng dir vừa tạo trong lúc dùng');
+    teardown();
+    assert.equal(fs.existsSync(dir), false, 'teardown() phải xoá dir');
+    assert.equal(process.env.DATA_DIR, '/tmp/gia-lap-data-dir-truoc-do', 'teardown() phải khôi phục đúng giá trị DATA_DIR trước đó');
+  } finally {
+    if (hadPrev) process.env.DATA_DIR = prevValue;
+    else delete process.env.DATA_DIR;
+  }
+});
+
+test('setupTestDataDir() success: khôi phục về "chưa từng set" khi trước đó không có DATA_DIR', () => {
+  const dbHarness = require('../test-support/db-harness');
+  const hadPrev = Object.prototype.hasOwnProperty.call(process.env, 'DATA_DIR');
+  const prevValue = process.env.DATA_DIR;
+  delete process.env.DATA_DIR;
+  try {
+    const { dir, teardown } = dbHarness.setupTestDataDir();
+    teardown();
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(process.env, 'DATA_DIR'), false,
+      'teardown() phải xoá hẳn key DATA_DIR nếu trước đó chưa từng set, không để lại chuỗi "undefined"'
+    );
+  } finally {
+    if (hadPrev) process.env.DATA_DIR = prevValue;
+    else delete process.env.DATA_DIR;
+  }
+});
+
+// Tái hiện đúng thí nghiệm Codex đo được ở audit `cefd6b3` (R1): "chạy failure test làm số thư
+// mục tmp tăng thêm 1 mỗi lần". Với pattern mới — acquire setupTestDataDir() vào resource-stack
+// TRƯỚC khi gọi createMysqlTestDb() — dù DB creation thất bại giữa đường, resource-stack vẫn có
+// đúng 1 cleanup đã đăng ký để dọn dir, không rò.
+test('pattern acquire-trước-khi-tạo-DB: setupTestDataDir() không rò khi createMysqlTestDb() thất bại', { skip: !isMysql }, async () => {
+  const dbHarness = require('../test-support/db-harness');
+  const stack = createResourceStack();
+  const hadUser = Object.prototype.hasOwnProperty.call(process.env, 'MYSQL_USER');
+  const originalUser = process.env.MYSQL_USER;
+
+  // Đúng thứ tự các file test G1A.3 phải dùng: acquire dir TRƯỚC khi thử tạo DB.
+  const { dir, teardown } = dbHarness.setupTestDataDir();
+  stack.acquire(teardown);
+  assert.equal(stack.size, 1, 'resource dir phải được acquire ngay, độc lập với việc tạo DB có thành công hay không');
+
+  process.env.MYSQL_USER = 'codex_missing_test_user_xyz'; // user không tồn tại -> GRANT phải lỗi
+  try {
+    await assert.rejects(
+      () => dbHarness.createMysqlTestDb(),
+      'createMysqlTestDb() phải reject khi GRANT lỗi (không đăng ký thêm resource DB nào)'
+    );
+  } finally {
+    if (hadUser) process.env.MYSQL_USER = originalUser;
+    else delete process.env.MYSQL_USER;
+  }
+
+  // Resource dir vẫn còn nguyên trong stack (createMysqlTestDb() thất bại không tự dọn resource
+  // của caller) — cleanupAll() phải dọn được, khác hẳn hành vi rò trước fix (Codex đo được: chạy
+  // lại failure test làm số thư mục tmp tăng thêm 1 mỗi lần).
+  assert.equal(stack.size, 1, 'resource dir đã acquire trước đó không bị mất khi bước tạo DB sau đó thất bại');
+  assert.ok(fs.existsSync(dir), 'dir vẫn còn tồn tại ngay trước khi cleanupAll()');
+  await stack.cleanupAll();
+  assert.equal(fs.existsSync(dir), false, 'cleanupAll() phải xoá dir dù createMysqlTestDb() đã thất bại giữa đường');
 });

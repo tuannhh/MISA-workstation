@@ -11,22 +11,34 @@ const TEST_DB_NAME_RE = /^pr_media_test_\d+_[0-9a-f]{8}$/;
 const SAFE_TEST_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 const SAFE_APP_USER_RE = /^[A-Za-z0-9_]{1,32}$/;
 
-// Theo dõi DATA_DIR tạm ứng với database MySQL tạm ĐANG mở, để dropMysqlTestDb() dọn đúng cặp
-// (Codex audit G1A.3-F13, A3, 2026-08-25: createMysqlTestDb() trước đây chỉ cách ly database,
-// KHÔNG cách ly DATA_DIR như setupSqliteDb() — test upload có thể ghi vào data/uploads thật của
-// máy dev khi chạy test:integration:mysql mà quên tự set DATA_DIR trước). An toàn dùng biến
-// module-level vì `node --test` chạy mỗi file test trong 1 process riêng — không có 2 cặp
-// create/drop chạy đồng thời trong cùng process.
-let activeMysqlDataDir = null;
-
-function setupSqliteDb() {
+// Resource DATA_DIR độc lập, KHÔNG gắn vào lifecycle database (Codex re-audit `cefd6b3`, R1,
+// 2026-08-25): bản trước gắn việc tạo/dọn DATA_DIR ngay trong createMysqlTestDb()/
+// dropMysqlTestDb() qua 1 biến module-level — nếu createMysqlTestDb() throw ở bất kỳ bước nào
+// SAU khi đã tạo dir (assertSafeAppUser/bootstrapConfig/createConnection/CREATE/GRANT/FLUSH),
+// caller không nhận được dbName nên không gọi được dropMysqlTestDb(), dir bị rò (Codex đo được:
+// chạy lại failure test làm số thư mục tmp tăng thêm 1 mỗi lần); ngoài ra success path xoá dir
+// nhưng không restore `process.env.DATA_DIR`, để biến trỏ tới đường dẫn đã xoá.
+// Fix: tách hẳn thành resource riêng — caller PHẢI tự `resources.acquire(teardown)` TRƯỚC khi gọi
+// createMysqlTestDb(), để dù bước tạo DB thất bại ở đâu, resource-stack vẫn có cleanup đã đăng ký
+// từ trước đó (đúng nguyên tắc "chỉ dọn đúng những gì đã acquire thành công" của resource-stack.js).
+function setupTestDataDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-media-test-'));
+  const hadPrev = Object.prototype.hasOwnProperty.call(process.env, 'DATA_DIR');
+  const prevValue = process.env.DATA_DIR;
   process.env.DATA_DIR = dir;
   return {
+    dir,
     teardown() {
       fs.rmSync(dir, { recursive: true, force: true });
+      if (hadPrev) process.env.DATA_DIR = prevValue;
+      else delete process.env.DATA_DIR;
     },
   };
+}
+
+// SQLite dùng chung đúng 1 resource DATA_DIR — không có lifecycle database riêng để tách khỏi.
+function setupSqliteDb() {
+  return setupTestDataDir();
 }
 
 // Chốt fail-closed (Codex G1A1-audit A3): harness dùng tài khoản root để tạo/xoá database —
@@ -97,8 +109,6 @@ function bootstrapConfig() {
 
 async function createMysqlTestDb() {
   assertOptIn();
-  activeMysqlDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-media-test-'));
-  process.env.DATA_DIR = activeMysqlDataDir;
   const mysql = require('mysql2/promise');
   const name = `pr_media_test_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   const appUser = process.env.MYSQL_USER || 'pr_media';
@@ -151,11 +161,7 @@ async function dropMysqlTestDb(name) {
     await admin.query(`DROP DATABASE IF EXISTS \`${name}\``);
   } finally {
     await admin.end();
-    if (activeMysqlDataDir) {
-      fs.rmSync(activeMysqlDataDir, { recursive: true, force: true });
-      activeMysqlDataDir = null;
-    }
   }
 }
 
-module.exports = { setupSqliteDb, createMysqlTestDb, dropMysqlTestDb, TEST_DB_NAME_RE };
+module.exports = { setupSqliteDb, setupTestDataDir, createMysqlTestDb, dropMysqlTestDb, TEST_DB_NAME_RE };
