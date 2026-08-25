@@ -427,4 +427,27 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
 - Chưa gửi Codex audit — theo quy mô ~12 commit của G1A.3, gộp báo cáo sau vài commit thay vì
   từng commit một (khác G1A.2 vốn chỉ 4 commit rồi audit 1 lần).
 
+## 2026-08-25 — G1A.3 commit 2/~12: integration test nhóm "Cơ quan đối tác" (R001-R028)
+- File mới `server/test/integration-partners.test.js`, 86 test: assignable-users, organizations
+  CRUD, sponsorships, agreements(+upload file), work-logs(+upload file), gifts, benefit-usages,
+  association_fees(+remind).
+- Phát hiện đáng chú ý (đưa vào G1A.5, KHÔNG sửa ở đây): **lệch hành vi FK giữa SQLite và MySQL**.
+  `server/db.js` khai báo cột con bằng cú pháp `INTEGER REFERENCES table(id) ON DELETE CASCADE`;
+  SQLite thật sự enforce (nhờ `PRAGMA foreign_keys=ON` ở `db.js:19`) nên insert với `org_id` mồ
+  côi bị chặn (`sponsorships` ví dụ). `server/mysql-sync.js#translate()` chỉ đổi `INTEGER`→`BIGINT`
+  cho khối `CREATE TABLE`, KHÔNG chuyển cú pháp `REFERENCES` cột thành mệnh đề `FOREIGN KEY` thật
+  — MySQL parse rồi bỏ qua reference kiểu này, nên insert mồ côi tương tự vẫn thành công (200) ở
+  MySQL. Test `R007` viết driver-aware (`isMysql ? 200 : 400`) để phản ánh đúng thực trạng thay vì
+  che giấu bằng cách chỉ chạy 1 driver.
+- Xác nhận lại quy tắc hệ thống: NGOẠI TRỪ `GET /partners/:id` (có 404 thật), mọi route CRUD lồng
+  cấp-con (sponsorships/agreements/work-logs/gifts/benefit-usages/fees) đều KHÔNG kiểm tồn tại
+  trước khi UPDATE/DELETE — id lạ vẫn trả `200 {ok:true}` (no-op lặng lẽ, không lỗi). Đặc tả đúng
+  bằng test `CHARACTERIZATION not-found`, không phải bug được che.
+- Xác nhận: rbac.js MATRIX cho `pr_staff` đủ quyền `partners: view/create/edit/delete` giống
+  `super_admin` — với đúng 2 role hiện có, mọi route thuộc module `partners` KHÔNG có case
+  "forbidden" thật (chỉ "unauthenticated"); sẽ bổ sung khi D13 (RBAC v2) lên Wave 1.
+- Mapping: 28 dòng route `TODO`→`green` (109 dòng route còn `TODO`). Verify: `test:security` 6/6,
+  `test:integration:sqlite` 204 pass+6 skip, `test:integration:mysql` 209 pass+1 skip,
+  `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

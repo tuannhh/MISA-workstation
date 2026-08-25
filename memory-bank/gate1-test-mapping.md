@@ -43,34 +43,34 @@
 
 | route_id | test_id | status | file | note |
 |---|---|---|---|---|
-| R001 | — | TODO | — | — |
-| R002 | — | TODO | — | — |
-| R003 | — | TODO | — | — |
-| R004 | — | TODO | — | — |
-| R005 | — | TODO | — | — |
-| R006 | — | TODO | — | — |
-| R007 | — | TODO | — | — |
-| R008 | — | TODO | — | — |
-| R009 | — | TODO | — | — |
-| R010 | — | TODO | — | — |
-| R011 | — | TODO | — | — |
-| R012 | — | TODO | — | — |
-| R013 | — | TODO | — | — |
-| R014 | — | TODO | — | — |
-| R015 | — | TODO | — | — |
-| R016 | — | TODO | — | — |
-| R017 | — | TODO | — | — |
-| R018 | — | TODO | — | — |
-| R019 | — | TODO | — | — |
-| R020 | — | TODO | — | — |
-| R021 | — | TODO | — | — |
-| R022 | — | TODO | — | — |
-| R023 | — | TODO | — | — |
-| R024 | — | TODO | — | — |
-| R025 | — | TODO | — | — |
-| R026 | — | TODO | — | — |
-| R027 | — | TODO | — | — |
-| R028 | — | TODO | — | — |
+| R001 | R001 | green | server/test/integration-partners.test.js | happy/unauthenticated (không :id/body -> không invalid/not-found; forbidden N/A — pr_staff đủ quyền partners.*) |
+| R002 | R002 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION invalid(type lạ bị bỏ qua lặng lẽ)/unauthenticated (forbidden N/A) |
+| R003 | R003 | green | server/test/integration-partners.test.js | happy/not-found(404 thật, khác đa số route dưới)/unauthenticated (forbidden N/A) |
+| R004 | R004 | green | server/test/integration-partners.test.js | happy/invalid(thiếu name->400 lỗi DB; org_type lạ->CHARACTERIZATION tự thành 'other')/unauthenticated (forbidden N/A) |
+| R005 | R005 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true, không 404)/unauthenticated (forbidden N/A) |
+| R006 | R006 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R007 | R007 | green | server/test/integration-partners.test.js | happy/invalid(thiếu title->400)/CHARACTERIZATION not-found — **lệch driver**: org_id lạ SQLite chặn 400 (FK PRAGMA=ON), MySQL không chặn vẫn 200 (cột REFERENCES inline không thành FOREIGN KEY thật qua translate() — ghi nhận cho G1A.5)/unauthenticated |
+| R008 | R008 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R009 | R009 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R010 | R010 | green | server/test/integration-partners.test.js | happy/invalid(thiếu title->400, validate rõ trong route)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R011 | R011 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R012 | R012 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R013 | R013 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION invalid(body rỗng vẫn 200, không field NOT NULL nào từ client)/unauthenticated (forbidden N/A) |
+| R014 | R014 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R015 | R015 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R016 | R016 | green | server/test/integration-partners.test.js | happy(multipart upload)/invalid(không file->400)/unauthenticated (not-found N/A; forbidden N/A) |
+| R017 | R017 | green | server/test/integration-partners.test.js | happy(multipart upload)/invalid(không file->400)/unauthenticated (not-found N/A; forbidden N/A) |
+| R018 | R018 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION invalid(body rỗng vẫn 200)/unauthenticated (not-found N/A; forbidden N/A) |
+| R019 | R019 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(person_id lạ vẫn 200 — gifts.owner_id không có FK tới people)/unauthenticated (forbidden N/A) |
+| R020 | R020 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R021 | R021 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R022 | R022 | green | server/test/integration-partners.test.js | happy/invalid(thiếu title->400, validate rõ trong route)/unauthenticated (not-found N/A; forbidden N/A) |
+| R023 | R023 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R024 | R024 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R025 | R025 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION invalid(body rỗng vẫn 200)/unauthenticated (not-found N/A; forbidden N/A) |
+| R026 | R026 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R027 | R027 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
+| R028 | R028 | green | server/test/integration-partners.test.js | happy/invalid(chưa có hạn đóng->400)/not-found(fid lạ rơi cùng nhánh 400 "chưa có hạn đóng")/unauthenticated (forbidden N/A) |
 | R029 | — | TODO | — | — |
 | R030 | — | TODO | — | — |
 | R031 | — | TODO | — | — |
