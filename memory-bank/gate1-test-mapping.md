@@ -198,3 +198,19 @@
 | BR-VAL-032 | UT-VAL-030 | green | server/test/unit-validation-formatter.test.js | spreadsheet-parser.js validateSignature() — signature ZIP(xlsx)/OLE(xls) hợp lệ/không hợp lệ |
 | BR-VAL-033 | UT-VAL-031 | green | server/test/unit-validation-formatter.test.js | uploads.js fileFilter() — mimetype ngoài ALLOWED bị từ chối |
 | BR-VAL-034 | UT-VAL-032 | green | server/test/unit-validation-formatter.test.js | uploads.js aiDocumentFileFilter() — yêu cầu ĐỒNG THỜI mimetype + đuôi file hợp lệ |
+| BR-SSRF-001 | UT-SSRF-001 | green | server/test/unit-ssrf-security.test.js | monitor.js stripTags() — loại tag HTML + entity đơn giản |
+| BR-SSRF-002 | UT-SSRF-002 | green | server/test/unit-ssrf-security.test.js | monitor.js decodeEntities() — giải mã CDATA + entity HTML cơ bản |
+| BR-SSRF-003 | UT-SSRF-003 | green | server/test/unit-ssrf-security.test.js | monitor.js fetchText() — trả text khi HTTP OK, đúng User-Agent/Accept (fetch giả DI) |
+| BR-SSRF-004 | UT-SSRF-004 | green | server/test/unit-ssrf-security.test.js | monitor.js fetchText() — throw "HTTP <status>" khi response không OK |
+| BR-SSRF-005 | UT-SSRF-005 | green | server/test/unit-ssrf-security.test.js | monitor.js fetchText() — abort sau timeoutMs qua AbortController |
+| BR-SSRF-006 | UT-SSRF-006 | green | server/test/unit-ssrf-security.test.js | monitor.js resolveLink() — trích <title>, dùng res.url thật theo redirect |
+| BR-SSRF-007 | UT-SSRF-007 | green | server/test/unit-ssrf-security.test.js | monitor.js resolveLink() — fallback {url,title:''} khi fetch lỗi, không throw |
+| BR-SSRF-008 | UT-SSRF-008 | green | server/test/unit-ssrf-security.test.js | monitor.js classifyHost() — nhận diện nền tảng theo host, mặc định 'web', bỏ www. |
+| BR-SSRF-009 | UT-SSRF-009 | green | server/test/unit-ssrf-security.test.js | monitor.js hostOf() — tự thêm scheme, bỏ www., fallback khi URL không parse được |
+| BR-SSRF-010 | UT-SSRF-010 | known-red | server/test/unit-ssrf-security.test.js | ĐẶC TẢ lỗ hổng đang tồn tại: resolveLink() gọi fetch thẳng tới host nội bộ/RFC1918/link-local/metadata IP do caller truyền, KHÔNG có allowlist/denylist. KHÔNG fix trong G1A.2 — allowlist/deny thật chuyển sang G1B.4 (SSRF matrix F3), owner: chưa gán, chưa có expiry — cần bổ sung allowlist {F3, owner, expiry} trước khi Gate 1 đóng theo §G1B.6 |
+| BR-SSRF-011 | UT-SSRF-011 | known-red | server/test/unit-ssrf-security.test.js | ĐẶC TẢ lỗ hổng đang tồn tại: detectFeed() (nguồn gọi thật: POST /monitor/sources, R-id xem 07-route-catalog.md) gọi fetchText() thẳng tới host nội bộ/metadata do người dùng nhập, KHÔNG có guard. Cùng chuyển G1B.4 như BR-SSRF-010, chưa gán owner/expiry |
+| BR-SSRF-012 | UT-SSRF-012 | green | server/test/unit-ssrf-security.test.js | ai.js stripHtml() — loại script/style trước tag khác, gộp khoảng trắng, cắt 20000 ký tự |
+| BR-SSRF-013 | UT-SSRF-013 | green | server/test/unit-ssrf-security.test.js | ai.js limitEventExtract() — tối đa 8 lần/60s theo user, lần 9 trả 429 |
+| BR-SSRF-014 | UT-SSRF-014 | green | server/test/unit-ssrf-security.test.js | ai.js limitEventExtract() — cửa sổ trượt 60s, request cũ hết hạn khỏi bộ đếm |
+| BR-SSRF-015 | UT-SSRF-015 | green | server/test/unit-ssrf-security.test.js | ai.js limitEventExtract() — đếm riêng theo từng user (key session.user.id) |
+| BR-SSRF-016 | — | TODO | — | ai.js POST /award-extract (routes handler, không phải pure/DI helper) — fetch(sourceUrl) trực tiếp KHÔNG redact/allowlist khi req.body.url được cung cấp; cần test mức route (G1A.3) + guard thật (G1B.4), KHÔNG thuộc phạm vi characterization thuần của G1A.2 |

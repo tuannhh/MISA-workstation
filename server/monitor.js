@@ -436,4 +436,9 @@ function applySchedule() {
 }
 function start() { applySchedule(); }
 
-module.exports = { runScan, analyzePending, detectCrisis, aiMisaHighlights, aiCompetitorAnalysis, evaluateCampaign, groundIngest, start, applySchedule, parseFeed, matchTerms, detectFeed, keywordStats };
+module.exports = {
+  runScan, analyzePending, detectCrisis, aiMisaHighlights, aiCompetitorAnalysis, evaluateCampaign, groundIngest,
+  start, applySchedule, parseFeed, matchTerms, detectFeed, keywordStats,
+  // Thêm để unit test (G1A.2) — hàm thuần/DI-được, KHÔNG đổi hành vi các export trên.
+  fetchText, resolveLink, classifyHost, hostOf, stripTags, decodeEntities,
+};

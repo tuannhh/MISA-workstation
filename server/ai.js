@@ -274,4 +274,7 @@ router.post('/event-extract', requirePerm('events', 'create'), limitEventExtract
 
 router.get('/status', (req, res) => res.json({ enabled: cfg.hasKey(), textModel: cfg.GEMINI_TEXT_MODEL, imageModel: cfg.GEMINI_IMAGE_MODEL }));
 
+// Thêm để unit test (G1A.2) — hàm thuần/DI-được, không đổi hành vi router (giống routes.js.testables).
+router.testables = { stripHtml, limitEventExtract };
+
 module.exports = router;
