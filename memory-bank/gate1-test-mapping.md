@@ -214,3 +214,21 @@
 | BR-SSRF-014 | UT-SSRF-014 | green | server/test/unit-ssrf-security.test.js | ai.js limitEventExtract() — cửa sổ trượt 60s, request cũ hết hạn khỏi bộ đếm |
 | BR-SSRF-015 | UT-SSRF-015 | green | server/test/unit-ssrf-security.test.js | ai.js limitEventExtract() — đếm riêng theo từng user (key session.user.id) |
 | BR-SSRF-016 | — | TODO | — | ai.js POST /award-extract (routes handler, không phải pure/DI helper) — fetch(sourceUrl) trực tiếp KHÔNG redact/allowlist khi req.body.url được cung cấp; cần test mức route (G1A.3) + guard thật (G1B.4), KHÔNG thuộc phạm vi characterization thuần của G1A.2 |
+| BR-AI-001 | UT-AI-001 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js genText() — model/temperature/x-goog-api-key đúng, nối+trim text (fetch giả DI) |
+| BR-AI-002 | UT-AI-002 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js genJSON() — đúng responseSchema/responseMimeType, parse JSON trả về |
+| BR-AI-003 | UT-AI-003 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js genJSON() — throw "AI trả về dữ liệu không hợp lệ." khi text không parse được |
+| BR-AI-004 | UT-AI-004 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js groundedSearch() — trích text/chunks(lọc uri)/queries từ groundingMetadata |
+| BR-AI-005 | UT-AI-005 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js genImage() — trích ảnh base64 đầu tiên, gửi kèm refImages |
+| BR-AI-006 | UT-AI-006 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js genImage() — throw "AI không tạo được ảnh. Thử lại." khi không có ảnh |
+| BR-AI-007 | UT-AI-007 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js call() — message lỗi thật hoặc fallback "Gemini HTTP <status>" |
+| BR-AI-008 | UT-AI-008 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js ensureKey() — throw khi thiếu GEMINI_API_KEY + không có file gemini.key |
+| BR-AI-009 | UT-AI-009 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js textOf() — nối part.text, trim 2 đầu, an toàn khi thiếu candidates/parts |
+| BR-AI-010 | UT-AI-010 | green | server/test/unit-ai-redaction-schema.test.js | ai.js VOICE_SCHEMA — required=[transcript,summary] |
+| BR-AI-011 | UT-AI-011 | green | server/test/unit-ai-redaction-schema.test.js | ai.js AWARD_SCHEMA — required=[name,ai_summary], cost:integer |
+| BR-AI-012 | UT-AI-012 | green | server/test/unit-ai-redaction-schema.test.js | ai.js ADVICE_SCHEMA — required=[capability,plan] |
+| BR-AI-013 | UT-AI-013 | green | server/test/unit-ai-redaction-schema.test.js | ai.js EVENT_SCHEMA — required=[name] |
+| BR-AI-014 | UT-AI-014 | green | server/test/unit-ai-redaction-schema.test.js | monitor.js SENT_SCHEMA — mảng object required=[i,sentiment,summary], sentiment enum 3 giá trị |
+| BR-AI-015 | UT-AI-015 | known-red | server/test/unit-ai-redaction-schema.test.js | ĐẶC TẢ lỗ hổng đang tồn tại: monitor.js analyzeBatch() đưa content THÔ (chưa qua redactTextForAi) vào prompt gửi Gemini — toàn bộ pipeline quét RSS/mention KHÔNG redact PII trước khi gửi AI. KHÔNG fix trong G1A.2 — chuyển W1.AI-POLICY (data-egress gateway), chưa gán owner/expiry |
+| BR-AI-016 | UT-AI-016 | green | server/test/unit-ai-redaction-schema.test.js | monitor.js analyzeBatch() — map kết quả theo đúng chỉ số "i", trả [] khi genJSON không trả mảng |
+| BR-AI-017 | — | TODO | — | ai.js POST /award-extract — nội dung dán trực tiếp (req.body.text) và nội dung scrape từ URL (qua stripHtml, không qua redactTextForAi) đều gửi Gemini KHÔNG redact, khác với /event-extract (có redactTextForAi ở dòng tương ứng). Route handler, không phải pure/DI helper — cần test mức route (G1A.3) + gateway thật (W1.AI-POLICY), KHÔNG thuộc phạm vi G1A.2 |
+| BR-AI-018 | — | TODO | — | monitor.js analyzePending() (DB-coupled: đọc/ghi bảng mentions) — đã quyết định chuyển sang G1A.8 (test scheduler/monitor mức job), KHÔNG kiểm ở G1A.2 vốn chỉ characterize helper thuần/DI |
