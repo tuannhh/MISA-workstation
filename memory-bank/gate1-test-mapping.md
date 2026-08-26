@@ -178,13 +178,13 @@
 | R133 | R133 | green | server/test/integration-monitor-2.test.js | happy(xoá)/happy CHARACTERIZATION(id lạ vẫn 200)/unauthenticated (invalid N/A; not-found đã gộp; forbidden N/A) |
 | R134 | R134 | green | server/test/integration-monitor-2.test.js | happy(tổng hợp sentiment/nsr/timeline/sample theo keyword+khoảng ngày)/happy CHARACTERIZATION(không keywords -> total=0)/not-found(404)/unauthenticated (invalid N/A; forbidden N/A) |
 | R135 | R135 | green | server/test/integration-monitor-2.test.js | happy CHARACTERIZATION(thiếu GEMINI_API_KEY -> 500, không gọi mạng thật)/not-found(404, không chạm Gemini)/unauthenticated (invalid N/A; forbidden N/A) |
-| R136 | — | TODO | — | — |
-| R137 | — | TODO | — | — |
-| R138 | — | TODO | — | — |
-| R139 | — | TODO | — | — |
-| R140 | — | TODO | — | — |
-| R141 | — | TODO | — | — |
-| R142 | — | TODO | — | — |
+| R136 | R136 | green | server/test/integration-ai.test.js | happy CHARACTERIZATION(thiếu GEMINI_API_KEY -> 502, không gọi mạng thật)/invalid(thiếu file audio 400)/happy CHARACTERIZATION(uploadAudio không fileFilter, chấp nhận MIME tuỳ ý)/unauthenticated |
+| R137 | R137 | green | server/test/integration-ai.test.js | happy CHARACTERIZATION(thiếu GEMINI_API_KEY -> 502)/happy CHARACTERIZATION(body rỗng vẫn 502, không validate trước khi gọi AI)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R138 | R138 | green | server/test/integration-ai.test.js | happy CHARACTERIZATION(thiếu GEMINI_API_KEY -> 502)/invalid(thiếu text 400)/unauthenticated (not-found N/A; forbidden N/A) |
+| R139 | R139 | green | server/test/integration-ai.test.js | happy CHARACTERIZATION(nhánh text/file -> 502 thiếu key)/happy CHARACTERIZATION network-safe(nhánh url -> fetch thật qua loopback cổng đóng -> 502, F3 SSRF chưa guard)/invalid(thiếu text/url/file 400)/unauthenticated |
+| R140 | R140 | green | server/test/integration-ai.test.js | happy CHARACTERIZATION(thiếu GEMINI_API_KEY -> 502)/happy CHARACTERIZATION(body rỗng vẫn 502)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R141 | R141 | green | server/test/integration-ai.test.js | happy CHARACTERIZATION(nhánh text -> 502 thiếu key)/invalid(file không phải Excel/CSV bị fileFilter chặn 400; thiếu file/text 400)/happy CHARACTERIZATION(rate-limit 8 lần/phút/user, lần 9 trả 429 trước khi chạm Gemini)/unauthenticated |
+| R142 | R142 | green | server/test/integration-ai.test.js | happy(enabled=false + tên model)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A vì requireAuth only) |
 | R143 | R143 | green | server/test/integration-auth-admin.test.js | happy/invalid (không có :id -> không case not-found; đây là route đăng nhập nên "unauthenticated" không áp dụng) |
 | R144 | R144 | green | server/test/integration-auth-admin.test.js | happy + CHARACTERIZATION (route không gắn requireAuth — logout không cookie vẫn 200 ok:true) |
 | R145 | R145 | green | server/test/integration-auth-admin.test.js | happy/unauthenticated (không có :id/body -> không case invalid/not-found) |
