@@ -8,5 +8,6 @@ Trước mỗi batch triển khai hoặc remediation trong repository này:
 4. Commit có thể nhỏ và độc lập, nhưng chỉ gửi Codex audit khi hoàn tất cả batch cùng Evidence Bundle.
 5. Chỉ P0/P1 hoặc exit criterion chưa đạt mới được giữ gate. P2/P3 phải vào backlog, không tạo vòng remediation riêng.
 6. UI/MDS thuộc lane Codex theo quyết định owner hiện tại; Claude không sửa UI nếu chưa được owner giao lại rõ ràng.
+7. Khi có amendment trong `memory-bank/17-fast-track-collaboration.md`, amendment mới nhất điều khiển nhịp handoff/audit. Không gửi audit xen giữa các sub-batch đã được phép gộp; chỉ tách sớm khi có P0/P1 tái hiện được hoặc một exit criterion không thể đạt.
 
 Nguồn điều hành đầy đủ: [`memory-bank/17-fast-track-collaboration.md`](memory-bank/17-fast-track-collaboration.md).

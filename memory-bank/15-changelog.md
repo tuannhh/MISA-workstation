@@ -1073,4 +1073,29 @@ toàn bộ G1A hay Gate 1: còn lại phải gộp thành tối đa 2 Evidence B
 concurrency/DB contract/AI golden/target security tests; (B) UI smoke, E2E skeleton, CI-mapping
 verifier, performance artifact — trước khi có thể tuyên bố CLOSE G1A/Gate 1.
 
+**Auditor ONE-SHOT AUDIT (ChatGPT, cùng vai trò/luồng làm việc, xem
+[[pr-workstation-fasttrack-branch-push]]) — Decision: ACCEPT — G1A.3 HTTP ROUTE COVERAGE 145/145
+IS VALIDLY CLOSED** (closure HEAD `227a33c`, product range `13501da..4d133d9`)
+- Finding A: remediation F17 trước đó (fail-fast migration + canonical `sources.mode`) xác nhận đúng
+  — Medium finding trước CLOSED.
+- Finding B/C: F18 là bug P1 thật, fix `numField()` + Number()-wrap đúng hướng, đặc biệt tránh đúng
+  lỗi nối chuỗi `totalCost`; test regression đủ mạnh (kiểm cộng số thực tế, không chỉ `typeof`), giữ
+  đúng ngữ nghĩa `avgScore = null` khi AVG() rỗng. **Decision: KEEP toàn bộ thay đổi F18.**
+- Finding D: monitor phần 2 characterization chấp nhận được, SSRF gap được ghi backlog đúng, không
+  "tô xanh giả".
+- Finding E (ghi chú phạm vi, không phải blocker): AI route characterization (no-key-throw-trước-mạng
+  + loopback cho nhánh URL) hợp lý cho route-level, nhưng **không được hiểu là đã test thành công
+  Gemini thật** — live-AI coverage vẫn thuộc AI golden set (G1A.7) và các unit test mock/DI cấp thấp
+  hơn.
+- Finding F/G: 145/145 route closure đáng tin cậy; mapping vẫn giữ đúng phân biệt route đã
+  characterize vs target security/AI policy còn TODO (không xoá TODO chỉ để mapping trông xanh hết).
+- **Must not do (audit nhấn mạnh):** không tuyên bố Gate 1 đóng chỉ vì 145/145 route xanh; không gọi
+  AI characterization no-key là đã test Gemini thật thành công; không xoá TODO security/AI target chỉ
+  để mapping trông đẹp; không thay Number()-wrap bằng coercion phía client — API phải trả đúng kiểu số.
+- **Next bundles (theo đúng amendment §14):** Bundle A = jobs + concurrency/idempotency
+  characterization + DB contract + AI golden tests + security target tests (≈ G1A.4/G1A.5/G1A.7 +
+  phần G1B target). Bundle B = UI smoke + E2E skeleton + CI/mapping verifier + performance (≈
+  G1A.6/G1.8 + verifier). Chỉ sau khi cả 2 bundle này đạt exit gate mới được coi G1A/Gate 1 CLOSE.
+- **Batch monitor-2+ai+F18 CLOSED (ACCEPT). Chuyển sang Bundle A.**
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

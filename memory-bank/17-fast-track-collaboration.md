@@ -181,3 +181,14 @@ Backlog P2/P3: <list + owner/wave>
 Experiment independently rerun: <command/result>
 Next action: <continue batch | narrow remediation>
 ```
+
+## 14. Amendment tăng tốc: hợp nhất handoff, không hợp nhất rủi ro
+
+> **Status:** OWNER APPROVED — 2026-08-26. Áp dụng ngay cho phần đóng G1A.3 và các nhóm việc Gate 1 sau đó.
+
+- Các sub-batch kề nhau có tổng quy mô trong giới hạn batch và cùng exit criterion có thể được **bàn giao chung một lần**. Vẫn giữ commit nhỏ, mapping và bằng chứng theo từng sub-batch để truy vết/rollback.
+- Với G1A.3, `monitor-2` (R121–R135) và `ai` (R136–R142) là một **audit-closure bundle**: Codex audit một lần trên range `13501da..fc77674`, không review xen giữa hai commit. Điều kiện là route mapping phải 145/145 `green`, Evidence Bundle tách rõ 15+7 route, và full regression/checkpoint chỉ chạy một lần ở HEAD.
+- Không gọi Gemini, SMTP hay URL Internet thật trong characterization. Các case no-key, timeout, SSRF và upload nguy hiểm phải dùng fixture/fake/local closed port; golden evaluation Gemini vẫn thuộc G1A.7.
+- P2/P3 và finding ngoài scope chỉ được ghi **một** lần vào registry có owner+wave. Không mở remediation/audit mới cho chúng. P0/P1 hoặc exit criterion thiếu vẫn phải tách remediation hẹp và re-audit focused.
+- Sau route closure, Claude phải gộp phần Gate 1 còn lại thành tối đa hai Evidence Bundle: **(A)** jobs/concurrency/DB contract/AI golden/target security tests; **(B)** UI smoke, E2E skeleton, CI-mapping verifier và performance artifact. Tách nhỏ hơn chỉ khi chạm migration, auth/session, RBAC, file hoặc một P0/P1 có bằng chứng.
+- `145/145 route green` chỉ đóng phần HTTP-route của G1A.3; không được tuyên bố CLOSE G1A hoặc Gate 1 cho đến khi hai job, mapping verifier, các G1A còn lại và G1B/G1C/G1.8 đạt exit gate ở roadmap.
