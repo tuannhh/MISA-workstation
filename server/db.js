@@ -436,6 +436,7 @@ function init() {
     url TEXT,                                  -- link RSS / feed
     enabled INTEGER NOT NULL DEFAULT 1,
     auto INTEGER NOT NULL DEFAULT 1,           -- 1 = do hệ thống seed (được reconcile); 0 = user tự thêm (giữ nguyên)
+    mode VARCHAR(20) NOT NULL DEFAULT 'rss',   -- rss / site (quét RSS feed hay quét trực tiếp trang web)
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   -- Tin/bài quét được
@@ -568,16 +569,25 @@ function seedMonitoringDefaults() {
   } catch (e) { console.error('[seedMonitoringDefaults]', e.message); }
 }
 
+// Lỗi "duplicate column" (đã có cột từ lần chạy trước) là idempotency bình thường của add() bên
+// dưới — mỗi lần app khởi động lại chạy qua toàn bộ migrate(), các ALTER TABLE của những lần chạy
+// trước chắc chắn khớp mẫu này, phải bỏ qua âm thầm. Mọi lỗi KHÁC (cú pháp không tương thích MySQL,
+// quyền, mất kết nối...) PHẢI làm app dừng khởi động ngay — không được chỉ log rồi tiếp tục chạy
+// với schema thiếu, vì đó chính là cơ chế đã khiến F17 (cột sources.mode) biến mất hoàn toàn trên
+// MySQL trong thời gian dài mà không ai biết (xem 01-audit-findings.md §F17).
+function isIgnorableMigrationError(message) {
+  return /duplicate column|already exists/i.test(String(message || ''));
+}
+
 // Thêm cột còn thiếu cho DB cũ (idempotent) — để deploy không cần reseed, không mất dữ liệu
 function migrate() {
-  // Lỗi "duplicate column" (đã có cột từ lần chạy trước) là chuyện bình thường, bỏ qua âm thầm.
-  // Các lỗi khác (vd. cú pháp không tương thích MySQL) phải log ra để không tái diễn bug ẩn như
-  // cột `sources.mode` từng bị nuốt lỗi và biến mất hoàn toàn trên MySQL trong một thời gian dài.
   const add = (sql) => {
     try { db.exec(sql); }
     catch (e) {
       const msg = String(e.message || '');
-      if (!/duplicate column|already exists/i.test(msg)) console.error('[migrate] lỗi ALTER TABLE:', sql, '->', msg);
+      if (isIgnorableMigrationError(msg)) return;
+      console.error('[migrate] lỗi ALTER TABLE (dừng khởi động):', sql, '->', msg);
+      throw e;
     }
   };
   add("ALTER TABLE users ADD COLUMN sensitive_perms TEXT");
@@ -943,4 +953,4 @@ function closeDb() {
   return typeof db.close === 'function' ? db.close() : undefined;
 }
 
-module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb };
+module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb, isIgnorableMigrationError };

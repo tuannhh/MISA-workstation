@@ -30,6 +30,7 @@ const router = require('../routes');
 const t = router.testables;
 const { MAX_FILE_BYTES, validateSignature } = require('../spreadsheet-parser');
 const { fileFilter, aiDocumentFileFilter } = require('../uploads');
+const dbModule = require('../db');
 
 test.after(() => { fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); });
 
@@ -303,4 +304,31 @@ test('BR-VAL-034: aiDocumentFileFilter() yêu cầu ĐỒNG THỜI mimetype hợ
   const wrongMime = captured();
   aiDocumentFileFilter(null, { mimetype: 'application/zip', originalname: 'a.xlsx' }, wrongMime.cb);
   assert.match(wrongMime.calls[0].err.message, /Chỉ chấp nhận file Excel hoặc CSV/);
+});
+
+// G1A.3 batch monitor-1 F17 remediation (ChatGPT audit Finding D, commit 0bf0f5f) — migrate()'s
+// add() giờ phải fail-fast cho lỗi lạ thay vì chỉ log rồi tiếp tục boot với schema thiếu (đúng
+// cơ chế đã gây F17: cột sources.mode biến mất im lặng trên MySQL). isIgnorableMigrationError()
+// là helper thuần được tách ra để test được logic phân loại mà không cần re-run migrate() thật.
+test('BR-VAL-041: isIgnorableMigrationError() nhận diện đúng lỗi "duplicate column"/"already exists" của cả SQLite lẫn MySQL (idempotent, phải bỏ qua âm thầm)', () => {
+  assert.equal(dbModule.isIgnorableMigrationError('duplicate column name: mode'), true);
+  assert.equal(dbModule.isIgnorableMigrationError("Duplicate column name 'mode'"), true);
+  assert.equal(dbModule.isIgnorableMigrationError('table sources already exists'), true);
+});
+test('BR-VAL-041: isIgnorableMigrationError() trả false cho lỗi lạ (phải fail-fast, không được bỏ qua)', () => {
+  assert.equal(dbModule.isIgnorableMigrationError("BLOB, TEXT, GEOMETRY or JSON column 'mode' can't have a default value"), false);
+  assert.equal(dbModule.isIgnorableMigrationError('syntax error near ALTER'), false);
+  assert.equal(dbModule.isIgnorableMigrationError(''), false);
+  assert.equal(dbModule.isIgnorableMigrationError(undefined), false);
+});
+test('BR-VAL-042: migrate() thật — ALTER TABLE trùng cột (đã có từ init) không throw khi chạy lại, nhưng ALTER TABLE cú pháp không hợp lệ vẫn throw ra ngoài (fail-fast, không bị nuốt)', () => {
+  const db = dbModule.db;
+  assert.doesNotThrow(() => {
+    try { db.exec("ALTER TABLE sources ADD COLUMN mode VARCHAR(20) NOT NULL DEFAULT 'rss'"); }
+    catch (e) { if (!dbModule.isIgnorableMigrationError(e.message)) throw e; }
+  }, 'cột mode đã tồn tại từ init() -> phải là lỗi duplicate, được bỏ qua');
+  assert.throws(() => {
+    try { db.exec('ALTER TABLE sources ADD COLUMN'); }
+    catch (e) { if (!dbModule.isIgnorableMigrationError(e.message)) throw e; }
+  }, 'cú pháp sai (thiếu tên/kiểu cột) không phải duplicate -> phải throw, không được nuốt im lặng');
 });
