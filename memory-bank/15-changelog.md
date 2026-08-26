@@ -641,4 +641,70 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
   tài liệu/process thuần, không tác động code/test contract; verify bằng `verify-g0.mjs` (0 broken
   link, toàn bộ check PASS) và `git diff --check` sạch.
 
+## 2026-08-26 — G1A.3 Batch "reports-awards" (21 route) — batch đầu tiên theo fast-track protocol
+
+**Batch Contract**
+```
+Batch-ID: reports-awards
+Goal: characterization HTTP cho nhóm bookings/budgets/reports/awards
+In scope: R046-R056 (bookings, budgets, reports), R062-R071 (awards + participations + files + remind)
+Out of scope: suppliers/events/monitor/ai (batch sau); F12 (event_id mismatch, đã đăng ký riêng)
+Behavior mode: characterization (trừ P0/P1 phát sinh giữa batch, xử lý như F13)
+Risk hotspots: org_fee write-gap F1 (R047/R048/R051/R064/R065/R067/R068 — đã biết, không sửa),
+  file delete vật lý (R066), file upload ≤8 (R070), RBAC-forbidden thật đầu tiên ở reports (R050-R056,
+  pr_staff MATRIX.reports=[])
+Required tests: happy + invalid + unauthenticated + not-found + forbidden (khi áp dụng) mỗi route
+Allowed known-red/TODO: không có known-red mới; F15 (FK MySQL) ghi backlog P2, owner=Claude, wave=Wave 1
+Exit criteria: 21/21 route green trong mapping; full regression cả 2 driver + security + verifier PASS
+Expected commit range/count: 3 commit độc lập (bookings-budgets / reports+F14 / awards)
+```
+
+- **Commit 1** (`f40be9c`) — bookings+budgets (R046-R051), 19 test. `POST /budgets` dùng
+  `ON CONFLICT` (đã có bản dịch MySQL sẵn ở `mysql-sync.js`, không phải bug mới). Bổ sung case
+  forbidden đầu tiên cho `pr_staff` (MATRIX.reports=[]).
+- **Commit 2** (`119f81a`) — reports (R052-R056), 17 test. **Phát hiện + fix ngay F14**: `grandTotal`
+  (`routes.js:752` cũ) cộng trực tiếp 3 giá trị `SELECT SUM(...)`; `mysql2` trả `SUM()` dạng string
+  (DECIMAL) trong khi `better-sqlite3` trả number → `+` nối chuỗi thay vì cộng số trên MySQL, sai
+  lệch âm thầm tổng tiền hiển thị cho lãnh đạo (không ném lỗi, khác F13). Owner duyệt fix ngay cùng
+  cơ chế F13 — bọc `Number()` quanh 4 giá trị SUM tại điểm đọc query. Xem `01-audit-findings.md` F14.
+- **Commit 3** (`c0270a1`) — awards CRUD + participations + files + remind (R062-R071), 33 test.
+  **Phát hiện F15** (P2, backlog, KHÔNG sửa — đúng scope-freeze batch): FK
+  `award_participations.award_id` chỉ SQLite thực thi (insert award_id không tồn tại → 400), MySQL
+  không thực thi (→ 200, participation mồ côi). Test R067 characterize đúng cả 2 driver bằng nhánh
+  `isMysql`. Xem `01-audit-findings.md` F15.
+
+**Evidence Bundle**
+```
+Batch-ID / commit range / HEAD: reports-awards / f40be9c..c0270a1 / c0270a1
+Contract result: 21/21 route exit criterion PASS — mapping 79/145 green (66 TODO), 0 known-red sai nghĩa
+Changed files: product: server/routes.js (F14 fix, 4 dòng); test: 3 file mới
+  (integration-bookings-budgets/integration-reports/integration-awards.test.js, 69 test);
+  docs: 01-audit-findings.md (F14+F15), gate1-test-mapping.md (21 dòng TODO->green), 04-ROADMAP.md
+Route-job-rule mapping delta: R046-R056, R062-R071 TODO -> green
+Behavior changes: có — F14 fix tại routes.js:699,701,740,745 (Number() quanh 4 giá trị SUM),
+  không đổi business logic/contract nào khác
+Tests added/changed: 69 test HTTP mới (19+17+33), 0 test cũ bị sửa
+Commands and exact results:
+  npm run test:integration:sqlite -> 342 pass, 7 skip, 0 fail
+  npm run test:integration:mysql (ALLOW_TEST_DB_CREATE=1) -> 348 pass, 1 skip, 0 fail
+  npm run test:security -> 6 pass, 0 fail
+  node scripts/verify-g0.mjs -> PASS toàn bộ 7 check (route catalog, auth matrix, UI-flow,
+    Gemini inventory, schema facts, error contract, 0 broken link)
+  git diff --check (toàn batch) -> sạch
+Known-red/TODO: 66 route TODO còn lại thuộc batch sau (suppliers/events/monitor/ai), đều có wave
+  đích trong 04-ROADMAP.md; F15 backlog P2 owner=Claude wave=Wave 1, expiry=khi root-cause xong
+Out-of-scope findings/backlog: F15 (chi tiết trên)
+Rollback path: revert 3 commit độc lập theo thứ tự ngược (c0270a1 -> 119f81a -> f40be9c); F14 fix
+  tách riêng khỏi test nên có thể revert riêng nếu cần
+Worktree status and unrelated pre-existing changes: sạch, chỉ `.DS_Store` không liên quan (không track)
+```
+
+**READY FOR ONE-SHOT AUDIT — Batch reports-awards, commits f40be9c..c0270a1**
+Contract: PASS 21/21 exit criteria
+Tests: targeted từng commit đã pass lúc code; full MySQL 348 pass/1 skip; full SQLite 342 pass/7 skip;
+  security 6/6; verify-g0.mjs PASS
+Hotspots: F14 (money aggregate type, đã fix), RBAC-forbidden mới (reports), file delete/upload (awards)
+Known gaps/backlog: F15 (FK MySQL không thực thi, P2, Wave 1)
+Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch reports-awards")
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
