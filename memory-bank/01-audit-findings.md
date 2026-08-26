@@ -90,6 +90,13 @@ Brief Codex §4.4-P1: kiểm tra lịch sử Git; nếu là key thật → **rot
 - Cloud Run hiện tại chạy `DB_CLIENT=mysql` nhưng **chỉ là môi trường test** (như F13) — bug đã ảnh hưởng môi trường test này và sẽ chặn production MySQL thật khi hạ tầng đó lên, nếu không sửa trước.
 - Phát hiện qua characterization batch "reports-awards" (`server/test/integration-reports.test.js`, test R052 chạy MySQL). **Đã sửa ngay** (owner yêu cầu, cùng cơ chế đã áp dụng cho F13): bọc `Number(...)` quanh 4 giá trị SUM (`totalSpend.s`, `budget.s`, `evTotal`, `feeTotal`) ngay tại điểm đọc kết quả query — sửa tận gốc kiểu dữ liệu thay vì chỉ sửa phép cộng, để mọi chỗ dùng lại các giá trị này (hiện tại và tương lai) đều nhận `number` đúng trên cả 2 driver. Test mới xác nhận `typeof === 'number'` cho cả 3 field + `grandTotal === spend.total + events.total + fees.total` đúng bằng số trên cả SQLite và MySQL.
 
+### F15 — `award_participations.award_id` FK không được MySQL thực thi (SQLite có, MySQL không) · **P2 Medium / — / backlog** (G1A.3 batch reports-awards, phát hiện qua characterization R067, KHÔNG sửa trong batch này theo scope-freeze §3)
+`server/db.js` khai `award_id INTEGER REFERENCES awards(id) ON DELETE CASCADE` cho bảng `award_participations`. `POST /api/awards/9999999/participations` (award_id không tồn tại) trả **400** trên SQLite (FK constraint chặn insert) nhưng trả **200** trên MySQL (insert thành công, tạo ra participation "mồ côi" không có award cha) — route không tự kiểm tra award tồn tại trước khi insert, hành vi phụ thuộc hoàn toàn vào driver có/không thực thi FK.
+- Chưa root-cause vì sao MySQL không chặn (constraint không được tạo, hay `FOREIGN_KEY_CHECKS` tắt, hay charset/collation lệch khiến MySQL âm thầm bỏ qua) — đúng nguyên tắc scope-freeze của batch hiện tại (Behavior mode: characterization, không mở rộng điều tra ngoài route đang test).
+- Rủi ro: dữ liệu mồ côi tích luỹ trên MySQL (môi trường test/production tương lai) nếu client gửi award_id sai; không mất dữ liệu thật, không phải P0/P1 vì participation mồ côi không tự hiển thị ở đâu gây sai lệch nghiệp vụ trực tiếp (khác F14).
+- Test hiện tại (`server/test/integration-awards.test.js`, R067) đã characterize đúng cả 2 driver bằng nhánh `isMysql ? 200 : 400`, không che giấu khác biệt.
+- Backlog: root-cause + đồng bộ hành vi 2 driver (chặn ở tầng route bằng kiểm tra tồn tại tường minh, hoặc đảm bảo FK MySQL hoạt động đúng) — gắn Wave 1, owner xác nhận khi review batch.
+
 ## E. Điểm mạnh nên bảo toàn
 - Mô hình nghiệp vụ PR phong phú, liên hệ nhiều thực thể.
 - RBAC server-side + audit + per-user `sensitive_perms` (biểu cảm hơn role cứng).

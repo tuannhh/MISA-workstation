@@ -104,16 +104,16 @@
 | R059 | R059 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R057/R058)/unauthenticated (forbidden N/A) |
 | R060 | R060 | green | server/test/integration-reminders.test.js | happy (200 cả 2 driver — F13 đã fix ở commit 5, `scheduler.js` bỏ cú pháp `IS ?` chỉ SQLite chấp nhận; xem `01-audit-findings.md` F13)/unauthenticated (forbidden N/A) |
 | R061 | R061 | green | server/test/integration-reminders.test.js | happy(.ics đúng content-type)/not-found(404 thật)/unauthenticated (forbidden N/A) |
-| R062 | — | TODO | — | — |
-| R063 | — | TODO | — | — |
-| R064 | — | TODO | — | — |
-| R065 | — | TODO | — | — |
-| R066 | — | TODO | — | — |
-| R067 | — | TODO | — | — |
-| R068 | — | TODO | — | — |
-| R069 | — | TODO | — | — |
-| R070 | — | TODO | — | — |
-| R071 | — | TODO | — | — |
+| R062 | R062 | green | server/test/integration-awards.test.js | happy(tìm+lọc+phân trang)/CHARACTERIZATION(type lạ bị bỏ qua filter)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R063 | R063 | green | server/test/integration-awards.test.js | happy/not-found/unauthenticated (invalid N/A; forbidden N/A) |
+| R064 | R064 | green | server/test/integration-awards.test.js | happy/invalid(thiếu name NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R065 | R065 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
+| R066 | R066 | green | server/test/integration-awards.test.js | happy(xoá kèm file vật lý)/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
+| R067 | R067 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(F15 backlog: SQLite thực thi FK->400, MySQL KHÔNG thực thi->200)/unauthenticated (forbidden N/A) |
+| R068 | R068 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(pid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R069 | R069 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(pid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R070 | R070 | green | server/test/integration-awards.test.js | happy(1 file + nhiều file)/invalid(0 file->400)/CHARACTERIZATION not-found(award_id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
+| R071 | R071 | green | server/test/integration-awards.test.js | happy/invalid(thiếu submission_deadline->400)/not-found/unauthenticated (forbidden N/A) |
 | R072 | — | TODO | — | — |
 | R073 | — | TODO | — | — |
 | R074 | — | TODO | — | — |
