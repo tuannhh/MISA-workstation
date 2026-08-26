@@ -757,7 +757,7 @@ Expected commit range/count: 1 commit
 
 **Evidence Bundle**
 ```
-Batch-ID / commit range / HEAD: suppliers / 21fffc3^..21fffc3 / 21fffc3
+Batch-ID / commit range / HEAD: suppliers / 21fffc3^..350982e / 350982e (test tại 21fffc3, doc sync tại 350982e — HEAD thực tế lúc gửi audit là 350982e, đã sửa theo Codex nêu)
 Contract result: 15/15 route exit criterion PASS — mapping 94/145 green (51 TODO), 0 known-red sai nghĩa
 Changed files: product: không có; test: 1 file mới (integration-suppliers.test.js, 43 test);
   docs: 01-audit-findings.md (F15 bổ sung evidence), gate1-test-mapping.md (15 dòng TODO->green),
@@ -778,7 +778,7 @@ Rollback path: revert 1 commit (21fffc3), không có product code để rollback
 Worktree status and unrelated pre-existing changes: sạch, chỉ `.DS_Store` không liên quan (không track)
 ```
 
-**READY FOR ONE-SHOT AUDIT — Batch suppliers, commit 21fffc3^..21fffc3**
+**READY FOR ONE-SHOT AUDIT — Batch suppliers, commit 21fffc3^..350982e**
 Contract: PASS 15/15 exit criteria
 Tests: targeted lúc code đã pass; full MySQL 391 pass/1 skip; full SQLite 385 pass/7 skip; security
   6/6; verify-g0.mjs PASS
@@ -786,5 +786,20 @@ Hotspots: file upload không kiểm files.length rỗng (R086, characterization,
   bổ sung (không đổi severity/scope, chỉ củng cố phạm vi đã biết)
 Known gaps/backlog: F15 (không đổi — vẫn P2/Wave 1, evidence mở rộng sang suppliers)
 Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch suppliers")
+
+**Codex ONE-SHOT AUDIT — Decision: ACCEPTED WITH BACKLOG**
+- Không P0/P1. 15/15 route R072-R086 đạt characterization. Focused audit: SQLite 43/43, MySQL
+  43/43. Mapping chính xác 94/145 green, 51 TODO. Không có product code thay đổi. Không cần
+  remediation hay re-audit; tiếp tục batch kế tiếp.
+- **F15 được củng cố đúng theo Codex:** MySQL không cascade ở ít nhất 4 quan hệ FK (đã xác nhận qua
+  `award_participations`, `supplier_quotes`, `supplier_transactions`, `supplier_contacts`) — đủ bằng
+  chứng để coi đây là vấn đề tầng DDL/migration MySQL, không phải ngẫu nhiên 1-2 bảng. Wave 1 phải
+  inventory FK toàn schema và sửa migration/DDL tập trung (không phải vá từng route). Đã cập nhật
+  `01-audit-findings.md` F15 từ "chưa root-cause" thành "đã có bằng chứng mạnh tại tầng DDL/migration,
+  chờ inventory toàn schema" theo đúng gợi ý Codex.
+- Doc nit đã sửa trong bản này: HEAD thực tế lúc audit là `350982e` (doc sync), không phải `21fffc3`
+  (chỉ commit test) — commit range/HEAD ở Evidence Bundle trên đã cập nhật.
+- Báo cáo đầy đủ: `PR-WORKSTATION-CODEX-SUPPLIERS-ONE-SHOT-AUDIT.md` (owner giữ ngoài repo).
+- **Batch suppliers CLOSED. G1A.3 tiếp tục sang batch kế tiếp** (events+dashboard R087-R098).
 
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
