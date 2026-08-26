@@ -85,9 +85,9 @@
 | R040 | R040 | green | server/test/integration-reminders.test.js | happy/invalid(thiếu event_date->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
 | R041 | R041 | green | server/test/integration-reminders.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
 | R042 | R042 | green | server/test/integration-reminders.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
-| R043 | — | TODO | — | — |
-| R044 | — | TODO | — | — |
-| R045 | — | TODO | — | — |
+| R043 | R043 | green | server/test/integration-interactions.test.js | happy/CHARACTERIZATION invalid(q rỗng -> không lỗi)/unauthenticated (not-found N/A vì không có :id; forbidden N/A) |
+| R044 | R044 | green | server/test/integration-interactions.test.js | happy/CHARACTERIZATION invalid(page/pageSize sai định dạng -> tự clamp)/unauthenticated (not-found N/A; forbidden N/A) |
+| R045 | R045 | green | server/test/integration-interactions.test.js | happy/invalid(thiếu date NOT NULL->400)/CHARACTERIZATION (partner_type lạ tự về "person")/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
 | R046 | — | TODO | — | — |
 | R047 | — | TODO | — | — |
 | R048 | — | TODO | — | — |

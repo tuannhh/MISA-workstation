@@ -586,9 +586,11 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
   pattern acquire-trước-khi-tạo-DB mới — xác nhận resource dir KHÔNG rò (`stack.size` giữ nguyên
   qua thất bại, `cleanupAll()` xoá dir thành công).
 - Verify: chạy đúng thí nghiệm Codex lặp lại (đếm thư mục `pr-media-test-*` trước/sau
-  `db-harness-failure.test.js`) → 0/0, không rò. `test:security` 6/6, `test:integration:sqlite`
-  263 pass+7 skip, MySQL không set `DATA_DIR` tay 269 pass+1 skip, `verify-g0.mjs` + self-test
-  PASS, `git diff --check` sạch.
+  `db-harness-failure.test.js`) → **không tăng** (trên máy dev lúc verify: 0→0, thư mục
+  `os.tmpdir()` sạch sẵn từ đầu; Codex re-audit độc lập trên máy khác đo được 7→7 — cùng kết luận
+  cốt lõi "không rò thêm", chỉ khác con số tuyệt đối vì khác trạng thái máy). `test:security` 6/6,
+  `test:integration:sqlite` 263 pass+7 skip, MySQL không set `DATA_DIR` tay 269 pass+1 skip,
+  `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
 - **R4 — dọn 88 file rác trong `data/uploads`:** theo đúng phương án Codex (KHÔNG xoá theo tiêu
   chí kích thước — 1 trong 5 file cũ prefix `1781862...` cũng chỉ 8 byte, dễ xoá nhầm nếu lọc theo
   size). Xác nhận đúng 88 file có prefix timestamp `>=1787640000000` khớp fixture test (72 file
@@ -598,5 +600,32 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
   đầy đủ tên+size+mtime gốc) — thư mục này nằm trong `data/` (đã `.gitignore`), không phải dữ liệu
   Git, owner tự xoá quarantine sau khi xác nhận không thiếu gì. `data/uploads/` nay chỉ còn đúng 5
   file cũ.
+- **Codex re-audit `ab558c7` (2026-08-26) — PASS/CLOSE.** R1 CLOSED (evidence độc lập: failure
+  suite 5/5, đếm thư mục `pr-media-test-*` trước/sau toàn suite MySQL trên máy Codex = 7→7, không
+  rò thêm). R4 CLOSED (đối chiếu 2 chiều manifest↔filesystem, nội dung 88 file khớp đúng 3 nhóm
+  fixture, 5 file cũ giữ nguyên). F13 vẫn CLOSED. Không cần vòng remediation/audit nào thêm cho
+  `ab558c7`. Ghi chú 1 doc nit không chặn: bản ghi trước ở đây nói phép đo là "0/0" — con số đó
+  chỉ đúng trên máy verify tại thời điểm viết (thư mục tmp sạch sẵn), đã sửa lại thành "không tăng"
+  ở đoạn phía trên để không phụ thuộc trạng thái máy. Biên bản đầy đủ trên Desktop user
+  (`PR-WORKSTATION-CODEX-AB558C7-CLOSE.md`). **G1A.3 tiếp tục — chuyển sang commit nhóm
+  interactions (R043-R045).**
+
+## 2026-08-26 — G1A.3 commit 8/~12: integration test nhóm "Lịch sử tương tác" (R043-R045)
+- File mới `server/test/integration-interactions.test.js`, 10 test: tìm nhanh nhân sự+cơ quan
+  (`GET /entities/search`), danh sách tương tác phân trang+filter (`GET /interactions`), tạo
+  tương tác (`POST /interactions`).
+- Không phát hiện lệch hành vi driver nào ở nhóm này (khác commit 2/6) — cả 10 test pass đồng
+  nhất trên SQLite lẫn MySQL.
+- CHARACTERIZATION đáng chú ý: `POST /interactions` không validate `partner_type`/`partner_id` —
+  `partner_type` lạ tự động về `'person'`, `partner_id` thiếu tự về `0`, không lỗi; nhưng `date`
+  (cột `NOT NULL` không có `DEFAULT`) thiếu thì `buildInsert()` ném lỗi ràng buộc DB thẳng ra
+  ngoài, rơi vào error handler chung → `400` (không có check tường minh `if (!data.date)` như
+  reminders — khác cơ chế nhưng cùng kết quả HTTP). `GET /entities/search` không có case "invalid"
+  thật: `q` rỗng chỉ khớp `LIKE '%%'`, trả tối đa 10+10 kết quả bất kỳ, không lỗi.
+- Cả 2 role hiện có (`super_admin`/`pr_staff`) đều full quyền `interactions` (giống `partners`) —
+  không có case "forbidden" thật ở nhóm này.
+- Mapping: 3 dòng route `TODO`→`green` (87 dòng route còn `TODO`). Verify: `test:security` 6/6,
+  `test:integration:sqlite` 273 pass+7 skip, `test:integration:mysql` 279 pass+1 skip,
+  `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
 
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
