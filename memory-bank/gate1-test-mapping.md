@@ -163,21 +163,21 @@
 | R118 | R118 | green | server/test/integration-monitor-1.test.js | happy(tạo)/invalid(thiếu name 400)/unauthenticated (not-found N/A; forbidden N/A) |
 | R119 | R119 | green | server/test/integration-monitor-1.test.js | happy(sửa)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
 | R120 | R120 | green | server/test/integration-monitor-1.test.js | happy(xoá)/happy CHARACTERIZATION(id lạ vẫn 200)/unauthenticated (invalid N/A; not-found đã gộp; forbidden N/A) |
-| R121 | — | TODO | — | — |
-| R122 | — | TODO | — | — |
-| R123 | — | TODO | — | — |
-| R124 | — | TODO | — | — |
-| R125 | — | TODO | — | — |
-| R126 | — | TODO | — | — |
-| R127 | — | TODO | — | — |
-| R128 | — | TODO | — | — |
-| R129 | — | TODO | — | — |
-| R130 | — | TODO | — | — |
-| R131 | — | TODO | — | — |
-| R132 | — | TODO | — | — |
-| R133 | — | TODO | — | — |
-| R134 | — | TODO | — | — |
-| R135 | — | TODO | — | — |
+| R121 | R121 | green | server/test/integration-monitor-2.test.js | happy(danh sách nguồn tin)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A vì monitoring full-CRUD cả 2 role) |
+| R122 | R122 | green | server/test/integration-monitor-2.test.js | happy network-safe(loopback cổng đóng, mode=site)/invalid(thiếu name/url 400)/happy CHARACTERIZATION(url không scheme tự thêm https://)/unauthenticated (not-found N/A; forbidden N/A) |
+| R123 | R123 | green | server/test/integration-monitor-2.test.js | happy(sửa tên/enabled)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R124 | R124 | green | server/test/integration-monitor-2.test.js | happy(xoá)/happy CHARACTERIZATION(id lạ vẫn 200)/unauthenticated (invalid N/A; not-found đã gộp; forbidden N/A) |
+| R125 | R125 | green | server/test/integration-monitor-2.test.js | happy(danh sách đối thủ)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R126 | R126 | green | server/test/integration-monitor-2.test.js | happy(tạo)/invalid(thiếu name 400)/unauthenticated (not-found N/A; forbidden N/A) |
+| R127 | R127 | green | server/test/integration-monitor-2.test.js | happy(sửa)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R128 | R128 | green | server/test/integration-monitor-2.test.js | happy(xoá)/happy CHARACTERIZATION(id lạ vẫn 200)/unauthenticated (invalid N/A; not-found đã gộp; forbidden N/A) |
+| R129 | R129 | green | server/test/integration-monitor-2.test.js | happy(danh sách, keywords/competitors parse JSON->mảng)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R130 | R130 | green | server/test/integration-monitor-2.test.js | happy(chi tiết)/not-found(404)/unauthenticated (invalid N/A; forbidden N/A) |
+| R131 | R131 | green | server/test/integration-monitor-2.test.js | happy(tạo, created_by=user hiện tại)/invalid(thiếu name 400)/unauthenticated (not-found N/A; forbidden N/A) |
+| R132 | R132 | green | server/test/integration-monitor-2.test.js | happy(sửa)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R133 | R133 | green | server/test/integration-monitor-2.test.js | happy(xoá)/happy CHARACTERIZATION(id lạ vẫn 200)/unauthenticated (invalid N/A; not-found đã gộp; forbidden N/A) |
+| R134 | R134 | green | server/test/integration-monitor-2.test.js | happy(tổng hợp sentiment/nsr/timeline/sample theo keyword+khoảng ngày)/happy CHARACTERIZATION(không keywords -> total=0)/not-found(404)/unauthenticated (invalid N/A; forbidden N/A) |
+| R135 | R135 | green | server/test/integration-monitor-2.test.js | happy CHARACTERIZATION(thiếu GEMINI_API_KEY -> 500, không gọi mạng thật)/not-found(404, không chạm Gemini)/unauthenticated (invalid N/A; forbidden N/A) |
 | R136 | — | TODO | — | — |
 | R137 | — | TODO | — | — |
 | R138 | — | TODO | — | — |
