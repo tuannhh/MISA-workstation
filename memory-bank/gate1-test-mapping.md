@@ -88,17 +88,17 @@
 | R043 | R043 | green | server/test/integration-interactions.test.js | happy/CHARACTERIZATION invalid(q rỗng -> không lỗi)/unauthenticated (not-found N/A vì không có :id; forbidden N/A) |
 | R044 | R044 | green | server/test/integration-interactions.test.js | happy/CHARACTERIZATION invalid(page/pageSize sai định dạng -> tự clamp)/unauthenticated (not-found N/A; forbidden N/A) |
 | R045 | R045 | green | server/test/integration-interactions.test.js | happy/invalid(thiếu date NOT NULL->400)/CHARACTERIZATION (partner_type lạ tự về "person")/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
-| R046 | — | TODO | — | — |
-| R047 | — | TODO | — | — |
-| R048 | — | TODO | — | — |
-| R049 | — | TODO | — | — |
-| R050 | — | TODO | — | — |
-| R051 | — | TODO | — | — |
-| R052 | — | TODO | — | — |
-| R053 | — | TODO | — | — |
-| R054 | — | TODO | — | — |
-| R055 | — | TODO | — | — |
-| R056 | — | TODO | — | — |
+| R046 | R046 | green | server/test/integration-bookings-budgets.test.js | happy(lọc subject_type/subject_id/from/to)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R047 | R047 | green | server/test/integration-bookings-budgets.test.js | happy/invalid(thiếu title NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R048 | R048 | green | server/test/integration-bookings-budgets.test.js | happy/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
+| R049 | R049 | green | server/test/integration-bookings-budgets.test.js | happy/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
+| R050 | R050 | green | server/test/integration-bookings-budgets.test.js | happy/unauthenticated/forbidden (pr_staff MATRIX.reports=[] -> 403; invalid N/A; not-found N/A) |
+| R051 | R051 | green | server/test/integration-bookings-budgets.test.js | happy(tạo mới + upsert đè period trùng)/invalid(period sai YYYY-MM->400)/unauthenticated/forbidden (pr_staff->403; not-found N/A) |
+| R052 | R052 | green | server/test/integration-reports.test.js | happy(đủ khối spend/events/fees/grandTotal/network)/happy(F14: grandTotal cộng đúng bằng số)/CHARACTERIZATION(thiếu from/to dùng dải mặc định)/unauthenticated/forbidden (pr_staff->403; not-found N/A) |
+| R053 | R053 | green | server/test/integration-reports.test.js | happy/unauthenticated/forbidden (pr_staff->403; invalid N/A; not-found N/A) |
+| R054 | R054 | green | server/test/integration-reports.test.js | happy/unauthenticated/forbidden (pr_staff->403; invalid N/A; not-found N/A) |
+| R055 | R055 | green | server/test/integration-reports.test.js | happy CHARACTERIZATION(chỉ trả award có participations/mediaCost>0)/unauthenticated/forbidden (pr_staff->403; invalid N/A; not-found N/A) |
+| R056 | R056 | green | server/test/integration-reports.test.js | happy(rows+counts theo bucket)/unauthenticated/forbidden (pr_staff->403; invalid N/A; not-found N/A) |
 | R057 | R057 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R058/R059)/unauthenticated (forbidden N/A) |
 | R058 | R058 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R057/R059)/CHARACTERIZATION not-found(200 ok:true, UPDATE 0 dòng)/unauthenticated (forbidden N/A) |
 | R059 | R059 | green | server/test/integration-reminders.test.js | happy(chung luồng notif với R057/R058)/unauthenticated (forbidden N/A) |

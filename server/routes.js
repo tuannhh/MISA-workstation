@@ -697,8 +697,9 @@ router.get('/reports', requirePerm('reports', 'view'), (req, res) => {
     FROM bookings b LEFT JOIN users u ON u.id=b.created_by
     WHERE b.status!='Hủy' AND b.booked_date BETWEEN ? AND ? GROUP BY b.created_by ORDER BY amount DESC`).all(...bArgs);
   const totalSpend = db.prepare(`SELECT COALESCE(SUM(amount),0) s, COUNT(*) c FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ?`).get(...bArgs);
+  totalSpend.s = Number(totalSpend.s);
   const fulfillment = db.prepare(`SELECT status, COUNT(*) cnt, COALESCE(SUM(amount),0) amount FROM bookings WHERE booked_date BETWEEN ? AND ? GROUP BY status`).all(...bArgs);
-  const budget = db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM budgets WHERE period BETWEEN ? AND ?`).get(from.slice(0, 7), to.slice(0, 7));
+  const budget = { s: Number(db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM budgets WHERE period BETWEEN ? AND ?`).get(from.slice(0, 7), to.slice(0, 7)).s) };
 
   // Quan hệ
   const tiers = db.prepare(`SELECT
@@ -737,12 +738,12 @@ router.get('/reports', requirePerm('reports', 'view'), (req, res) => {
     JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ? GROUP BY ec.category`).all(from, to);
   const evByEvent = db.prepare(`SELECT e.name, e.mode, COALESCE(SUM(ec.amount),0) amount FROM events e
     LEFT JOIN event_costs ec ON ec.event_id=e.id WHERE e.start_time BETWEEN ? AND ? GROUP BY e.id ORDER BY amount DESC`).all(from, to);
-  const evTotal = db.prepare(`SELECT COALESCE(SUM(ec.amount),0) s FROM event_costs ec JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ?`).get(from, to).s;
+  const evTotal = Number(db.prepare(`SELECT COALESCE(SUM(ec.amount),0) s FROM event_costs ec JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ?`).get(from, to).s);
 
   // Hội phí hiệp hội (theo hạn đóng trong kỳ)
   const feeByOrg = db.prepare(`SELECT o.name, COALESCE(SUM(f.amount),0) amount FROM association_fees f JOIN organizations o ON o.id=f.org_id
     WHERE f.due_date BETWEEN ? AND ? GROUP BY f.org_id ORDER BY amount DESC`).all(from, to);
-  const feeTotal = db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM association_fees WHERE due_date BETWEEN ? AND ?`).get(from, to).s;
+  const feeTotal = Number(db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM association_fees WHERE due_date BETWEEN ? AND ?`).get(from, to).s);
 
   res.json({
     range: { from, to },
