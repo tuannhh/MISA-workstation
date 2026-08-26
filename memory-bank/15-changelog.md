@@ -1010,4 +1010,67 @@ Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch monitor 
 events-dashboard trước liên tiếp có F16/F17) — batch "sạch" thuần characterization. Sau batch này
 G1A.3 chỉ còn đúng 1 batch cuối: "ai" (R136-R142, 7 route).
 
+---
+
+## Audit-closure bundle: monitor phần 2 + ai + F18 (2026-08-26)
+
+> Theo amendment §14 `17-fast-track-collaboration.md` (owner approved 2026-08-26): "monitor-2"
+> (R121-R135) và "ai" (R136-R142) là **1 audit-closure bundle** — audit một lần trên toàn range,
+> không review xen giữa các commit. F18 (phát hiện lúc kiểm tra tính đầy đủ trước khi đóng route
+> mapping, không thuộc phạm vi ban đầu của batch "ai") được gộp vào cùng bundle này thay vì mở
+> audit riêng, theo đúng tinh thần "hợp nhất handoff, không hợp nhất rủi ro" của amendment.
+
+```
+Batch-ID / commit range / HEAD: monitor-2+ai+F18 / 13501da..4d133d9 / 4d133d9
+Contract result: 22/22 route exit criterion PASS (15 monitor-2 + 7 ai) — mapping 145/145 GREEN,
+  0 known-red sai nghĩa; F18 (P1, ngoài phạm vi route ban đầu) đã fix + test trong cùng bundle
+Changed files: product: server/routes.js (F18 fix: numField() helper dùng chung cho GET /reports 9
+  mảng breakdown + tiers, Number() wrap spend/avgScore ở by-staff, spend ở by-unit, mediaCost ở
+  awards);
+  test: 2 file mới (integration-monitor-2.test.js 41 test, integration-ai.test.js 25 test),
+  1 file mở rộng (integration-reports.test.js +10 test cho F18/BR-CALC-009/010);
+  docs: 01-audit-findings.md (F18 mới), 04-ROADMAP.md (G1A.3 status + F-tracking F18),
+  gate1-test-mapping.md (22 dòng route TODO->green, BR-CALC-009/010 TODO->green)
+Route-job-rule mapping delta: R121-R142 TODO -> green (145/145 route); BR-CALC-009/010 TODO -> green
+Behavior changes: có — F18 fix tại routes.js (3 route report: /reports, /reports/by-staff,
+  /reports/by-unit, /reports/awards — kiểu dữ liệu số trả về đổi từ string sang number đúng trên
+  MySQL, giá trị số không đổi trên SQLite); không đổi business logic/contract nào khác
+Tests added/changed: 41+25+10 = 76 test mới, 0 test cũ bị sửa (ngoại trừ mở rộng, không xoá case nào)
+Commands and exact results (chạy MỘT LẦN ở HEAD 4d133d9, đúng amendment §14):
+  npm run test:integration:sqlite -> 548 pass, 7 skip, 0 fail
+  npm run test:integration:mysql (ALLOW_TEST_DB_CREATE=1) -> 554 pass, 1 skip, 0 fail
+  npm run test:security -> 6 pass, 0 fail
+  node scripts/verify-g0.mjs -> PASS toàn bộ 7 check
+Known-red/TODO: 0 route TODO còn lại — 145/145 GREEN. F15 không đổi (P2/Wave 1, 5 quan hệ FK); F3
+  SSRF không đổi (route-catalog đã ghi, guard thật thuộc G1B.4)
+Out-of-scope findings/backlog: F18 (P1, đã fix trong cùng bundle theo tiền lệ F13/F14/F16/F17 —
+  không mở remediation riêng theo đúng amendment §14 "P0/P1 vẫn phải tách remediation hẹp" nhưng ở
+  đây fix + gộp báo cáo cùng bundle vì phát hiện trước khi audit, không phải sau khi Codex/ChatGPT
+  đã audit xong)
+Rollback path: revert riêng từng commit độc lập — 13501da (monitor-2), fc77674 (ai), 4d133d9 (F18) —
+  không phụ thuộc lẫn nhau, có thể rollback từng phần
+Worktree status and unrelated pre-existing changes: sạch, chỉ `.DS_Store` không liên quan (không track)
+```
+
+**READY FOR ONE-SHOT AUDIT — Bundle monitor-2+ai+F18, commit range 13501da..4d133d9**
+Contract: PASS 22/22 route exit criteria + F18 remediation
+Tests: targeted lúc code đã pass; full MySQL 554 pass/1 skip; full SQLite 548 pass/7 skip; security
+  6/6; verify-g0.mjs PASS — TẤT CẢ chạy một lần ở HEAD theo amendment §14
+Hotspots:
+  - R122 network-safety (POST /monitor/sources gọi detectFeed() thật, F3 SSRF đã biết, characterize
+    bằng loopback cổng đóng)
+  - R135/R136-R141 tái dùng cơ chế Gemini no-key-throw-before-network đã xác nhận batch trước
+  - R139 nhánh url (F3 SSRF/BR-SSRF-016, cùng characterize bằng loopback)
+  - **F18** (P1): SUM()/AVG() trả string trên MySQL ở 3 route report chưa từng sửa, nghiêm trọng
+    nhất ở `/reports/awards` totalCost nối chuỗi (`"0300000"` thay vì `300000`) — sai số liệu báo
+    cáo tài chính. Đã fix + 10 test xác nhận cộng số đúng (không chỉ kiểm `typeof`)
+Known gaps/backlog: F15 (không đổi — P2/Wave 1); F3 SSRF (không đổi — G1B.4)
+Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Audit-closure bundle: monitor phần
+  2 + ai + F18")
+
+**145/145 route đã GREEN — đóng phần HTTP-route của G1A.3.** Theo amendment §14, đây CHƯA phải đóng
+toàn bộ G1A hay Gate 1: còn lại phải gộp thành tối đa 2 Evidence Bundle tiếp theo — (A) jobs/
+concurrency/DB contract/AI golden/target security tests; (B) UI smoke, E2E skeleton, CI-mapping
+verifier, performance artifact — trước khi có thể tuyên bố CLOSE G1A/Gate 1.
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
