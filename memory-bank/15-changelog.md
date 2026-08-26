@@ -969,4 +969,45 @@ Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch monitor 
 - **Batch monitor phần 1 CLOSED (ACCEPT, hardening issue đã remediate cùng phiên). G1A.3 tiếp tục sang
   batch monitor phần 2 (R121-R135).**
 
+---
+
+## Batch monitor phần 2 (2026-08-26)
+
+```
+Batch-ID / commit range / HEAD: monitor-2 / 13501da^..13501da / 13501da
+Contract result: 15/15 route exit criterion PASS — mapping 138/145 green (7 TODO), 0 known-red sai nghĩa
+Changed files: product: không có (batch này không sửa product code, chỉ characterize);
+  test: 1 file mới (integration-monitor-2.test.js, 41 test);
+  docs: gate1-test-mapping.md (15 dòng TODO->green)
+Route-job-rule mapping delta: R121-R135 TODO -> green
+Behavior changes: không có — chỉ characterization, không sửa business logic
+Tests added/changed: 41 test HTTP mới, 0 test cũ bị sửa
+Commands and exact results:
+  npm run test:integration:sqlite -> 518 pass, 7 skip, 0 fail
+  npm run test:integration:mysql (ALLOW_TEST_DB_CREATE=1) -> 524 pass, 1 skip, 0 fail
+  npm run test:security -> 6 pass, 0 fail
+  node scripts/verify-g0.mjs -> PASS toàn bộ 7 check
+Known-red/TODO: 7 route TODO còn lại (batch "ai" R136-R142, batch cuối cùng của G1A.3); F15 không đổi
+Out-of-scope findings/backlog: không có finding mới trong batch này (F3 SSRF ở R122 đã ghi sẵn trong
+  route-catalog từ trước, KHÔNG phải phát hiện mới — chỉ đo đúng hành vi hiện có, không sửa)
+Rollback path: revert 1 commit (13501da), không ảnh hưởng product code
+Worktree status and unrelated pre-existing changes: sạch, chỉ `.DS_Store` không liên quan (không track)
+```
+
+**READY FOR ONE-SHOT AUDIT — Batch monitor phần 2, commit 13501da^..13501da**
+Contract: PASS 15/15 exit criteria
+Tests: targeted lúc code đã pass; full MySQL 524 pass/1 skip; full SQLite 518 pass/7 skip; security
+  6/6; verify-g0.mjs PASS
+Hotspots: R122 network-safety (POST /monitor/sources gọi detectFeed() -> fetch() thật không
+  allowlist host — F3 SSRF đã biết, characterize bằng URL loopback cổng đóng để không gọi Internet
+  thật, không sửa), R135 tái dùng cơ chế an toàn Gemini đã xác nhận ở batch monitor phần 1
+  (R112/R113: thiếu GEMINI_API_KEY throw trước khi gọi mạng)
+Known gaps/backlog: F15 (không đổi — vẫn P2/Wave 1); F3 SSRF (không đổi — vẫn ghi trong route-catalog,
+  không thuộc phạm vi characterization G1A.3, cần guard thật ở G1B.4 cùng nhóm BR-SSRF-016)
+Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch monitor phần 2")
+
+**Batch monitor phần 2 KHÔNG phát hiện bug production mới** (khác 2 batch monitor phần 1/
+events-dashboard trước liên tiếp có F16/F17) — batch "sạch" thuần characterization. Sau batch này
+G1A.3 chỉ còn đúng 1 batch cuối: "ai" (R136-R142, 7 route).
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
