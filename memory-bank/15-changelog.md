@@ -802,4 +802,74 @@ Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch supplier
 - Báo cáo đầy đủ: `PR-WORKSTATION-CODEX-SUPPLIERS-ONE-SHOT-AUDIT.md` (owner giữ ngoài repo).
 - **Batch suppliers CLOSED. G1A.3 tiếp tục sang batch kế tiếp** (events+dashboard R087-R098).
 
+## 2026-08-26 — G1A.3 Batch "events-dashboard" (12 route)
+
+**Batch Contract**
+```
+Batch-ID: events-dashboard
+Goal: characterization HTTP cho nhóm sự kiện + dashboard tổng hợp
+In scope: R087-R098 (events CRUD, event_costs, file upload, remind, press-overview, dashboard)
+Out of scope: monitor/ai (batch sau); R099-R103 admin đã green từ trước, không thuộc batch này
+Behavior mode: characterization (trừ P0/P1 cùng root cause đã owner duyệt trước — xử lý như F14/F16)
+Risk hotspots: org_fee write-gap F1 (R092/R093 — đã biết, không sửa), file delete vật lý (R091),
+  file upload kind từ query không whitelist (F9, R095), F15 (FK MySQL, dự kiến chạm event_costs),
+  SUM() aggregate type trên MySQL (F14-style, dashboard có nhiều SUM/COUNT tổng hợp — hotspot mới
+  xác định ngay trong lúc đọc code trước khi viết test)
+Required tests: happy + invalid + unauthenticated + not-found mỗi route (không có forbidden thật —
+  cả 2 role full CRUD events, R098 dashboard chỉ requireAuth không requirePerm module)
+Allowed known-red/TODO: không có known-red mới
+Exit criteria: 12/12 route green; full regression cả 2 driver + security + verifier PASS
+Expected commit range/count: 1 commit (test + fix P0/P1 cùng root cause đã duyệt, nếu phát sinh)
+```
+
+- **Commit** (`8baa28d`) — events CRUD + costs + files + remind, press-overview, dashboard
+  (R087-R098), 42 test HTTP. **Phát hiện + fix ngay F16** (cùng root cause F14, không hỏi lại
+  owner lần 3): `total_cost` (`GET /api/events`, correlated `SUM()` subquery) và
+  `overview.events.keynoteMonth` + `charts.assocActivityMonthly` (`GET /api/dashboard`) trả string
+  trên MySQL do cùng cơ chế mysql2 SUM()→DECIMAL→string. `assocActivityMonthly` là ca khó nhất: bug
+  chỉ lộ khi GROUP BY sinh dòng khớp thật (có dữ liệu tương tác/tài trợ hiệp hội đúng tháng/năm hiện
+  tại) — môi trường test trống dữ liệu che giấu bug hoàn toàn; test mới chủ động seed dữ liệu để lộ
+  đúng nhánh. Sửa tận gốc 3 helper dùng chung ở dashboard (`one`/`grouped`/`monthly`) bằng `Number()`
+  bọc quanh — phòng ngừa cả field hiện đang an toàn (COUNT()) nếu sau này đổi sang SUM(). Xem
+  `01-audit-findings.md` F16.
+- Xác nhận thêm bằng chứng F15 (R091): xoá `events` có `event_costs` liên quan — SQLite cascade
+  đúng, MySQL để lại mồ côi. Nâng tổng số quan hệ FK đã xác nhận lỗi lên 5.
+- Phát hiện F9 tái xuất hiện dạng khác ở R095 (`kind` từ query string không whitelist, cắt 40 ký
+  tự) — đã có trong `07-route-catalog.md`, không phải finding mới, chỉ characterize lại đúng route.
+
+**Evidence Bundle**
+```
+Batch-ID / commit range / HEAD: events-dashboard / 8baa28d^..8baa28d / 8baa28d
+Contract result: 12/12 route exit criterion PASS — mapping 106/145 green (39 TODO), 0 known-red sai nghĩa
+Changed files: product: server/routes.js (F16 fix, 5 chỗ: total_cost + 3 helper + keynoteMonth);
+  test: 1 file mới (integration-events-dashboard.test.js, 42 test);
+  docs: 01-audit-findings.md (F16 mới + F15 bổ sung), gate1-test-mapping.md (12 dòng TODO->green)
+Route-job-rule mapping delta: R087-R098 TODO -> green
+Behavior changes: có — F16 fix tại routes.js (total_cost, one/grouped/monthly helper, keynoteMonth),
+  không đổi business logic/contract nào khác (chỉ sửa type, giá trị số không đổi)
+Tests added/changed: 42 test HTTP mới, 0 test cũ bị sửa
+Commands and exact results:
+  npm run test:integration:sqlite -> 427 pass, 7 skip, 0 fail
+  npm run test:integration:mysql (ALLOW_TEST_DB_CREATE=1) -> 433 pass, 1 skip, 0 fail
+  npm run test:security -> 6 pass, 0 fail
+  node scripts/verify-g0.mjs -> PASS toàn bộ 7 check
+  git diff --check (toàn batch) -> sạch
+Known-red/TODO: 39 route TODO còn lại thuộc batch sau (monitor/ai), đều có wave đích trong
+  04-ROADMAP.md; F15 vẫn P2/Wave 1/owner=Claude, evidence mở rộng lên 5 quan hệ FK
+Out-of-scope findings/backlog: không có finding mới ngoài F16 (đã fix trong batch) và F15 evidence
+Rollback path: revert 1 commit (8baa28d); F16 fix nằm trong cùng commit với test, không tách riêng
+  được nhưng có thể cherry-pick ngược nếu cần giữ lại phần test
+Worktree status and unrelated pre-existing changes: sạch, chỉ `.DS_Store` không liên quan (không track)
+```
+
+**READY FOR ONE-SHOT AUDIT — Batch events-dashboard, commit 8baa28d^..8baa28d**
+Contract: PASS 12/12 exit criteria
+Tests: targeted lúc code đã pass; full MySQL 433 pass/1 skip; full SQLite 427 pass/7 skip; security
+  6/6; verify-g0.mjs PASS
+Hotspots: F16 (SUM() type trên MySQL, cùng root cause F14, đã fix + test seed dữ liệu để không bỏ
+  sót ca ẩn), F15 evidence bổ sung (event_costs, không đổi severity), F9 tái xuất hiện dạng khác (đã
+  có sẵn trong route-catalog, không phải finding mới)
+Known gaps/backlog: F15 (không đổi — vẫn P2/Wave 1, evidence mở rộng lên 5 quan hệ FK)
+Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch events-dashboard")
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
