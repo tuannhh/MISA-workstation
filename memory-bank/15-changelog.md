@@ -937,4 +937,36 @@ Known gaps/backlog: F15 (không đổi — vẫn P2/Wave 1, evidence mở rộng
   trong batch này vì nhóm monitor không có quan hệ FK cascade liên quan)
 Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch monitor phần 1")
 
+**Auditor ONE-SHOT AUDIT (ChatGPT, cùng vai trò/luồng làm việc, xem
+[[pr-workstation-fasttrack-branch-push]]) — Decision: ACCEPT WITH 1 MEDIUM HARDENING ISSUE**
+- F17 diagnosis/fix/test: PASS, KEEP nguyên (`VARCHAR(20)` đúng hướng cho field enum-like `rss`/`site`,
+  tương thích MySQL tốt hơn `TEXT`; test R110 xác nhận thực sự bắt được missing-column dù đã tắt
+  network — network isolation không che giấu bug).
+- **Finding D (Medium, REQUIRED FOLLOW-UP):** helper `add()` sau fix F17 chỉ `console.error()` lỗi lạ
+  rồi vẫn tiếp tục migrate/boot — audit chỉ rõ đây **vẫn cùng class failure đã gây F17**, chỉ khác là
+  nay có log thay vì im lặng hoàn toàn; app vẫn có thể chạy với schema thiếu, route liên quan mới fail
+  sau đó lúc request thật tới. Acceptance criterion: lỗi migration syntax/type/permission/connection
+  phải làm app init fail, không được boot với schema chưa hoàn chỉnh.
+- **Finding E (Low, RECOMMENDED):** nên thêm `mode VARCHAR(20) NOT NULL DEFAULT 'rss'` trực tiếp vào
+  canonical `CREATE TABLE sources` (không chỉ dựa migration `ALTER TABLE`), giữ migration cho DB cũ.
+- Must do: rethrow mọi migration error không thuộc duplicate/idempotency case; must not do: không quay
+  lại nuốt toàn bộ lỗi, không bỏ migration backward-compat chỉ vì fresh schema đã có `mode`.
+- **Remediation đã thực hiện ngay (commit `e684918`, cùng phiên, không hỏi lại vì đây là bug hardening
+  rõ ràng theo đúng tiền lệ F13/F14/F16/F17):**
+  - `add()` rethrow mọi lỗi không phải duplicate column/already exists — fail-fast thật thay vì chỉ log.
+  - Tách `isIgnorableMigrationError()` thành hàm thuần, export từ `db.js` để test được logic phân loại
+    mà không cần re-run `migrate()` thật (đúng gợi ý audit "extract riêng helper để test").
+  - Thêm `mode VARCHAR(20) NOT NULL DEFAULT 'rss'` vào canonical `CREATE TABLE sources`, giữ nguyên
+    `ALTER TABLE` cho DB cũ — xác nhận bằng script tạo DB mới hoàn toàn, `PRAGMA table_info(sources)`
+    đã có cột `mode` ngay từ `init()`, không cần qua `migrate()`.
+  - Test mới `BR-VAL-041/042` (`server/test/unit-validation-formatter.test.js`): `isIgnorableMigrationError()`
+    nhận đúng message duplicate của cả SQLite/MySQL, trả `false` cho lỗi lạ; `migrate()` thật xác nhận
+    ALTER trùng cột không throw còn ALTER cú pháp sai vẫn throw ra ngoài.
+  - Đã rà toàn bộ dòng `add("ALTER TABLE ...")` khác trong `migrate()` — không còn pattern `TEXT+DEFAULT`
+    nào khác, rethrow không phá vỡ migration hiện có nào.
+  - Regression sau remediation: SQLite 477 pass/7 skip, MySQL 483 pass/1 skip, security 6/6,
+    `verify-g0.mjs` PASS — không hồi quy.
+- **Batch monitor phần 1 CLOSED (ACCEPT, hardening issue đã remediate cùng phiên). G1A.3 tiếp tục sang
+  batch monitor phần 2 (R121-R135).**
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
