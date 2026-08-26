@@ -724,4 +724,67 @@ Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch reports-
 - **Batch reports-awards CLOSED. G1A.3 tiếp tục sang batch kế tiếp** (suppliers R072-R086, theo kế
   hoạch ở `04-ROADMAP.md`).
 
+## 2026-08-26 — G1A.3 Batch "suppliers" (15 route)
+
+**Batch Contract**
+```
+Batch-ID: suppliers
+Goal: characterization HTTP cho nhóm nhà cung cấp
+In scope: R072-R086 (suppliers CRUD, contacts, transactions, quotes, file upload)
+Out of scope: events/dashboard/monitor/ai (batch sau)
+Behavior mode: characterization
+Risk hotspots: org_fee write-gap F1 (R078/R079/R084 — đã biết, không sửa), file delete vật lý
+  (R083), file upload không kiểm files.length (R086, khác R034/R070), F15 (FK MySQL) — dự kiến chạm
+  lại đúng pattern đã biết ở supplier_quotes/supplier_transactions/supplier_contacts, không phải mở
+  rộng điều tra mới
+Required tests: happy + invalid + unauthenticated + not-found mỗi route (không có case forbidden
+  thật — cả 2 role full CRUD suppliers, giống bookings/partners/interactions/awards)
+Allowed known-red/TODO: không có known-red mới; F15 evidence bổ sung ghi vào finding đã có, không
+  tạo finding mới trùng lặp
+Exit criteria: 15/15 route green trong mapping; full regression cả 2 driver + security + verifier PASS
+Expected commit range/count: 1 commit
+```
+
+- **Commit** (`21fffc3`) — suppliers CRUD + contacts + transactions + quotes + files (R072-R086),
+  43 test. Phát hiện R086 KHÔNG kiểm `files.length` (khác R034 people/R070 awards) — 0 file vẫn
+  200, ghi CHARACTERIZATION, không sửa (đúng behavior mode batch).
+  Xác nhận thêm bằng chứng cho **F15** đã biết (không phải phát hiện mới, chỉ đo lại đúng phạm vi
+  Codex đã cảnh báo khi routes trong batch này tình cờ chạm cùng pattern FK): R075
+  `supplier_contacts.supplier_id` không tồn tại → SQLite 400/MySQL 200; R083 xoá supplier có
+  quotes/transactions/contacts liên quan → SQLite cascade đúng, MySQL để lại cả 3 bảng con mồ côi
+  (xác nhận bằng query trực tiếp qua `db` sau khi cha đã xoá, không chỉ suy luận qua response HTTP).
+  Xem `01-audit-findings.md` F15 (đã cập nhật, không tạo F16 trùng).
+
+**Evidence Bundle**
+```
+Batch-ID / commit range / HEAD: suppliers / 21fffc3^..21fffc3 / 21fffc3
+Contract result: 15/15 route exit criterion PASS — mapping 94/145 green (51 TODO), 0 known-red sai nghĩa
+Changed files: product: không có; test: 1 file mới (integration-suppliers.test.js, 43 test);
+  docs: 01-audit-findings.md (F15 bổ sung evidence), gate1-test-mapping.md (15 dòng TODO->green),
+  04-ROADMAP.md
+Route-job-rule mapping delta: R072-R086 TODO -> green
+Behavior changes: không — batch thuần characterization, không sửa product code
+Tests added/changed: 43 test HTTP mới, 0 test cũ bị sửa
+Commands and exact results:
+  npm run test:integration:sqlite -> 385 pass, 7 skip, 0 fail
+  npm run test:integration:mysql (ALLOW_TEST_DB_CREATE=1) -> 391 pass, 1 skip, 0 fail
+  npm run test:security -> 6 pass, 0 fail
+  node scripts/verify-g0.mjs -> PASS toàn bộ 7 check
+  git diff --check (toàn batch) -> sạch
+Known-red/TODO: 51 route TODO còn lại thuộc batch sau (events/monitor/ai), đều có wave đích trong
+  04-ROADMAP.md; F15 vẫn P2/Wave 1/owner=Claude, evidence mở rộng nhưng không đổi severity
+Out-of-scope findings/backlog: không có finding mới ngoài F15 evidence bổ sung
+Rollback path: revert 1 commit (21fffc3), không có product code để rollback riêng
+Worktree status and unrelated pre-existing changes: sạch, chỉ `.DS_Store` không liên quan (không track)
+```
+
+**READY FOR ONE-SHOT AUDIT — Batch suppliers, commit 21fffc3^..21fffc3**
+Contract: PASS 15/15 exit criteria
+Tests: targeted lúc code đã pass; full MySQL 391 pass/1 skip; full SQLite 385 pass/7 skip; security
+  6/6; verify-g0.mjs PASS
+Hotspots: file upload không kiểm files.length rỗng (R086, characterization, không sửa), F15 evidence
+  bổ sung (không đổi severity/scope, chỉ củng cố phạm vi đã biết)
+Known gaps/backlog: F15 (không đổi — vẫn P2/Wave 1, evidence mở rộng sang suppliers)
+Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch suppliers")
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

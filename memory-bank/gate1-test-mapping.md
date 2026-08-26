@@ -114,21 +114,21 @@
 | R069 | R069 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(pid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R070 | R070 | green | server/test/integration-awards.test.js | happy(1 file + nhiều file)/invalid(0 file->400)/CHARACTERIZATION not-found(award_id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
 | R071 | R071 | green | server/test/integration-awards.test.js | happy/invalid(thiếu submission_deadline->400)/not-found/unauthenticated (forbidden N/A) |
-| R072 | — | TODO | — | — |
-| R073 | — | TODO | — | — |
-| R074 | — | TODO | — | — |
-| R075 | — | TODO | — | — |
-| R076 | — | TODO | — | — |
-| R077 | — | TODO | — | — |
-| R078 | — | TODO | — | — |
-| R079 | — | TODO | — | — |
-| R080 | — | TODO | — | — |
-| R081 | — | TODO | — | — |
-| R082 | — | TODO | — | — |
-| R083 | — | TODO | — | — |
-| R084 | — | TODO | — | — |
-| R085 | — | TODO | — | — |
-| R086 | — | TODO | — | — |
+| R072 | R072 | green | server/test/integration-suppliers.test.js | happy(tìm+lọc industry+phân trang)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R073 | R073 | green | server/test/integration-suppliers.test.js | happy/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R074 | R074 | green | server/test/integration-suppliers.test.js | happy/not-found/unauthenticated (invalid N/A; forbidden N/A) |
+| R075 | R075 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION(F15: SQLite FK->400, MySQL->200)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R076 | R076 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(cid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R077 | R077 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(cid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R078 | R078 | green | server/test/integration-suppliers.test.js | happy/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R079 | R079 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(tid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R080 | R080 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(tid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R081 | R081 | green | server/test/integration-suppliers.test.js | happy/invalid(thiếu name NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R082 | R082 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
+| R083 | R083 | green | server/test/integration-suppliers.test.js | happy(xoá kèm file vật lý)/CHARACTERIZATION(F15 mở rộng: cascade quotes/transactions/contacts SQLite có, MySQL không, xác nhận qua query trực tiếp db)/CHARACTERIZATION not-found(id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
+| R084 | R084 | green | server/test/integration-suppliers.test.js | happy/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R085 | R085 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(qid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R086 | R086 | green | server/test/integration-suppliers.test.js | happy(1 file+nhiều file)/CHARACTERIZATION(0 file vẫn 200, khác R034/R070)/unauthenticated (not-found N/A; forbidden N/A) |
 | R087 | — | TODO | — | — |
 | R088 | — | TODO | — | — |
 | R089 | — | TODO | — | — |
