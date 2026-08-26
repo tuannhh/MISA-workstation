@@ -108,6 +108,16 @@ Cùng nguyên nhân F14 (mysql2 trả kết quả `SUM()` dạng string/DECIMAL,
 - Sửa tận gốc tại 3 helper dùng chung trong `GET /api/dashboard` (`one()`, `grouped()`, `monthly()`) bằng `Number(...)` bọc quanh kết quả `.c` — không chỉ sửa 2 chỗ đang lỗi mà củng cố mọi field số hiện tại VÀ tương lai của dashboard (kể cả các field COUNT()-based hiện đang an toàn, phòng khi sau này đổi sang SUM()). `total_cost` ở `GET /api/events` sửa riêng tại điểm map `rows`.
 - Test mới xác nhận `typeof === 'number'` cho toàn bộ field số trong `overview`, toàn bộ phần tử `charts.*Monthly` (kể cả ép seed dữ liệu để lộ đúng nhánh SUM), và `charts.reportersByBeat/assocByField[].value`.
 
+### F17 — `POST /api/monitor/scan` trả 500 trên MỌI lượt quét thật trên MySQL do cột `sources.mode` không tồn tại · **P1 High / A / production (endpoint quét tin hoàn toàn hỏng trên MySQL) — ĐÃ FIX** (G1A.3 batch monitor phần 1, phát hiện qua characterization R110)
+`server/db.js` `migrate()` thêm cột `sources.mode` bằng `ALTER TABLE sources ADD COLUMN mode TEXT NOT NULL DEFAULT 'rss'`. MySQL **không cho phép cột `TEXT`/`BLOB`/`GEOMETRY`/`JSON` có `DEFAULT` literal** (lỗi `"BLOB, TEXT, GEOMETRY or JSON column can't have a default value"`), nên câu ALTER này **luôn fail trên MySQL** — nhưng `migrate()` dùng helper `add(sql) { try { db.exec(sql); } catch {} }` **nuốt hết mọi lỗi im lặng**, nên thất bại này không bao giờ lộ ra qua log hay exception khởi động. Kết quả: cột `mode` **không tồn tại** trên schema MySQL thực tế, dù code CREATE TABLE và mọi route đều giả định nó có.
+- Hậu quả thực tế: `monitor.js runScan()` bước 2 (fetch RSS không điều kiện theo `queryIds`, chạy trên MỌI lượt gọi `POST /api/monitor/scan`) query `WHERE enabled=1 AND type='news' AND (mode IS NULL OR mode='rss')` → MySQL báo `Unknown column 'mode' in 'where clause'` → route catch → **500 cho mọi lượt quét thật trên MySQL**, không chỉ characterization test. Đây là bug production nghiêm trọng hơn F14/F16 (không phải sai lệch số liệu mà là **hỏng hoàn toàn 1 chức năng chính** — quét giám sát truyền thông).
+- Phát hiện bằng test R110 (network-safe: tắt hết `sources` + `scan_queries` include rỗng để không gọi mạng thật khi characterize) — 500 lộ ra ngay ở lần chạy MySQL đầu tiên, không cần dữ liệu RSS thật.
+- **Sửa tận gốc** (không phải vá triệu chứng), 2 phần:
+  1. Đổi kiểu cột từ `TEXT` sang `VARCHAR(20)` (`ALTER TABLE sources ADD COLUMN mode VARCHAR(20) NOT NULL DEFAULT 'rss'`) — hợp lệ trên cả MySQL và SQLite (SQLite dùng type affinity, không phân biệt `VARCHAR`/`TEXT`).
+  2. Sửa helper `add()` trong `migrate()`: chỉ nuốt lỗi "duplicate column"/"already exists" (idempotent bình thường), còn mọi lỗi khác phải `console.error` ra — để lớp lỗi tương tự (cú pháp DDL không tương thích MySQL) không còn âm thầm biến mất trong tương lai, phòng ngừa tái diễn class bug này ở các cột khác.
+- Đã kiểm tra toàn bộ các dòng `add("ALTER TABLE ...")` khác trong `migrate()`: chỉ có đúng 1 dòng dùng pattern `TEXT ... DEFAULT` (dòng vừa sửa), không phát hiện thêm trường hợp tương tự.
+- Xác nhận sau fix: 47/47 test batch monitor phần 1 xanh trên cả SQLite và MySQL; toàn bộ regression suite (481 integration test) không hồi quy.
+
 ## E. Điểm mạnh nên bảo toàn
 - Mô hình nghiệp vụ PR phong phú, liên hệ nhiều thực thể.
 - RBAC server-side + audit + per-user `sensitive_perms` (biểu cảm hơn role cứng).

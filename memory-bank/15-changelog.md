@@ -898,4 +898,43 @@ Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch events-d
 - **Batch events-dashboard CLOSED (ACCEPT). G1A.3 tiếp tục sang batch kế tiếp** (monitor phần 1
   R104-R120).
 
+---
+
+## Batch monitor phần 1 (2026-08-26)
+
+```
+Batch-ID / commit range / HEAD: monitor-1 / 0bf0f5f^..0bf0f5f / 0bf0f5f
+Contract result: 17/17 route exit criterion PASS — mapping 123/145 green (22 TODO), 0 known-red sai nghĩa
+Changed files: product: server/db.js (F17 fix: cột sources.mode VARCHAR(20) + add() log lỗi thay vì nuốt);
+  test: 1 file mới (integration-monitor-1.test.js, 47 test);
+  docs: 01-audit-findings.md (F17 mới), 04-ROADMAP.md (G1A.3 + bảng F-tracking), gate1-test-mapping.md (17 dòng TODO->green)
+Route-job-rule mapping delta: R104-R120 TODO -> green
+Behavior changes: có — F17 fix tại db.js (kiểu cột sources.mode đổi TEXT->VARCHAR(20),
+  helper add() log lỗi không phải "đã tồn tại"); không đổi business logic/contract nào khác
+Tests added/changed: 47 test HTTP mới, 0 test cũ bị sửa
+Commands and exact results:
+  npm run test:integration:sqlite -> 474 pass, 7 skip, 0 fail
+  npm run test:integration:mysql (ALLOW_TEST_DB_CREATE=1) -> 480 pass, 1 skip, 0 fail
+  npm run test:security -> 6 pass, 0 fail
+  node scripts/verify-g0.mjs -> PASS toàn bộ 7 check
+Known-red/TODO: 22 route TODO còn lại (monitor phần 2 + ai), đều có wave đích trong 04-ROADMAP.md;
+  F15 không đổi (P2/Wave 1/owner=Claude, 5 quan hệ FK)
+Out-of-scope findings/backlog: không có finding mới ngoài F17 (đã fix trong batch)
+Rollback path: revert 1 commit (0bf0f5f); F17 fix nằm trong cùng commit với test, có thể cherry-pick
+  ngược riêng phần server/db.js nếu cần giữ lại test
+Worktree status and unrelated pre-existing changes: sạch, chỉ `.DS_Store` không liên quan (không track)
+```
+
+**READY FOR ONE-SHOT AUDIT — Batch monitor phần 1, commit 0bf0f5f^..0bf0f5f**
+Contract: PASS 17/17 exit criteria
+Tests: targeted lúc code đã pass; full MySQL 480 pass/1 skip; full SQLite 474 pass/7 skip; security
+  6/6; verify-g0.mjs PASS
+Hotspots: F17 (cột `sources.mode` không tồn tại trên MySQL do ALTER TABLE TEXT DEFAULT fail âm thầm,
+  khiến POST /monitor/scan trả 500 trên MỌI lượt quét thật trên MySQL — đã fix tận gốc: đổi kiểu cột
+  + sửa migrate() không còn nuốt lỗi im lặng), R110 network-isolation (tắt sources + scan_queries
+  include rỗng để characterize an toàn, không gọi RSS/Gemini thật)
+Known gaps/backlog: F15 (không đổi — vẫn P2/Wave 1, evidence mở rộng lên 5 quan hệ FK, chưa chạm
+  trong batch này vì nhóm monitor không có quan hệ FK cascade liên quan)
+Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch monitor phần 1")
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
