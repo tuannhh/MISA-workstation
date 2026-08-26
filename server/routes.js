@@ -1107,7 +1107,7 @@ router.get('/events', requirePerm('events', 'view'), (req, res) => {
       (SELECT COALESCE(SUM(amount),0) FROM event_costs ec WHERE ec.event_id=e.id) AS total_cost
     FROM events e LEFT JOIN organizations o ON o.id=e.organizer_org_id
     ${where} ORDER BY (e.start_time IS NULL), e.start_time DESC LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
-  rows = rows.map((r) => ({ ...r, daysToStart: deadlineInfo(r.start_time).days }));
+  rows = rows.map((r) => ({ ...r, total_cost: Number(r.total_cost), daysToStart: deadlineInfo(r.start_time).days }));
   maskMoney(req, rows, 'total_cost');
   res.json({ rows, total, page, pageSize });
 });
@@ -1196,7 +1196,7 @@ router.get('/dashboard', (req, res) => {
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
   const ym = `${year}-${mm}`;
   const yr = String(year);
-  const one = (sql, ...a) => db.prepare(sql).get(...a).c;
+  const one = (sql, ...a) => Number(db.prepare(sql).get(...a).c);
   // Phóng viên (báo chí): nhân sự cấp/loại "Phóng viên" thuộc cơ quan báo chí
   const PV = `o.org_type='press' AND (p.level='Phóng viên' OR p.category='Phóng viên')`;
 
@@ -1223,14 +1223,14 @@ router.get('/dashboard', (req, res) => {
     events: {
       hostMonth: one(`SELECT COUNT(*) c FROM events WHERE mode='host' AND start_time IS NOT NULL AND strftime('%Y-%m', start_time)=?`, ym),
       sponsorMonth: one(`SELECT COUNT(*) c FROM events WHERE mode='join' AND start_time IS NOT NULL AND strftime('%Y-%m', start_time)=?`, ym),
-      keynoteMonth: db.prepare(`SELECT COALESCE(SUM(misa_keynotes),0) c FROM events
-        WHERE start_time IS NOT NULL AND strftime('%Y-%m', start_time)=?`).get(ym).c,
+      keynoteMonth: Number(db.prepare(`SELECT COALESCE(SUM(misa_keynotes),0) c FROM events
+        WHERE start_time IS NOT NULL AND strftime('%Y-%m', start_time)=?`).get(ym).c),
     },
   };
 
   // Biểu đồ: gom theo tháng (mảng 12 phần tử) hoặc theo nhóm phân loại
-  const monthly = (rows) => { const a = Array(12).fill(0); rows.forEach((r) => { const m = parseInt(r.m, 10); if (m >= 1 && m <= 12) a[m - 1] = r.c; }); return a; };
-  const grouped = (sql, ...a) => db.prepare(sql).all(...a).map((r) => ({ label: r.label, value: r.c }));
+  const monthly = (rows) => { const a = Array(12).fill(0); rows.forEach((r) => { const m = parseInt(r.m, 10); if (m >= 1 && m <= 12) a[m - 1] = Number(r.c); }); return a; };
+  const grouped = (sql, ...a) => db.prepare(sql).all(...a).map((r) => ({ label: r.label, value: Number(r.c) }));
 
   const charts = {
     reportersByBeat: grouped(`SELECT COALESCE(NULLIF(p.beat,''),'Chưa phân loại') label, COUNT(*) c

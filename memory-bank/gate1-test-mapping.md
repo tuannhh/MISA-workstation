@@ -129,18 +129,18 @@
 | R084 | R084 | green | server/test/integration-suppliers.test.js | happy/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
 | R085 | R085 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(qid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R086 | R086 | green | server/test/integration-suppliers.test.js | happy(1 file+nhiều file)/CHARACTERIZATION(0 file vẫn 200, khác R034/R070)/unauthenticated (not-found N/A; forbidden N/A) |
-| R087 | — | TODO | — | — |
-| R088 | — | TODO | — | — |
-| R089 | — | TODO | — | — |
-| R090 | — | TODO | — | — |
-| R091 | — | TODO | — | — |
-| R092 | — | TODO | — | — |
-| R093 | — | TODO | — | — |
-| R094 | — | TODO | — | — |
-| R095 | — | TODO | — | — |
-| R096 | — | TODO | — | — |
-| R097 | — | TODO | — | — |
-| R098 | — | TODO | — | — |
+| R087 | R087 | green | server/test/integration-events-dashboard.test.js | happy(tìm+lọc+total_cost, F16 đã fix)/CHARACTERIZATION(mode lạ bị bỏ qua filter)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R088 | R088 | green | server/test/integration-events-dashboard.test.js | happy(costs 3 nhóm+totals)/happy(totals.grand cộng đúng)/not-found/unauthenticated (invalid N/A; forbidden N/A) |
+| R089 | R089 | green | server/test/integration-events-dashboard.test.js | happy/invalid(thiếu name NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R090 | R090 | green | server/test/integration-events-dashboard.test.js | happy/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
+| R091 | R091 | green | server/test/integration-events-dashboard.test.js | happy(xoá kèm file vật lý)/CHARACTERIZATION(F15: cascade event_costs SQLite có, MySQL không)/CHARACTERIZATION not-found(id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
+| R092 | R092 | green | server/test/integration-events-dashboard.test.js | happy/invalid(thiếu category NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R093 | R093 | green | server/test/integration-events-dashboard.test.js | happy/CHARACTERIZATION not-found(cid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R094 | R094 | green | server/test/integration-events-dashboard.test.js | happy/CHARACTERIZATION not-found(cid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
+| R095 | R095 | green | server/test/integration-events-dashboard.test.js | happy(kind mặc định)/CHARACTERIZATION(F9: kind từ query không whitelist, cắt 40 ký tự)/CHARACTERIZATION(0 file vẫn 200)/unauthenticated (not-found N/A; forbidden N/A) |
+| R096 | R096 | green | server/test/integration-events-dashboard.test.js | happy/invalid(thiếu start_time->400)/CHARACTERIZATION invalid(event_id không tồn tại cũng 400, gộp chung nhánh)/unauthenticated (forbidden N/A) |
+| R097 | R097 | green | server/test/integration-events-dashboard.test.js | happy/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
+| R098 | R098 | green | server/test/integration-events-dashboard.test.js | happy(overview+charts+upcoming)/happy(F16: mọi field số overview là number đã fix)/happy(F16: charts.*Monthly toàn number đã fix, có seed data để lộ đúng nhánh SUM)/happy(charts label/value)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A vì requireAuth only) |
 | R099 | R099 | green | server/test/integration-auth-admin.test.js | happy/unauthenticated/forbidden (không có :id/body -> không case invalid/not-found) |
 | R100 | R100 | green | server/test/integration-auth-admin.test.js | happy/invalid(thiếu field, username trùng 409)/unauthenticated/forbidden |
 | R101 | R101 | green | server/test/integration-auth-admin.test.js | happy/invalid(role lạ bị bỏ qua lặng lẽ)/CHARACTERIZATION not-found (id lạ vẫn 200 ok:true, không 404)/unauthenticated/forbidden |
