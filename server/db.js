@@ -570,7 +570,16 @@ function seedMonitoringDefaults() {
 
 // Thêm cột còn thiếu cho DB cũ (idempotent) — để deploy không cần reseed, không mất dữ liệu
 function migrate() {
-  const add = (sql) => { try { db.exec(sql); } catch {} };
+  // Lỗi "duplicate column" (đã có cột từ lần chạy trước) là chuyện bình thường, bỏ qua âm thầm.
+  // Các lỗi khác (vd. cú pháp không tương thích MySQL) phải log ra để không tái diễn bug ẩn như
+  // cột `sources.mode` từng bị nuốt lỗi và biến mất hoàn toàn trên MySQL trong một thời gian dài.
+  const add = (sql) => {
+    try { db.exec(sql); }
+    catch (e) {
+      const msg = String(e.message || '');
+      if (!/duplicate column|already exists/i.test(msg)) console.error('[migrate] lỗi ALTER TABLE:', sql, '->', msg);
+    }
+  };
   add("ALTER TABLE users ADD COLUMN sensitive_perms TEXT");
   add("ALTER TABLE users ADD COLUMN email TEXT");
   add("ALTER TABLE users ADD COLUMN notify_opt_in INTEGER NOT NULL DEFAULT 1");
@@ -587,7 +596,11 @@ function migrate() {
   add("ALTER TABLE scan_runs ADD COLUMN neg INTEGER DEFAULT 0");
   // Giám sát: nhóm từ khóa đã khớp (để đo hiệu quả từng từ khóa) + nguồn dạng website thường (quét qua Google Search)
   add("ALTER TABLE mentions ADD COLUMN matched_group TEXT");
-  add("ALTER TABLE sources ADD COLUMN mode TEXT NOT NULL DEFAULT 'rss'");
+  // Dùng VARCHAR (không phải TEXT) vì MySQL không cho phép cột TEXT/BLOB có DEFAULT literal
+  // (lỗi "BLOB, TEXT, GEOMETRY or JSON column can't have a default value") — với TEXT, ALTER TABLE
+  // này từng fail SILENT trên MySQL (add() nuốt hết lỗi), khiến cột `mode` không tồn tại và mọi
+  // lượt quét thật (POST /api/monitor/scan) trả 500 "Unknown column 'mode' in 'where clause'".
+  add("ALTER TABLE sources ADD COLUMN mode VARCHAR(20) NOT NULL DEFAULT 'rss'");
   // Đối tác bộ ngành (gov)
   add("ALTER TABLE organizations ADD COLUMN admin_level TEXT");
   add("ALTER TABLE organizations ADD COLUMN agency_block TEXT");
