@@ -675,7 +675,7 @@ Expected commit range/count: 3 commit độc lập (bookings-budgets / reports+F
 
 **Evidence Bundle**
 ```
-Batch-ID / commit range / HEAD: reports-awards / f40be9c..c0270a1 / c0270a1
+Batch-ID / commit range / HEAD: reports-awards / f40be9c^..c0270a1 / c0270a1
 Contract result: 21/21 route exit criterion PASS — mapping 79/145 green (66 TODO), 0 known-red sai nghĩa
 Changed files: product: server/routes.js (F14 fix, 4 dòng); test: 3 file mới
   (integration-bookings-budgets/integration-reports/integration-awards.test.js, 69 test);
@@ -699,12 +699,29 @@ Rollback path: revert 3 commit độc lập theo thứ tự ngược (c0270a1 ->
 Worktree status and unrelated pre-existing changes: sạch, chỉ `.DS_Store` không liên quan (không track)
 ```
 
-**READY FOR ONE-SHOT AUDIT — Batch reports-awards, commits f40be9c..c0270a1**
+**READY FOR ONE-SHOT AUDIT — Batch reports-awards, commits f40be9c^..c0270a1**
 Contract: PASS 21/21 exit criteria
 Tests: targeted từng commit đã pass lúc code; full MySQL 348 pass/1 skip; full SQLite 342 pass/7 skip;
   security 6/6; verify-g0.mjs PASS
 Hotspots: F14 (money aggregate type, đã fix), RBAC-forbidden mới (reports), file delete/upload (awards)
 Known gaps/backlog: F15 (FK MySQL không thực thi, P2, Wave 1)
 Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch reports-awards")
+
+**Codex ONE-SHOT AUDIT — Decision: ACCEPTED WITH BACKLOG**
+- Không P0/P1. 21/21 route được chấp nhận. F14 CLOSED (Codex xác nhận độc lập root cause mysql2
+  trả `SUM()` string + bản sửa cộng đúng). Focused audit: SQLite 69/69, MySQL 69/69, security 6/6,
+  verifier PASS. Không cần remediation hay re-audit batch này.
+- **F15 mở rộng theo Codex** (vẫn P2, nhưng phạm vi lớn hơn ghi nhận ban đầu): MySQL không chỉ cho
+  tạo `award_participations` mồ côi khi `award_id` không tồn tại — **xoá `awards` cũng KHÔNG cascade
+  xoá `award_participations` liên quan trên MySQL** (dù schema khai `ON DELETE CASCADE`), để lại
+  participation mồ côi vĩnh viễn thay vì chỉ tạm thời lúc insert sai. Wave 1 phải inventory FK toàn
+  schema (không chỉ bảng này) và sửa root cause tại tầng DB/migration, **không phải thêm `if` kiểm
+  tồn tại thủ công ở từng route** (route-level check chỉ vá triệu chứng, không đồng bộ hành vi 2
+  driver cho các quan hệ FK khác chưa được kiểm). Đã cập nhật `01-audit-findings.md` F15.
+- Doc nit không chặn (đã sửa trong bản này): commit range dùng `f40be9c^..c0270a1` (inclusive từ
+  commit đầu) thay vì `f40be9c..c0270a1` (loại mất `f40be9c`).
+- Báo cáo đầy đủ: `PR-WORKSTATION-CODEX-REPORTS-AWARDS-ONE-SHOT-AUDIT.md` (owner giữ ngoài repo).
+- **Batch reports-awards CLOSED. G1A.3 tiếp tục sang batch kế tiếp** (suppliers R072-R086, theo kế
+  hoạch ở `04-ROADMAP.md`).
 
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
