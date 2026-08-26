@@ -681,32 +681,38 @@ router.post('/budgets', requirePerm('reports', 'view'), (req, res) => {
 // =====================================================================
 //  REPORTS (Tab Báo cáo — chỉ lãnh đạo/quản lý)
 // =====================================================================
+// mysql2 trả SUM()/COUNT(CASE...) dạng string (DECIMAL/BIGINT) trong khi better-sqlite3 trả
+// number — bọc Number() cho field `key` trên từng dòng của mảng breakdown, để tránh tái diễn lớp
+// bug F14/F16 (nối chuỗi/so sánh sai khi client dùng giá trị này để tính tổng/sắp xếp/vẽ chart).
+function numField(rows, key = 'amount') { rows.forEach((r) => { r[key] = Number(r[key]); }); return rows; }
+
 router.get('/reports', requirePerm('reports', 'view'), (req, res) => {
   const from = req.query.from || '0000-01-01';
   const to = req.query.to || '9999-12-31';
   const bArgs = [from, to];
-  const spendByMonth = db.prepare(`SELECT substr(booked_date,1,7) period, SUM(amount) amount, COUNT(*) cnt
-    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY period ORDER BY period`).all(...bArgs);
-  const spendByOrg = db.prepare(`SELECT org_name name, SUM(amount) amount, COUNT(*) cnt
-    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY org_id ORDER BY amount DESC`).all(...bArgs);
-  const spendByPerson = db.prepare(`SELECT subject_name name, org_name, SUM(amount) amount, COUNT(*) cnt
-    FROM bookings WHERE status!='Hủy' AND subject_type='person' AND booked_date BETWEEN ? AND ? GROUP BY subject_id ORDER BY amount DESC`).all(...bArgs);
-  const spendByType = db.prepare(`SELECT content_type name, SUM(amount) amount, COUNT(*) cnt
-    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY content_type ORDER BY amount DESC`).all(...bArgs);
-  const spendByStaff = db.prepare(`SELECT COALESCE(u.full_name,'(Không rõ)') name, SUM(b.amount) amount, COUNT(*) cnt
+  const spendByMonth = numField(db.prepare(`SELECT substr(booked_date,1,7) period, SUM(amount) amount, COUNT(*) cnt
+    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY period ORDER BY period`).all(...bArgs));
+  const spendByOrg = numField(db.prepare(`SELECT org_name name, SUM(amount) amount, COUNT(*) cnt
+    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY org_id ORDER BY amount DESC`).all(...bArgs));
+  const spendByPerson = numField(db.prepare(`SELECT subject_name name, org_name, SUM(amount) amount, COUNT(*) cnt
+    FROM bookings WHERE status!='Hủy' AND subject_type='person' AND booked_date BETWEEN ? AND ? GROUP BY subject_id ORDER BY amount DESC`).all(...bArgs));
+  const spendByType = numField(db.prepare(`SELECT content_type name, SUM(amount) amount, COUNT(*) cnt
+    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY content_type ORDER BY amount DESC`).all(...bArgs));
+  const spendByStaff = numField(db.prepare(`SELECT COALESCE(u.full_name,'(Không rõ)') name, SUM(b.amount) amount, COUNT(*) cnt
     FROM bookings b LEFT JOIN users u ON u.id=b.created_by
-    WHERE b.status!='Hủy' AND b.booked_date BETWEEN ? AND ? GROUP BY b.created_by ORDER BY amount DESC`).all(...bArgs);
+    WHERE b.status!='Hủy' AND b.booked_date BETWEEN ? AND ? GROUP BY b.created_by ORDER BY amount DESC`).all(...bArgs));
   const totalSpend = db.prepare(`SELECT COALESCE(SUM(amount),0) s, COUNT(*) c FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ?`).get(...bArgs);
   totalSpend.s = Number(totalSpend.s);
-  const fulfillment = db.prepare(`SELECT status, COUNT(*) cnt, COALESCE(SUM(amount),0) amount FROM bookings WHERE booked_date BETWEEN ? AND ? GROUP BY status`).all(...bArgs);
+  const fulfillment = numField(db.prepare(`SELECT status, COUNT(*) cnt, COALESCE(SUM(amount),0) amount FROM bookings WHERE booked_date BETWEEN ? AND ? GROUP BY status`).all(...bArgs));
   const budget = { s: Number(db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM budgets WHERE period BETWEEN ? AND ?`).get(from.slice(0, 7), to.slice(0, 7)).s) };
 
   // Quan hệ
-  const tiers = db.prepare(`SELECT
+  const tiersRaw = db.prepare(`SELECT
       SUM(CASE WHEN relationship_score>=75 THEN 1 ELSE 0 END) t1,
       SUM(CASE WHEN relationship_score>=50 AND relationship_score<75 THEN 1 ELSE 0 END) t2,
       SUM(CASE WHEN relationship_score>=25 AND relationship_score<50 THEN 1 ELSE 0 END) t3,
       SUM(CASE WHEN relationship_score<25 THEN 1 ELSE 0 END) t4 FROM people`).get();
+  const tiers = { t1: Number(tiersRaw.t1) || 0, t2: Number(tiersRaw.t2) || 0, t3: Number(tiersRaw.t3) || 0, t4: Number(tiersRaw.t4) || 0 };
   const byBeat = db.prepare(`SELECT COALESCE(NULLIF(beat,''),'(Khác)') name, COUNT(*) cnt FROM people GROUP BY name ORDER BY cnt DESC`).all();
 
   // Rủi ro chăm sóc: lâu chưa tương tác
@@ -734,15 +740,15 @@ router.get('/reports', requirePerm('reports', 'view'), (req, res) => {
   };
 
   // Chi phí sự kiện (theo nhóm + theo sự kiện) — nối vào báo cáo cho chính xác
-  const evByCategory = db.prepare(`SELECT ec.category, COALESCE(SUM(ec.amount),0) amount FROM event_costs ec
-    JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ? GROUP BY ec.category`).all(from, to);
-  const evByEvent = db.prepare(`SELECT e.name, e.mode, COALESCE(SUM(ec.amount),0) amount FROM events e
-    LEFT JOIN event_costs ec ON ec.event_id=e.id WHERE e.start_time BETWEEN ? AND ? GROUP BY e.id ORDER BY amount DESC`).all(from, to);
+  const evByCategory = numField(db.prepare(`SELECT ec.category, COALESCE(SUM(ec.amount),0) amount FROM event_costs ec
+    JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ? GROUP BY ec.category`).all(from, to));
+  const evByEvent = numField(db.prepare(`SELECT e.name, e.mode, COALESCE(SUM(ec.amount),0) amount FROM events e
+    LEFT JOIN event_costs ec ON ec.event_id=e.id WHERE e.start_time BETWEEN ? AND ? GROUP BY e.id ORDER BY amount DESC`).all(from, to));
   const evTotal = Number(db.prepare(`SELECT COALESCE(SUM(ec.amount),0) s FROM event_costs ec JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ?`).get(from, to).s);
 
   // Hội phí hiệp hội (theo hạn đóng trong kỳ)
-  const feeByOrg = db.prepare(`SELECT o.name, COALESCE(SUM(f.amount),0) amount FROM association_fees f JOIN organizations o ON o.id=f.org_id
-    WHERE f.due_date BETWEEN ? AND ? GROUP BY f.org_id ORDER BY amount DESC`).all(from, to);
+  const feeByOrg = numField(db.prepare(`SELECT o.name, COALESCE(SUM(f.amount),0) amount FROM association_fees f JOIN organizations o ON o.id=f.org_id
+    WHERE f.due_date BETWEEN ? AND ? GROUP BY f.org_id ORDER BY amount DESC`).all(from, to));
   const feeTotal = Number(db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM association_fees WHERE due_date BETWEEN ? AND ?`).get(from, to).s);
 
   res.json({
@@ -766,11 +772,14 @@ router.get('/reports/by-staff', requirePerm('reports', 'view'), (req, res) => {
     const orgs = cnt('org', u.id), people = cnt('person', u.id), awards = cnt('award', u.id);
     const spend = db.prepare(`SELECT COALESCE(SUM(amount),0) s, COUNT(*) c FROM bookings WHERE created_by=? AND status!='Hủy' AND booked_date BETWEEN ? AND ?`).get(u.id, from, to);
     const inter = db.prepare('SELECT COUNT(*) c FROM interactions WHERE created_by=? AND date BETWEEN ? AND ?').get(u.id, from, to).c;
-    const avg = db.prepare(`SELECT ROUND(AVG(p.relationship_score)) a FROM assignments x JOIN people p ON p.id=x.subject_id WHERE x.user_id=? AND x.subject_type='person'`).get(u.id).a;
+    const avgRaw = db.prepare(`SELECT ROUND(AVG(p.relationship_score)) a FROM assignments x JOIN people p ON p.id=x.subject_id WHERE x.user_id=? AND x.subject_type='person'`).get(u.id).a;
     // đầu mối người được giao quá 30 ngày không tương tác
     const overdue = db.prepare(`SELECT COUNT(*) c FROM assignments x JOIN people p ON p.id=x.subject_id WHERE x.user_id=? AND x.subject_type='person'
       AND COALESCE((SELECT MAX(date) FROM interactions i WHERE i.partner_type='person' AND i.partner_id=p.id),'0000') < date('now','-30 day')`).get(u.id).c;
-    return { id: u.id, full_name: u.full_name, role: u.role, orgs, people, awards, assigned: orgs + people + awards, spend: spend.s, bookings: spend.c, interactions: inter, avgScore: avg, overdue };
+    // mysql2 trả SUM()/AVG() dạng string (DECIMAL) trong khi better-sqlite3 trả number — Number()
+    // để tránh tái diễn lớp bug F14/F16 (nối chuỗi thay vì cộng số khi client dùng spend để tính
+    // toán tiếp). avgScore giữ null khi không có đầu mối (AVG rỗng), không ép về 0 gây sai lệch.
+    return { id: u.id, full_name: u.full_name, role: u.role, orgs, people, awards, assigned: orgs + people + awards, spend: Number(spend.s), bookings: spend.c, interactions: inter, avgScore: avgRaw == null ? null : Number(avgRaw), overdue };
   }).filter((r) => r.assigned > 0 || r.spend > 0 || r.interactions > 0).sort((a, b) => b.assigned - a.assigned);
   res.json({ rows });
 });
@@ -785,7 +794,8 @@ router.get('/reports/by-unit', requirePerm('reports', 'view'), (req, res) => {
       (SELECT MAX(date) FROM interactions i WHERE i.partner_type='org' AND i.partner_id=o.id) last_inter,
       (SELECT COUNT(*) FROM people p WHERE p.org_id=o.id) people_cnt
     FROM organizations o ORDER BY spend DESC, inter_cnt DESC`).all(from, to, from, to, from, to);
-  rows.forEach((r) => { r.caretakers = getCaretakers('org', r.id).map((u) => u.full_name); });
+  // mysql2 trả SUM() dạng string (DECIMAL) — Number() để tránh tái diễn lớp bug F14/F16.
+  rows.forEach((r) => { r.spend = Number(r.spend); r.caretakers = getCaretakers('org', r.id).map((u) => u.full_name); });
   res.json({ rows });
 });
 
@@ -796,7 +806,10 @@ router.get('/reports/awards', requirePerm('reports', 'view'), (req, res) => {
   const awards = db.prepare('SELECT * FROM awards ORDER BY submission_deadline').all();
   const rows = awards.map((a) => {
     const parts = db.prepare('SELECT * FROM award_participations WHERE award_id=? AND year BETWEEN ? AND ? ORDER BY year DESC').all(a.id, yFrom, yTo);
-    const mediaCost = db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM bookings WHERE award_id=? AND status!='Hủy'`).get(a.id).s;
+    // mysql2 trả SUM() dạng string (DECIMAL) — Number() ở đây để tránh tái diễn lớp bug F14/F16:
+    // awardCostOf() cộng mediaCost trực tiếp vào totalCost (cost + partBudget + mediaCost), nếu
+    // mediaCost là string thì "+" sẽ nối chuỗi thay vì cộng số (vd totalCost="0300000" thay vì 300000).
+    const mediaCost = Number(db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM bookings WHERE award_id=? AND status!='Hủy'`).get(a.id).s);
     const { cost, partBudget, totalCost } = awardCostOf(a, parts, mediaCost);
     return {
       id: a.id, name: a.name, organizer: a.organizer, status: a.status, scope: a.scope,
