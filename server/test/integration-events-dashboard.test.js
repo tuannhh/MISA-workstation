@@ -318,8 +318,11 @@ test('R098 happy: charts.*Monthly là mảng 12 phần tử, mọi phần tử l
 });
 test('R098 happy: charts.assocActivityMonthly có phần tử number ĐÚNG khi thực sự có dữ liệu khớp tháng hiện tại (bug F14-style chỉ lộ khi SUM() gộp ≥1 dòng thật, không lộ lúc mảng toàn 0 mặc định — seed dữ liệu để không bỏ sót)', async () => {
   const org = await (await call('POST', '/api/partners', { body: { name: `Hiệp hội chart ${Date.now()}`, org_type: 'association' } })).json();
-  const today = new Date().toISOString().slice(0, 10);
-  const thisMonth = Number(today.slice(5, 7));
+  // Dùng cùng mốc giờ Hà Nội (GMT+7) như production (routes.js: `new Date(Date.now() + 7 * 3600 * 1000)`)
+  // — nếu seed theo UTC, gần nửa đêm VN 2 mốc có thể lệch tháng/ngày, khiến test flaky dù code đúng.
+  const hanoiNow = new Date(Date.now() + 7 * 3600 * 1000);
+  const today = hanoiNow.toISOString().slice(0, 10);
+  const thisMonth = hanoiNow.getUTCMonth() + 1;
   await call('POST', '/api/interactions', { body: { partner_type: 'org', partner_id: org.id, date: today, summary: 'x' } });
   const body = await (await call('GET', '/api/dashboard')).json();
   const arr = body.charts.assocActivityMonthly;

@@ -872,4 +872,30 @@ Hotspots: F16 (SUM() type trên MySQL, cùng root cause F14, đã fix + test see
 Known gaps/backlog: F15 (không đổi — vẫn P2/Wave 1, evidence mở rộng lên 5 quan hệ FK)
 Evidence Bundle: mục này (`15-changelog.md`, entry 2026-08-26 "Batch events-dashboard")
 
+**Auditor ONE-SHOT AUDIT (ChatGPT thay Codex CLI hết token, cùng vai trò/luồng làm việc, xem
+[[pr-workstation-fasttrack-branch-push]]) — Decision: ACCEPT — PASS WITH 1 MINOR TEST ISSUE**
+- F16 fix ĐÚNG hướng: chuẩn hoá tại tầng helper dùng chung (`one`/`grouped`/`monthly`) tốt hơn chỉ
+  vá field đang lỗi, vì tự động bảo vệ cả các aggregate tương lai nếu đổi từ `COUNT()` sang `SUM()`.
+  Giữ nguyên (KEEP), không rollback.
+- Test regression `assocActivityMonthly` được đánh giá thiết kế tốt: tránh false-green khi dataset
+  rỗng bằng cách chủ động seed dữ liệu khớp tháng hiện tại thay vì dựa vào giá trị mặc định 0.
+- F15 evidence đáng tin cậy, đủ để coi là **vấn đề hệ thống ở tầng schema/migration MySQL** (5 quan
+  hệ FK: `award_participations`, `supplier_quotes`, `supplier_transactions`, `supplier_contacts`,
+  `event_costs`). Xác nhận lại yêu cầu Wave 1: **không** sửa bằng cách thêm DELETE thủ công dọn dẹp
+  từng route (`DELETE FROM event_costs WHERE event_id=?` trước `DELETE FROM events...`) làm giải
+  pháp chính — phải inventory FK toàn schema, so sánh SQLite vs MySQL schema thật, kiểm MySQL có tạo
+  constraint hay không, root-cause + sửa tại tầng migration, rồi thêm test xác minh schema-level.
+- `GET /api/dashboard` xác nhận vẫn có `router.use(requireAuth)` bảo vệ dù route không khai
+  `requirePerm` module — không có regression lộ public-access.
+- **Finding D (Low, đã sửa trong bản này):** test R098 seed `assocActivityMonthly` dùng mốc giờ UTC
+  (`new Date().toISOString()`) trong khi production tính "tháng hiện tại" theo giờ Hà Nội GMT+7
+  (`new Date(Date.now() + 7*3600*1000)`, `routes.js`) — gần nửa đêm VN 2 mốc có thể lệch ngày/tháng,
+  khiến test flaky dù code sản phẩm đúng. Đã sửa test dùng cùng mốc `hanoiNow` như production. Không
+  chặn batch (non-blocking), sửa ngay theo đúng khuyến nghị "Must do" của audit.
+- Audit note: GitHub không có commit status/check cho SHA này nên auditor không tự chạy lại được
+  full regression qua CI, chỉ xác nhận qua đọc code + số liệu Claude báo cáo — không phải batch fail,
+  chỉ là giới hạn evidence, không cần xử lý thêm.
+- **Batch events-dashboard CLOSED (ACCEPT). G1A.3 tiếp tục sang batch kế tiếp** (monitor phần 1
+  R104-R120).
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
