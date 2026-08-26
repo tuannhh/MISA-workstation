@@ -23,6 +23,7 @@
 | [14-known-traps.md](14-known-traps.md) | G0.2 — bẫy kỹ thuật đã biết (khác audit findings) |
 | [15-changelog.md](15-changelog.md) | G0.2 — lịch sử phát triển theo mốc kiến trúc/tính năng, kèm lý do |
 | [16-coding-rules.md](16-coding-rules.md) | G0.2 — §A quy tắc/pattern legacy (mô tả, không phải chuẩn) + **§B quy tắc BẮT BUỘC cho code mới** (thêm 2026-08-25 theo Codex C0.4.9) |
+| [17-fast-track-collaboration.md](17-fast-track-collaboration.md) | Protocol owner-approved để Claude triển khai theo batch và Codex audit theo rủi ro: Batch Contract, Evidence Bundle, test checkpoints, severity/gate và phân công UI |
 
 ## Tổng quan sản phẩm (1 đoạn)
 

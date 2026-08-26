@@ -628,4 +628,17 @@ trò và định tuyến sang `G1B.4`/`W1.AI-POLICY`, không bị sửa lẫn v�
   `test:integration:sqlite` 273 pass+7 skip, `test:integration:mysql` 279 pass+1 skip,
   `verify-g0.mjs` + self-test PASS, `git diff --check` sạch.
 
+## 2026-08-26 — Owner duyệt Fast-track protocol Claude ↔ Codex
+- Thêm `CLAUDE.md` ở root để Claude Code luôn được dẫn tới quy trình bắt buộc, và thêm
+  `17-fast-track-collaboration.md` làm nguồn sự thật cho cách phối hợp từ phần còn lại của G1A.3:
+  bàn giao theo batch thay vì từng commit, chốt Batch Contract trước code, Evidence Bundle trước
+  audit, Codex audit theo rủi ro và chỉ P0/P1 hoặc exit criterion chưa đạt mới giữ gate.
+- Tốc độ được cải thiện bằng targeted test trong các commit trung gian và full regression đúng một
+  lần trước handoff; không bỏ full regression, không hạ chuẩn security/resilience. P2/P3 đi backlog
+  thay vì mở remediation riêng. Phân công hiện tại được ghi rõ: Claude phụ trách backend/kiến
+  trúc/test, Codex phụ trách UI/MDS theo quyết định owner.
+- Cập nhật mục lục `memory-bank/README.md` và neo quy tắc từ `16-coding-rules.md` §C. Đây là thay đổi
+  tài liệu/process thuần, không tác động code/test contract; verify bằng `verify-g0.mjs` (0 broken
+  link, toàn bộ check PASS) và `git diff --check` sạch.
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

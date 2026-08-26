@@ -78,3 +78,7 @@ Mọi cột ngày (`event_date`, `booked_date`, `due_date`, `start_time`…) kha
 6. **Không dùng `dropAll()`/`RESET_DB=1`/`npm run seed` hiện tại làm cơ chế reset cho bất kỳ migration/redesign mới nào** (xem `09-db-schema.md` §E, `04-ROADMAP.md` W1.RBAC.0) — hàm này xoá 28/34 bảng, không sạch hoàn toàn.
 7. **Route/action mới có side-effect ghi phải dùng tên action tường minh** (`create`/`edit`/`delete`/`ack`/`notify`/`run`…), không tái dùng `view` cho hành động có ghi dữ liệu (N1, đã RESOLVED — xem `02-decisions.md` §B.1).
 8. **Verify/smoke thủ công (chạy `node server/index.js` tay để kiểm tra) phải tự set `DATA_DIR` trỏ vào thư mục tạm** (vd `DATA_DIR=$(mktemp -d)`) và tự xoá thư mục đó sau khi xong — không chạy trực tiếp lên `data/pr.db` dev thật của máy, dù chỉ đọc/login. Nếu đã lỡ ghi vào `data/pr.db` thật, KHÔNG dùng `npm run seed` để "làm sạch" — đó là thao tác reseed/destructive không tương xứng với vài dòng log lỡ ghi thêm (Codex G1A1-audit N1).
+
+## §C. Quy trình phối hợp và quality gate bắt buộc
+
+Từ 2026-08-26, mọi batch triển khai/audit phải tuân theo [`17-fast-track-collaboration.md`](17-fast-track-collaboration.md): chốt Batch Contract trước code, Claude bàn giao một Evidence Bundle cho toàn batch, Codex audit theo rủi ro, và chỉ P0/P1 hoặc exit criterion chưa đạt mới giữ gate. Quy tắc này tối ưu số vòng phối hợp; **không** miễn full regression trước handoff và không hạ chuẩn bảo mật/chịu lỗi của `BackEnd.SKILL`.
