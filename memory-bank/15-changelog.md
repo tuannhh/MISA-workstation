@@ -1098,4 +1098,63 @@ IS VALIDLY CLOSED** (closure HEAD `227a33c`, product range `13501da..4d133d9`)
   G1A.6/G1.8 + verifier). Chỉ sau khi cả 2 bundle này đạt exit gate mới được coi G1A/Gate 1 CLOSE.
 - **Batch monitor-2+ai+F18 CLOSED (ACCEPT). Chuyển sang Bundle A.**
 
+### Bundle A phần 1 — jobs (JOB-REMINDER + JOB-MONITOR-SCAN), 2026-08-26
+
+**Batch Contract:** G1A.4 (concurrency/idempotency characterization của `reminder_log` check-then-
+insert race, R3-02C) + G1A.8 (background job side-effect DB thật — `scheduler.runOnce()` và
+`monitor.runScan()/applySchedule()` — không chỉ verify qua route HTTP). Theo amendment §14, đây là
+sub-batch đầu tiên của Bundle A (jobs/concurrency/DB contract/AI golden/security target), gộp
+handoff cùng các sub-batch còn lại của Bundle A trước khi gửi audit một lần.
+
+**Nội dung:** file mới `server/test/integration-jobs.test.js` (6 test, gọi thẳng hàm job, không
+qua route HTTP):
+- `JOB-REMINDER` happy: `scheduler.runOnce()` sinh đúng dòng `reminder_log` (in-app) đúng
+  `occur_date`/`seq`, `emailed=0` vì `mailer.enabled()=false` trong test (không cấu hình SMTP).
+- `JOB-REMINDER` happy: gọi `runOnce()` lần 2 ngay sau (tuần tự) không tạo dòng trùng — check-then-
+  insert an toàn khi tuần tự (không có race trong 1 process vì không có điểm yield giữa SELECT-check
+  và INSERT).
+- `JOB-REMINDER` CHARACTERIZATION (G1A.4, R3-02C — xác nhận hành vi HIỆN TẠI CÓ RACE, không phải
+  test hành vi đích): chèn trực tiếp 2 dòng `reminder_log` giống hệt nhau (cùng
+  `date_id,occur_date,seq,channel,recipient_user_id`) — DB KHÔNG báo lỗi vì không có ràng buộc
+  UNIQUE (chỉ có index thường `idx_remlog(date_id,occur_date,seq)`, thiếu `channel`/
+  `recipient_user_id`). Đây là bằng chứng DB-level trực tiếp cho tiền đề race đã ghi ở
+  `11-business-flows.md` §E — không mô phỏng race đồng thời thật (không khả thi trong 1 tiến trình
+  Node đơn luồng với code không có `await` giữa check và insert).
+- `JOB-REMINDER` happy: `notify_repeat_count>1` sinh đủ các `seq` khi tất cả đều đến hạn.
+- `JOB-MONITOR-SCAN` happy (network-safe): `monitor.runScan({triggeredBy:'auto'})` KHÔNG truyền
+  `queryIds` — đúng đường job tự động thật (khác route thủ công `POST /monitor/scan` luôn yêu cầu
+  `query_ids` tường minh, 400 nếu rỗng) — characterize đúng hành vi "auto job quét TẤT CẢ
+  `scan_queries` đang `enabled=1`". An toàn mạng bằng cách tắt hết `sources` + rỗng `include`/
+  `grounding=0` của `scan_queries` (không gọi mạng thật). Verify `scan_runs.queries` = đúng số query
+  enabled, `status='done'`, `fetched=0`, `new_mentions=0`.
+- `JOB-MONITOR-SCAN` happy: `monitor.applySchedule()` gọi lặp lại (bật autoscan 3 lần liên tiếp)
+  không leak timer — theo dõi `setInterval`/`clearInterval` thật: 3 lần tạo timer, 2 lần clear (lần
+  đầu chưa có timer cũ để clear vì `timer=null` lúc module mới load).
+
+Không có bug code nào được phát hiện trong batch này — thuần characterization theo đúng scope đã
+audit-approved (G1A.4 chỉ yêu cầu xác nhận race hiện tại, không sửa; G1A.8 chỉ yêu cầu verify side-
+effect, không đổi hành vi job).
+
+**Evidence:**
+```
+DB_CLIENT=sqlite node --test server/test/integration-jobs.test.js -> 6 pass, 0 fail
+DB_CLIENT=mysql ALLOW_TEST_DB_CREATE=1 node --test server/test/integration-jobs.test.js -> 6 pass, 0 fail
+npm run test:integration:sqlite -> 554 pass, 0 fail, 7 skip (561 total)
+npm run test:integration:mysql -> 560 pass, 0 fail, 1 skip (561 total)
+npm run test:security -> 6 pass, 0 fail
+node scripts/verify-g0.mjs -> PASS toàn bộ 7 check
+```
+Mapping: `gate1-test-mapping.md` — `JOB-REMINDER` và `JOB-MONITOR-SCAN` chuyển từ `TODO` sang
+`green`. Không còn dòng `TODO` nào thuộc phạm vi route/job đã lên khung ở G1A.9 ngoài các mục
+target thật (AI golden set G1A.7, security target G1B, UI/E2E Bundle B).
+
+Rollback path: revert 1 commit độc lập (chỉ thêm file test mới + 2 dòng mapping/roadmap, không đổi
+code sản phẩm).
+
+Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
+
+**Chưa gửi audit** — theo amendment §14, chờ gộp tiếp các sub-batch còn lại của Bundle A (DB
+contract G1A.5, AI golden set G1A.7, security target tests G1B) thành 1 Evidence Bundle trước khi
+audit một lần.
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**

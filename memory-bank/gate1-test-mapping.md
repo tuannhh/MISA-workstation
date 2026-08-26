@@ -188,8 +188,8 @@
 | R143 | R143 | green | server/test/integration-auth-admin.test.js | happy/invalid (không có :id -> không case not-found; đây là route đăng nhập nên "unauthenticated" không áp dụng) |
 | R144 | R144 | green | server/test/integration-auth-admin.test.js | happy + CHARACTERIZATION (route không gắn requireAuth — logout không cookie vẫn 200 ok:true) |
 | R145 | R145 | green | server/test/integration-auth-admin.test.js | happy/unauthenticated (không có :id/body -> không case invalid/not-found) |
-| JOB-REMINDER | — | TODO | — | scheduler.js runOnce() — G1A.4 (race hiện tại)/G1A.8 |
-| JOB-MONITOR-SCAN | — | TODO | — | monitor.js runScan()/applySchedule() — G1A.8 |
+| JOB-REMINDER | — | green | server/test/integration-jobs.test.js | happy(tạo log in-app đúng ngày/seq, emailed=0 vì mailer tắt trong test)/happy(gọi tuần tự lần 2 idempotent, không trùng)/CHARACTERIZATION G1A.4 R3-02C(reminder_log KHÔNG có UNIQUE trên date_id+occur_date+seq+channel+recipient_user_id -> DB cho phép chèn 2 dòng trùng hệt, xác nhận tiền đề race hiện tại, KHÔNG phải test hành vi đích)/happy(notify_repeat_count>1 sinh đủ seq) |
+| JOB-MONITOR-SCAN | — | green | server/test/integration-jobs.test.js | happy network-safe(runScan({triggeredBy:'auto'}) không truyền queryIds -> quét TẤT CẢ scan_queries enabled, khác route thủ công luôn yêu cầu query_ids)/happy(applySchedule() gọi lặp lại không leak timer — clearInterval() timer cũ trước khi tạo mới) |
 | BR-VAL-001 | BR-VAL-001 | green | server/test/unit-validation-formatter.test.js | rbac.js can() — matrix lookup + role/action lạ -> false |
 | BR-VAL-002 | BR-VAL-001 | green | server/test/unit-validation-formatter.test.js | rbac.js can() — module có nhưng action không nằm trong danh sách (cùng test BR-VAL-001, 1 test nhiều assert) |
 | BR-VAL-003 | BR-VAL-001 | green | server/test/unit-validation-formatter.test.js | rbac.js can() — role không tồn tại trong MATRIX (cùng test BR-VAL-001) |
