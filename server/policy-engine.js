@@ -17,6 +17,7 @@ const FIELD_TIER = Object.freeze({
 
 function classification(entity, field) { return FIELD_TIER[entity]?.[field] || 'Public'; }
 function isPrivileged(principal) { return PRIVILEGED.has(principal?.role); }
+function isDirectEntity(entity) { return DIRECT.has(entity); }
 function ownerValue(entity, record) { return entity === 'gift' ? record?.responsible_user_id : record?.owner_id; }
 
 function canWrite({ principal, entity, action, record }) {
@@ -40,4 +41,4 @@ function canReadField({ principal, entity, field, record, isPublic = false }) {
   return !!isPublic && tier === 'Public';
 }
 
-module.exports = { TIER, FIELD_TIER, classification, canWrite, canReadField, ownerValue };
+module.exports = { TIER, FIELD_TIER, classification, isPrivileged, isDirectEntity, canWrite, canReadField, ownerValue };

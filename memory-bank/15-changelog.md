@@ -1275,3 +1275,10 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   công khai chúng chỉ qua `field_visibility`.
 - Regression D13-001/D13-007 bao phủ đủ representative Confidential và Restricted fields. Chưa có
   route runtime nào sử dụng field visibility ở slice này.
+
+### 2026-08-27 — W1.POLICY service choke point foundation
+
+- Thêm `policy-service` dùng chung cho vertical slice: server tự gán owner lúc tạo record direct,
+  `created_by` bất biến, chuyển owner chỉ Admin/Super Admin, và projection lọc field trước khi trả
+  response. Mọi deny là lỗi tường minh để handler trả 403, không xoá field âm thầm.
+- Tests D13-008..010 xanh. Chưa wire route legacy; bước tiếp theo là pilot People Detail dual-driver.
