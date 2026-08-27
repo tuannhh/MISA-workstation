@@ -1157,4 +1157,77 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
 contract G1A.5, AI golden set G1A.7, security target tests G1B) thành 1 Evidence Bundle trước khi
 audit một lần.
 
+### Bundle A phần 2 — AI golden set (G1A.7), BÀN GIAO Codex (hết token phiên Claude), 2026-08-26
+
+**Batch Contract:** G1A.7 — AI golden set cho ĐỦ 12 luồng egress Gemini (`06-threat-model.md` §A,
+AI-E001..AI-E012), dùng fake/fixture (KHÔNG gọi Gemini/Internet thật), cộng malformed/timeout/quota.
+Owner đã chốt phạm vi Bundle A ở tin nhắn trước: G1A.4+G1A.5+G1A.7+G1A.8 là test cho code hiện hữu,
+"phải GREEN"; G1B (RBAC v2/session/SSRF target) là spec-first riêng, CHƯA làm ở batch này.
+
+**Nội dung:** file mới `server/test/integration-ai-golden.test.js` (22 test). Kỹ thuật cách ly mạng:
+`process.env.GEMINI_API_KEY` set TRƯỚC mọi require (mỗi file test là 1 subprocess riêng theo quy
+ước `node --test server/test/*.test.js`, không ảnh hưởng file khác đang characterize nhánh
+không-key); `global.fetch` thay bằng hàng đợi (queue) response cố định theo ĐÚNG thứ tự lời gọi
+mạng thật của từng luồng (kể cả lời gọi không phải Gemini — `resolveLink()`, URL-fetch trực tiếp
+trong award-extract nhánh url) — lời gọi vượt hàng đợi throw ngay, đảm bảo không lọt ra mạng thật.
+`realFetch` (fetch gốc, lưu TRƯỚC khi mock) dùng riêng để gọi vào chính server test cục bộ, tách
+biệt khỏi `global.fetch` bị mock dùng cho lời gọi ra ngoài của server — nhầm lẫn 2 cái này ban đầu
+khiến toàn bộ 18 test lỗi `.listen undefined`, đã sửa.
+
+**Kết quả:**
+```
+DB_CLIENT=sqlite node --test server/test/integration-ai-golden.test.js -> 18 pass, 0 fail
+DB_CLIENT=mysql ALLOW_TEST_DB_CREATE=1 node --test server/test/integration-ai-golden.test.js -> 15 pass, 3 fail
+npm run test:integration:sqlite -> 572 pass, 0 fail, 7 skip (579 total, có file mới)
+npm run test:integration:mysql -> 575 pass, 3 fail, 1 skip (579 total)
+```
+**MySQL 3 fail là bug THẬT, không phải lỗi viết test — đã xác nhận trực tiếp, không suy đoán:**
+- **F19** (P1, root cause đã xác định rõ, CHƯA SỬA): `POST /ai/interaction-voice` (AI-E001) trả 502
+  `Unknown collation: 'NOCASE'` — `ai.js:26,30` (`matchPerson`/`matchOrg`) dùng `COLLATE NOCASE`
+  (cú pháp SQLite) trên MySQL không hỗ trợ. Route hỏng bất kỳ khi nào Gemini trả `person_name`/
+  `org_name` khác rỗng (gần như luôn luôn — đúng mục đích route). Hướng sửa đã đề xuất ở
+  `01-audit-findings.md` §F19 (bỏ `COLLATE NOCASE` hoặc thêm rule dịch vào `mysql-sync.js
+  translate()`), CHƯA thực thi.
+- **F20** (nghi vấn, CHƯA XÁC ĐỊNH ROOT CAUSE): `groundIngest()`/`siteGroundIngest()` (AI-E008/
+  AI-E009) báo `added>0` (ghi thành công) nhưng `SELECT ... WHERE query_id=?` NGAY SAU không thấy
+  dòng vừa lưu — CHỈ trên MySQL, SQLite ổn định 100%. Đã loại trừ lỗi cú pháp SQL bị nuốt (thêm log
+  trực tiếp vào `saveMention()` không in ra gì) và lỗi FK (đã xác nhận dòng `scan_queries` cha tồn
+  tại thật trước khi insert). Có dấu hiệu KHÔNG ổn định giữa các lần chạy y hệt — nghi cơ chế đồng
+  bộ hoá worker thread của `mysql-worker.js`/`mysql-sync.js`. **CHƯA đủ bằng chứng kết luận** đây là
+  bug hẹp (riêng `saveMention()`) hay bug RỘNG (mọi ghi-rồi-đọc-ngay trên MySQL) — cần Codex đọc kỹ
+  `mysql-worker.js` (đường đi `run()`/`get()`/`all()` qua worker thread có đúng đợi ghi xong trước
+  khi trả `changes` không) trước khi vá.
+
+Không sửa code sản phẩm trong batch này (chỉ thêm test) — theo đúng nguyên tắc thà bàn giao nguyên
+trạng với bằng chứng đầy đủ còn hơn vá vội khi chưa hiểu hết root cause của F20 (rủi ro vá sai vị
+trí nếu F20 thực ra là lỗi hạ tầng rộng).
+
+Mapping: `gate1-test-mapping.md` — dòng `AI-E001..E012 (G1A.7 AI golden set)` set **PARTIAL**
+(không phải `green`, không phải `TODO`) — mô tả rõ SQLite green/MySQL red + trỏ `01-audit-findings.md`
+§F19/§F20. `04-ROADMAP.md` G1A.7 cập nhật cùng nội dung, đánh dấu **KHÔNG được coi CLOSE**.
+
+**BÀN GIAO CODEX (owner hết token quota phiên Claude, chuyển tiếp — KHÔNG phải audit-closure bundle,
+đây là bàn giao công việc DANG DỞ):**
+1. Sửa **F19** (thấp rủi ro, root cause rõ) — bỏ `COLLATE NOCASE` hoặc thêm rule dịch, chạy lại
+   `integration-ai-golden.test.js` cả 2 driver tới khi AI-E001 xanh.
+2. Điều tra **F20** tới khi xác định rõ root cause (đọc `mysql-worker.js`) — QUAN TRỌNG: nếu xác
+   nhận đây là lỗi rộng ở tầng `mysql-worker.js`/`mysql-sync.js` (không riêng `saveMention()`), phải
+   nâng mức độ ưu tiên vì có thể ảnh hưởng bất kỳ route/job nào ghi-rồi-đọc-ngay trên MySQL — không
+   chỉ vá riêng `groundIngest()`.
+3. Sau khi cả 2 fix xong + `integration-ai-golden.test.js` đạt 18/18 cả 2 driver, chạy lại full
+   regression 1 lần (SQLite/MySQL/security/verify-g0.mjs), cập nhật mapping G1A.7 thành `green`.
+4. Tiếp tục G1A.5 (DB contract dual-driver) — CHƯA làm ở phiên này; lưu ý F20 có thể là tiền đề
+   quan trọng cho thiết kế test G1A.5 (nếu F20 là bug hạ tầng thật, DB contract cần test riêng cho
+   đúng tình huống ghi-rồi-đọc-ngay).
+5. G1B (RBAC v2 D13 target-red + session F2 + SSRF F3) theo đúng phạm vi owner đã chốt: chỉ viết
+   target specification test (CHƯA implement feature), tách CI `security-gap` riêng khỏi
+   `regression`, đối chiếu allowlist {finding/decision ID, owner, expiry=Wave 1} — CHƯA bắt đầu.
+6. Theo amendment §14: Bundle A vẫn CHƯA gửi audit (đang dở dang G1A.5/G1B) — chỉ gửi 1 Evidence
+   Bundle khi TOÀN BỘ Bundle A (G1A.4/G1A.5/G1A.7/G1A.8 + G1B.1/G1B.3/G1B.4 target-spec) hoàn tất.
+
+Rollback path: revert 1 commit độc lập (chỉ thêm file test mới + cập nhật mapping/roadmap/findings,
+không đổi code sản phẩm — an toàn revert bất kỳ lúc nào).
+
+Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
+
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
