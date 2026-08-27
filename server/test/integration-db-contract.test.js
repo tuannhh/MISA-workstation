@@ -16,7 +16,7 @@ const TABLES = [
   'award_participations', 'assignments', 'suppliers', 'supplier_quotes', 'events',
   'event_costs', 'association_fees', 'agreements', 'work_logs', 'gifts', 'benefit_usages',
   'supplier_transactions', 'supplier_contacts', 'scan_queries', 'sources', 'mentions',
-  'competitors', 'monitor_alerts', 'scan_runs', 'sentiment_audit', 'app_meta', 'campaigns',
+  'competitors', 'monitor_alerts', 'scan_runs', 'sentiment_audit', 'app_meta', 'campaigns', 'field_visibility',
 ];
 
 // Các cột này đại diện cho schema gốc + các migration từng gây lỗi thực tế. Không lặp toàn bộ
@@ -25,6 +25,7 @@ const REQUIRED_COLUMNS = {
   users: ['id', 'username', 'password_hash', 'full_name', 'role', 'sensitive_perms', 'email', 'notify_opt_in'],
   organizations: ['id', 'name', 'org_type', 'membership_fee'],
   people: ['id', 'org_id', 'full_name', 'phone_other', 'assoc_events', 'assoc_awards'],
+  attachments: ['id', 'owner_type', 'owner_id', 'kind', 'audience_visibility'],
   bookings: ['id', 'title', 'amount', 'award_id', 'event_id'],
   reminder_log: ['id', 'date_id', 'occur_date', 'seq', 'channel', 'recipient_user_id'],
   sources: ['id', 'name', 'enabled', 'auto', 'mode'],
@@ -75,8 +76,16 @@ function columnNames(table) {
   return db.prepare(`PRAGMA table_info(\`${table}\`)`).all().map((row) => row.name);
 }
 
-test('DB-CONTRACT-001: canonical schema có đủ 34 bảng trên cả hai driver', () => {
+test('DB-CONTRACT-001: canonical schema có đủ 35 bảng trên cả hai driver', () => {
   assert.deepEqual(new Set(tableNames()), new Set(TABLES));
+});
+
+test('DB-CONTRACT-005: field_visibility unique theo module+field và mặc định private', () => {
+  const insert = db.prepare('INSERT INTO field_visibility (module,field) VALUES (?,?)');
+  insert.run('partners', 'bank_account_number');
+  const row = db.prepare('SELECT is_public FROM field_visibility WHERE module=? AND field=?').get('partners', 'bank_account_number');
+  assert.equal(Number(row.is_public), 0);
+  assert.throws(() => insert.run('partners', 'bank_account_number'), /duplicate|unique|UNIQUE|constraint/i);
 });
 
 test('DB-CONTRACT-002: các cột lõi và migration quan trọng tồn tại', () => {

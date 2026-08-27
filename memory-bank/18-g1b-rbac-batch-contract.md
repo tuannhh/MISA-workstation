@@ -25,3 +25,8 @@
 - `npm run rbac:preflight` chạy **read-only**, không import `server/db.js` để tránh seed/migrate vô tình.
 - Kết quả SQLite local 2026-08-27: chưa sẵn sàng flip fail-closed — thiếu `owner_id` ở 13/14 resource direct (cột `gifts.owner_id` hiện là chủ thể nhận quà, không phải staff owner), attachment chưa có `audience_visibility`, chưa có bảng `field_visibility`.
 - Production/MySQL phải chạy lại đúng lệnh với biến `MYSQL_*`; lưu JSON artifact + backup reference trước khi bước migration bắt đầu.
+
+### Slice schema 1 — 2026-08-27
+
+- `field_visibility(module, field, is_public)` có unique key, default private; attachment thêm `audience_visibility='private'` cho cả DB mới và DB nâng cấp.
+- Chưa có route nào đọc hai giá trị này; PolicyEngine/backfill owner là slice sau. Vì vậy migration này additive, không làm lộ dữ liệu hoặc đổi quyền runtime.

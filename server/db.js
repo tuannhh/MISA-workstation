@@ -91,6 +91,7 @@ function init() {
     filename TEXT NOT NULL,    -- tên file lưu trên đĩa
     original_name TEXT,
     mime TEXT,
+    audience_visibility TEXT NOT NULL DEFAULT 'private', -- D13: public/private, server enforces ceiling
     is_primary INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -516,6 +517,16 @@ function init() {
     \`key\` TEXT PRIMARY KEY,
     value TEXT
   );
+  -- D13: cấu hình hiển thị theo field. Thiếu dòng luôn được PolicyEngine coi là private.
+  CREATE TABLE IF NOT EXISTS field_visibility (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    module TEXT NOT NULL,
+    field TEXT NOT NULL,
+    is_public INTEGER NOT NULL DEFAULT 0,
+    updated_by INTEGER REFERENCES users(id),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(module, field)
+  );
   -- Chiến dịch truyền thông
   CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -593,6 +604,9 @@ function migrate() {
   add("ALTER TABLE users ADD COLUMN sensitive_perms TEXT");
   add("ALTER TABLE users ADD COLUMN email TEXT");
   add("ALTER TABLE users ADD COLUMN notify_opt_in INTEGER NOT NULL DEFAULT 1");
+  // RBAC v2 foundation. Existing files start private; no route reads this value until the
+  // PolicyEngine + backfill gate is complete, so this additive migration cannot expose data.
+  add("ALTER TABLE attachments ADD COLUMN audience_visibility VARCHAR(20) NOT NULL DEFAULT 'private'");
   add("ALTER TABLE people ADD COLUMN phone_other TEXT");
   add("ALTER TABLE bookings ADD COLUMN award_id INTEGER");
   add("ALTER TABLE bookings ADD COLUMN event_id INTEGER");
