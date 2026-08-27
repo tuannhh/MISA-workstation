@@ -6,6 +6,8 @@ const policy = require('../policy-engine');
 const viewer = { id: 1, role: 'viewer' }, staff = { id: 2, role: 'executor' }, admin = { id: 3, role: 'admin' };
 test('D13-001: classification tier bất biến cho tiền và PII; field lạ là Public', () => {
   assert.equal(policy.classification('person', 'bank_account_number'), 'Restricted');
+  assert.equal(policy.classification('person', 'personality'), 'Confidential');
+  assert.equal(policy.classification('person', 'gift_rules'), 'Confidential');
   assert.equal(policy.classification('booking', 'amount'), 'Confidential');
   assert.equal(policy.classification('person', 'full_name'), 'Public');
 });

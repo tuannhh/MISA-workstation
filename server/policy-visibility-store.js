@@ -1,7 +1,7 @@
 'use strict';
 const policy = require('./policy-engine');
 const ALLOWED_FIELDS = Object.freeze({
-  partners: new Set(['full_name', 'phone_personal', 'phone_other', 'phone_ott', 'dob', 'home_address', 'personal_notes', 'social_facebook', 'social_instagram', 'social_tiktok', 'social_x', 'social_thread', 'bank_account_number', 'bank_name', 'membership_fee']),
+  partners: new Set(['full_name', 'phone_personal', 'phone_other', 'phone_ott', 'dob', 'home_address', 'personal_notes', 'personality', 'hobbies', 'food_habits', 'family_info', 'media_stance', 'relationship_network', 'meeting_places', 'gift_rules', 'social_facebook', 'social_instagram', 'social_tiktok', 'social_x', 'social_thread', 'bank_account_number', 'bank_name', 'membership_fee']),
 });
 function assertAllowed(module, field) { if (!ALLOWED_FIELDS[module]?.has(field)) throw new Error(`Field visibility không hợp lệ: ${module}.${field}`); }
 function entityFor(module, field) { return module === 'partners' && field === 'membership_fee' ? 'organization' : 'person'; }

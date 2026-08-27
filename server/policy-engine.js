@@ -10,7 +10,7 @@ const MODULE_ADMIN_ONLY = new Set(['budget', 'scan_query', 'source', 'competitor
 const FIELD_TIER = Object.freeze({
   organization: { membership_fee: 'Confidential' },
   person: {
-    phone_personal: 'Confidential', phone_other: 'Confidential', phone_ott: 'Confidential', dob: 'Confidential', home_address: 'Confidential', personal_notes: 'Confidential', social_facebook: 'Confidential', social_instagram: 'Confidential', social_tiktok: 'Confidential', social_x: 'Confidential', social_thread: 'Confidential', bank_account_number: 'Restricted', bank_name: 'Restricted',
+    phone_personal: 'Confidential', phone_other: 'Confidential', phone_ott: 'Confidential', dob: 'Confidential', home_address: 'Confidential', personal_notes: 'Confidential', personality: 'Confidential', hobbies: 'Confidential', food_habits: 'Confidential', family_info: 'Confidential', media_stance: 'Confidential', relationship_network: 'Confidential', meeting_places: 'Confidential', gift_rules: 'Confidential', social_facebook: 'Confidential', social_instagram: 'Confidential', social_tiktok: 'Confidential', social_x: 'Confidential', social_thread: 'Confidential', bank_account_number: 'Restricted', bank_name: 'Restricted',
   },
   sponsorship: { amount: 'Confidential' }, booking: { amount: 'Confidential' }, budget: { amount: 'Confidential' }, award: { cost: 'Confidential' }, award_participation: { budget: 'Confidential' }, supplier_quote: { unit_price: 'Confidential' }, supplier_transaction: { value: 'Confidential' }, event_cost: { amount: 'Confidential' }, association_fee: { amount: 'Confidential' }, gift: { value: 'Confidential' }, supplier: { service_fee_pct: 'Confidential', deposit_pct: 'Confidential' },
 });

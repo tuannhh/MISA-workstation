@@ -1266,3 +1266,12 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   bridge tương lai, không nhận principal từ request body/header và không đổi quyền của matrix cũ.
 - Các handler legacy vẫn tương thích qua `req.session.user`; vertical slice RBAC mới sẽ dùng
   `req.principal` thay vì tự đọc session. Regression `BR-RBAC-003/004` và auth HTTP 28/28 xanh.
+
+### 2026-08-27 — RBAC classification registry correction
+
+- Đối chiếu `03-data-classification.md` với `PolicyEngine` phát hiện 8 trường đời tư đã được owner
+  phân loại Confidential nhưng bị thiếu khỏi registry chạy thực tế. Bổ sung tier và allowlist cấu
+  hình cho toàn bộ 8 trường; engine/adapter tiếp tục fail-closed, nên Admin/Super Admin không thể
+  công khai chúng chỉ qua `field_visibility`.
+- Regression D13-001/D13-007 bao phủ đủ representative Confidential và Restricted fields. Chưa có
+  route runtime nào sử dụng field visibility ở slice này.
