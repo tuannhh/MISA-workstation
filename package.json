@@ -21,6 +21,7 @@
     "test:integration:mysql": "DB_CLIENT=mysql ALLOW_TEST_DB_CREATE=1 node --test server/test/*.test.js",
     "test:verify-gate1-mapping": "node scripts/verify-gate1-mapping.mjs",
     "test:verify-g0-selftest": "node --test scripts/verify-g0.selftest.mjs"
+    ,"rbac:preflight": "node scripts/rbac-preflight.mjs"
   },
   "dependencies": {
     "@tabler/icons-vue": "^3.35.0",
