@@ -28,12 +28,14 @@ try {
       : await query(`PRAGMA table_info(${table})`);
     columns.set(table, new Set(rows.map((row) => row.name)));
   }
-  const missingOwner = activityTables.filter((table) => !columns.get(table).has('owner_id'));
+  const missingOwner = activityTables.filter((table) => table === 'gifts'
+    ? !columns.get(table).has('responsible_user_id')
+    : !columns.get(table).has('owner_id'));
   const attachmentsHasVisibility = columns.get('attachments').has('audience_visibility');
   const visibilityTable = driver === 'mysql'
     ? await query("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='field_visibility'")
     : await query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='field_visibility'");
-  const report = { driver, readOnly: true, required: { activityTables, attachmentVisibility: 'audience_visibility', fieldVisibilityTable: 'field_visibility' }, actual: { missingOwner, attachmentsHasVisibility, hasFieldVisibility: visibilityTable.length > 0 }, readyToFlipFailClosed: missingOwner.length === 0 && attachmentsHasVisibility && visibilityTable.length > 0 };
+  const report = { driver, readOnly: true, required: { activityTables, ownerColumnException: { gifts: 'responsible_user_id (owner_id là người/cơ quan nhận quà legacy)' }, attachmentVisibility: 'audience_visibility', fieldVisibilityTable: 'field_visibility' }, actual: { missingOwner, attachmentsHasVisibility, hasFieldVisibility: visibilityTable.length > 0 }, readyToFlipFailClosed: missingOwner.length === 0 && attachmentsHasVisibility && visibilityTable.length > 0 };
   console.log(JSON.stringify(report, null, 2));
   if (!report.readyToFlipFailClosed) process.exitCode = 2;
 } finally {

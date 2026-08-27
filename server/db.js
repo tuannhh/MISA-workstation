@@ -607,6 +607,12 @@ function migrate() {
   // RBAC v2 foundation. Existing files start private; no route reads this value until the
   // PolicyEngine + backfill gate is complete, so this additive migration cannot expose data.
   add("ALTER TABLE attachments ADD COLUMN audience_visibility VARCHAR(20) NOT NULL DEFAULT 'private'");
+  // D13 ownership foundation. Gifts đã dùng owner_id cho người/cơ quan nhận quà nên dùng tên
+  // responsible_user_id cho nhân viên phụ trách (owner policy), tránh đổi nghĩa dữ liệu legacy.
+  for (const table of ['bookings', 'interactions', 'awards', 'events', 'sponsorships', 'agreements', 'work_logs', 'association_fees', 'supplier_quotes', 'supplier_transactions', 'supplier_contacts', 'award_participations', 'benefit_usages']) {
+    add(`ALTER TABLE ${table} ADD COLUMN owner_id INTEGER`);
+  }
+  add('ALTER TABLE gifts ADD COLUMN responsible_user_id INTEGER');
   add("ALTER TABLE people ADD COLUMN phone_other TEXT");
   add("ALTER TABLE bookings ADD COLUMN award_id INTEGER");
   add("ALTER TABLE bookings ADD COLUMN event_id INTEGER");
