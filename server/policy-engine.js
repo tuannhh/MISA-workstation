@@ -1,0 +1,43 @@
+'use strict';
+
+// D13 foundation. This module is intentionally pure: DB loading/cache and Express response
+// shaping belong to the adapter/service slice, never inside authorization decisions.
+const TIER = Object.freeze({ Public: 0, Internal: 1, Confidential: 2, Restricted: 3 });
+const PRIVILEGED = new Set(['admin', 'super_admin']);
+const DIRECT = new Set(['booking', 'interaction', 'award', 'event', 'sponsorship', 'agreement', 'work_log', 'gift', 'association_fee', 'supplier_quote', 'supplier_transaction', 'supplier_contact', 'award_participation', 'benefit_usage']);
+const GLOBAL = new Set(['organization', 'person', 'supplier', 'important_date']);
+const MODULE_ADMIN_ONLY = new Set(['budget', 'scan_query', 'source', 'competitor', 'campaign', 'monitor_alert']);
+const FIELD_TIER = Object.freeze({
+  organization: { membership_fee: 'Confidential' },
+  person: {
+    phone_personal: 'Confidential', phone_other: 'Confidential', phone_ott: 'Confidential', dob: 'Confidential', home_address: 'Confidential', personal_notes: 'Confidential', social_facebook: 'Confidential', social_instagram: 'Confidential', social_tiktok: 'Confidential', social_x: 'Confidential', social_thread: 'Confidential', bank_account_number: 'Restricted', bank_name: 'Restricted',
+  },
+  sponsorship: { amount: 'Confidential' }, booking: { amount: 'Confidential' }, budget: { amount: 'Confidential' }, award: { cost: 'Confidential' }, award_participation: { budget: 'Confidential' }, supplier_quote: { unit_price: 'Confidential' }, supplier_transaction: { value: 'Confidential' }, event_cost: { amount: 'Confidential' }, association_fee: { amount: 'Confidential' }, gift: { value: 'Confidential' }, supplier: { service_fee_pct: 'Confidential', deposit_pct: 'Confidential' },
+});
+
+function classification(entity, field) { return FIELD_TIER[entity]?.[field] || 'Public'; }
+function isPrivileged(principal) { return PRIVILEGED.has(principal?.role); }
+function ownerValue(entity, record) { return entity === 'gift' ? record?.responsible_user_id : record?.owner_id; }
+
+function canWrite({ principal, entity, action, record }) {
+  if (!principal) return false;
+  if (isPrivileged(principal)) return true;
+  if (principal.role === 'viewer' || action === 'delete') return false;
+  if (principal.role !== 'executor') return false;
+  if (MODULE_ADMIN_ONLY.has(entity)) return false;
+  if (action === 'create') return DIRECT.has(entity) || GLOBAL.has(entity);
+  if (GLOBAL.has(entity)) return action === 'edit';
+  return DIRECT.has(entity) && ownerValue(entity, record) === principal.id && action === 'edit';
+}
+
+function canReadField({ principal, entity, field, record, isPublic = false }) {
+  if (!principal) return false;
+  if (isPrivileged(principal)) return true;
+  const tier = classification(entity, field);
+  if (principal.role === 'executor' && DIRECT.has(entity) && ownerValue(entity, record) === principal.id) return true;
+  // A non-Public tier may never be made public by normal configuration; fail closed even if
+  // a corrupt row says is_public=1.
+  return !!isPublic && tier === 'Public';
+}
+
+module.exports = { TIER, FIELD_TIER, classification, canWrite, canReadField, ownerValue };
