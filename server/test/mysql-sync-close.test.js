@@ -5,7 +5,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('events');
-const { closeWorker } = require('../mysql-sync');
+const { closeWorker, bindSqliteNamedParams } = require('../mysql-sync');
 
 class FakeWorker extends EventEmitter {
   constructor({ onPostMessage } = {}) {
@@ -92,4 +92,26 @@ test('closeWorker() reject với lỗi terminate() nếu chính terminate() cũn
   const worker = new FakeWorker();
   worker.terminate = () => Promise.reject(new Error('terminate() thất bại giả lập'));
   await assert.rejects(() => closeWorker(worker, 30), /terminate\(\) thất bại giả lập/);
+});
+
+test('bindSqliteNamedParams() đổi @name thành positional params theo đúng thứ tự, kể cả lặp tên', () => {
+  const bound = bindSqliteNamedParams(
+    'INSERT INTO t (a,b,a2) VALUES (@a,@b,@a)',
+    [{ a: 7, b: 'hai' }],
+  );
+  assert.equal(bound.sql, 'INSERT INTO t (a,b,a2) VALUES (?,?,?)');
+  assert.deepEqual(bound.params, [7, 'hai', 7]);
+});
+
+test('bindSqliteNamedParams() không biến đổi @ trong literal/comment và không nuốt thiếu binding', () => {
+  const bound = bindSqliteNamedParams(
+    "SELECT '@email.example', `@column`, @@sql_mode -- @comment\n WHERE x=@value",
+    [{ value: 3 }],
+  );
+  assert.match(bound.sql, /'@email\.example'/);
+  assert.match(bound.sql, /`@column`/);
+  assert.match(bound.sql, /@@sql_mode/);
+  assert.match(bound.sql, /-- @comment/);
+  assert.deepEqual(bound.params, [3]);
+  assert.throws(() => bindSqliteNamedParams('SELECT @missing', [{}]), /Thiếu named parameter @missing/);
 });

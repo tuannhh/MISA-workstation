@@ -3,11 +3,8 @@
 // (R121-R135): CRUD nguồn tin (sources), đối thủ (competitors), chiến dịch (campaigns) + kết
 // quả/đánh giá chiến dịch.
 //
-// AN TOÀN MẠNG: R122 (POST /monitor/sources) gọi monitor.detectFeed(url) — fetch() THẬT không
-// allowlist/blocklist host (đây là F3 SSRF đã ghi trong route-catalog, KHÔNG sửa ở batch
-// characterization này, chỉ đo đúng hành vi hiện có). Để test không gọi ra Internet thật, dùng
-// URL loopback cổng đóng (http://127.0.0.1:1) — kết nối bị từ chối ngay (ECONNREFUSED), không có
-// gói tin nào rời máy, cùng tinh thần "network-safe" đã áp dụng cho R110 ở batch monitor phần 1.
+// AN TOÀN MẠNG: R122 chặn URL internal/private fail-closed trước fetch. URL public bình thường
+// vẫn được dò RSS qua outbound seam; các test integration chỉ dùng loopback để xác minh guard.
 // R135 (GET /monitor/campaigns/:id/evaluate) gọi monitor.evaluateCampaign() -> gemini.groundedSearch()
 // — throw đồng bộ "Chưa cấu hình GEMINI_API_KEY" TRƯỚC khi gọi mạng khi DATA_DIR tạm của test
 // không có data/gemini.key, characterize đúng lỗi 500 đó, không phải giả lập (đã xác nhận ở batch
@@ -83,25 +80,20 @@ test('R121 unauthenticated: không cookie trả 401', async () => {
 // ---------------------------------------------------------------------------
 // R122 — POST /api/monitor/sources (F3 SSRF hotspot — xem ghi chú an toàn mạng đầu file)
 // ---------------------------------------------------------------------------
-test('R122 happy (network-safe): URL loopback cổng đóng -> detectFeed() không tìm được feed, mode="site", vẫn tạo nguồn thành công', async () => {
+test('R122 security: URL loopback bị chặn fail-closed, không tạo nguồn', async () => {
   const res = await call('POST', '/api/monitor/sources', { body: { name: `Nguồn test ${Date.now()}`, url: 'http://127.0.0.1:1/nofeed', type: 'news' } });
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 400);
   const body = await res.json();
-  assert.ok(body.id);
-  assert.equal(body.mode, 'site');
-  const row = db.prepare('SELECT auto, mode FROM sources WHERE id=?').get(body.id);
-  assert.equal(row.auto, 0);
+  assert.match(body.error, /URL không được phép/);
 });
 test('R122 invalid: thiếu name/url trả 400', async () => {
   assert.equal((await call('POST', '/api/monitor/sources', { body: { name: 'x' } })).status, 400);
   assert.equal((await call('POST', '/api/monitor/sources', { body: { url: 'http://127.0.0.1:1' } })).status, 400);
 });
-test('R122 happy CHARACTERIZATION: url không có scheme (vd "example.test") tự thêm https:// (network-safe: dùng host loopback cổng đóng)', async () => {
+test('R122 security: URL không scheme dẫn tới loopback vẫn bị chặn sau normalize', async () => {
   const res = await call('POST', '/api/monitor/sources', { body: { name: `Nguồn không scheme ${Date.now()}`, url: '127.0.0.1:1/x' } });
-  assert.equal(res.status, 200);
-  const body = await res.json();
-  const row = db.prepare('SELECT url FROM sources WHERE id=?').get(body.id);
-  assert.match(row.url, /^https:\/\//);
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /URL không được phép/);
 });
 test('R122 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/monitor/sources', { auth: false, body: { name: 'x', url: 'http://127.0.0.1:1' } })).status, 401);

@@ -8,6 +8,7 @@ const cfg = require('./config');
 const { requireAuth, requirePerm } = require('./auth');
 const { uploadAudio, uploadAiDocument } = require('./uploads');
 const { isSpreadsheet, parseSpreadsheet, redactTextForAi } = require('./spreadsheet-parser');
+const outbound = require('./safe-fetch');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -23,11 +24,11 @@ function matchPerson(name) {
   if (!name) return null;
   return db.prepare(`SELECT p.id, p.full_name, o.name AS org_name, o.org_type
     FROM people p LEFT JOIN organizations o ON o.id=p.org_id
-    WHERE p.full_name LIKE ? COLLATE NOCASE ORDER BY p.relationship_score DESC LIMIT 1`).get(`%${name}%`);
+    WHERE p.full_name LIKE ? ORDER BY p.relationship_score DESC LIMIT 1`).get(`%${name}%`);
 }
 function matchOrg(name) {
   if (!name) return null;
-  return db.prepare(`SELECT id, name, org_type FROM organizations WHERE name LIKE ? COLLATE NOCASE LIMIT 1`).get(`%${name}%`);
+  return db.prepare(`SELECT id, name, org_type FROM organizations WHERE name LIKE ? LIMIT 1`).get(`%${name}%`);
 }
 
 const VOICE_SCHEMA = {
@@ -171,7 +172,7 @@ router.post('/award-extract', requirePerm('awards', 'create'), uploadAudio.singl
       parts.push({ text: 'NỘI DUNG:\n' + req.body.text.trim().slice(0, 20000) });
     } else if (req.body.url && /^https?:\/\//.test(req.body.url)) {
       sourceUrl = req.body.url.trim();
-      const r = await fetch(sourceUrl, { headers: { 'User-Agent': 'Mozilla/5.0 MISA-PR' } });
+      const r = await outbound.safeFetch(sourceUrl, { timeoutMs: 12000, headers: { 'User-Agent': 'Mozilla/5.0 MISA-PR' } });
       const html = await r.text();
       parts.push({ text: 'NỘI DUNG TỪ TRANG WEB:\n' + stripHtml(html) });
     } else {
@@ -182,6 +183,7 @@ router.post('/award-extract', requirePerm('awards', 'create'), uploadAudio.singl
     extracted.review_status = 'Thô';
     res.json({ extracted });
   } catch (e) {
+    if (e instanceof outbound.SafeFetchError) return res.status(400).json({ error: e.message });
     res.status(502).json({ error: 'Lỗi bóc tách: ' + e.message });
   }
 });

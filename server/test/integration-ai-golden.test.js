@@ -25,6 +25,7 @@ const dbHarness = require('../test-support/db-harness');
 const { createResourceStack } = require('../test-support/resource-stack');
 const { startTestApp } = require('../test-support/app-harness');
 const fixtures = require('../test-support/fixtures');
+const outbound = require('../safe-fetch');
 
 // Lưu lại fetch THẬT trước khi bất kỳ test nào thay global.fetch — dùng để gọi vào chính server
 // test cục bộ (baseUrl), TÁCH BIỆT khỏi global.fetch bị mock (dùng cho lời gọi mạng ra ngoài của
@@ -35,6 +36,8 @@ let baseUrl, cookie, db, monitor;
 const resources = createResourceStack();
 
 before(async () => {
+  // Golden set tự mock outbound fetch nhưng vẫn cần DNS public giả để safeFetch không gọi mạng.
+  outbound.__setTestDependencies({ lookup: async () => [{ address: '93.184.216.34', family: 4 }] });
   if (isMysql) {
     resources.acquire(dbHarness.setupTestDataDir().teardown);
     const dbName = await dbHarness.createMysqlTestDb();
@@ -56,6 +59,7 @@ before(async () => {
 });
 
 after(async () => {
+  outbound.__resetTestDependencies();
   await resources.cleanupAll();
 });
 
@@ -133,11 +137,11 @@ test('AI-E004 golden happy (nhánh url): POST /ai/award-extract fetch trang th�
     htmlPage('Thông báo giải thưởng ABC'),
     jsonResult({ name: 'Giải ABC', organizer: 'Bộ X' }),
   );
-  const res = await post('/api/ai/award-extract', { url: 'http://127.0.0.1:1/notice-fake-but-mocked' });
+  const res = await post('/api/ai/award-extract', { url: 'https://award-source.example/notice-fake-but-mocked' });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.extracted.name, 'Giải ABC');
-  assert.equal(body.extracted.source_url, 'http://127.0.0.1:1/notice-fake-but-mocked');
+  assert.equal(body.extracted.source_url, 'https://award-source.example/notice-fake-but-mocked');
 });
 test('AI-E005 golden happy: POST /ai/award-advice — genJSON trả ADVICE_SCHEMA {capability,plan}', async () => {
   useQueue(jsonResult({ capability: 'MISA có năng lực cạnh tranh tốt.', plan: 'Bước 1: chuẩn bị hồ sơ. Bước 2: nộp trước hạn.' }));
@@ -181,7 +185,7 @@ function insertQuery(overrides = {}) {
 test('AI-E008 golden happy: monitor.groundIngest() — groundedSearch trả chunks có kết quả (không cần fallback lần 2), resolveLink() fetch từng chunk.uri (2 lời gọi mạng: 1 Gemini + 1 resolveLink), lưu mention nếu khớp include', async () => {
   const q = insertQuery({ name: 'Test query E008' });
   useQueue(
-    groundedResult('kết quả', [{ uri: 'http://127.0.0.1:1/bai-viet-misa', title: 'Bài viết về MISA' }]),
+    groundedResult('kết quả', [{ uri: 'https://grounded.example/bai-viet-misa', title: 'Bài viết về MISA' }]),
     htmlPage('MISA ra mắt tính năng mới AMIS'),
   );
   const r = await monitor.groundIngest(q);
@@ -230,13 +234,13 @@ test('AI-E009 golden happy: runScan() với source mode="site" -> gọi siteGrou
 // AI-E010/AI-E011 — 2 route GET on-demand groundedSearch (monitor.js)
 // ---------------------------------------------------------------------------
 test('AI-E010 golden happy: GET /monitor/highlights — groundedSearch trả text+chunks, route map chunks -> sources {title,uri}', async () => {
-  useQueue(groundedResult('1. MISA ra mắt AMIS mới — nổi bật vì...', [{ uri: 'http://127.0.0.1:1/tin1', title: 'Tin 1' }]));
+  useQueue(groundedResult('1. MISA ra mắt AMIS mới — nổi bật vì...', [{ uri: 'https://grounded.example/tin1', title: 'Tin 1' }]));
   const res = await get('/api/monitor/highlights');
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.match(body.text, /MISA ra mắt/);
   assert.equal(body.sources.length, 1);
-  assert.equal(body.sources[0].uri, 'http://127.0.0.1:1/tin1');
+  assert.equal(body.sources[0].uri, 'https://grounded.example/tin1');
 });
 test('AI-E011 golden happy: GET /monitor/competitor-brief — groundedSearch trả text+chunks, route trả kèm danh sách competitors từ DB', async () => {
   useQueue(groundedResult('1. Đối thủ A vừa ra mắt sản phẩm mới.', []));

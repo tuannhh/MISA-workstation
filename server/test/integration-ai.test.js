@@ -127,10 +127,10 @@ test('R139 happy CHARACTERIZATION: nhánh file -> thiếu GEMINI_API_KEY -> 502 
   assert.equal(res.status, 502);
   assert.match((await res.json()).error, /GEMINI_API_KEY/);
 });
-test('R139 happy CHARACTERIZATION network-safe: nhánh url -> fetch(sourceUrl) THẬT nhưng dùng loopback cổng đóng -> lỗi kết nối bị bắt ở catch ngoài -> 502, KHÔNG chạm Gemini (F3 SSRF chưa có guard, characterize đúng hành vi hiện có)', async () => {
+test('R139 / BR-SSRF-016 security: nhánh url chặn loopback trước outbound fetch/Gemini, trả 400', async () => {
   const res = await call('POST', '/api/ai/award-extract', { body: { url: 'http://127.0.0.1:1/notice' } });
-  assert.equal(res.status, 502);
-  assert.match((await res.json()).error, /Lỗi bóc tách/);
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /URL không được phép/);
 });
 test('R139 invalid: không có text/url/file trả 400', async () => {
   const res = await call('POST', '/api/ai/award-extract', { body: {} });

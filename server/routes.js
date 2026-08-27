@@ -9,6 +9,7 @@ const { requireAuth, requirePerm } = require('./auth');
 const { upload } = require('./uploads');
 const scheduler = require('./scheduler');
 const monitor = require('./monitor');
+const outbound = require('./safe-fetch');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -1501,18 +1502,35 @@ router.get('/monitor/sources', requirePerm('monitoring', 'view'), (req, res) => 
 router.post('/monitor/sources', requirePerm('monitoring', 'create'), async (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.url) return res.status(400).json({ error: 'Thiếu tên/URL' });
+  let requestedUrl;
+  try {
+    requestedUrl = outbound.normalizeHttpUrl(b.url);
+    await outbound.validateOutboundUrl(requestedUrl);
+  } catch (error) {
+    if (error instanceof outbound.SafeFetchError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
   // Người dùng chỉ cần dán link website bình thường — tự dò xem có RSS không, nếu không thì quét bằng Google Search (site:)
   let feedUrl = null;
-  try { feedUrl = await monitor.detectFeed(b.url); } catch {}
+  try { feedUrl = await monitor.detectFeed(requestedUrl); } catch {}
   const mode = feedUrl ? 'rss' : 'site';
-  const finalUrl = feedUrl || (/^https?:\/\//i.test(b.url) ? b.url : `https://${b.url}`);
+  const finalUrl = feedUrl || requestedUrl;
   const r = db.prepare('INSERT INTO sources (name, type, url, enabled, auto, mode) VALUES (?,?,?,?,0,?)').run(b.name, b.type || 'news', finalUrl, b.enabled === false ? 0 : 1, mode);
   logEdit(req, 'CREATE', 'source', r.lastInsertRowid, b.name);
   res.json({ id: r.lastInsertRowid, mode });
 });
-router.put('/monitor/sources/:id', requirePerm('monitoring', 'edit'), (req, res) => {
+router.put('/monitor/sources/:id', requirePerm('monitoring', 'edit'), async (req, res) => {
   const b = req.body || {}; const data = {};
   ['name', 'type', 'url'].forEach((k) => { if (k in b) data[k] = b[k]; });
+  if ('url' in data) {
+    try {
+      data.url = outbound.normalizeHttpUrl(data.url);
+      await outbound.validateOutboundUrl(data.url);
+    } catch (error) {
+      if (error instanceof outbound.SafeFetchError) return res.status(400).json({ error: error.message });
+      throw error;
+    }
+  }
   if ('enabled' in b) data.enabled = b.enabled ? 1 : 0;
   if (Object.keys(data).length) buildUpdate('sources', req.params.id, data);
   logEdit(req, 'EDIT', 'source', req.params.id); res.json({ ok: true });

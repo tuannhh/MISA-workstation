@@ -19,6 +19,7 @@ Theo `mysql-sync.js:30-45`, khi gặp `CREATE TABLE`:
 - `ALTER TABLE ... ADD COLUMN` cũng dịch `INTEGER` → `BIGINT` (`mysql-sync.js:46-48`), TEXT giữ nguyên `TEXT`.
 - Modifier ngày `datetime('now','-30 day')` / `date('now','-N day')` được dịch sang `INTERVAL` MySQL (`mysql-sync.js:18-19`); `strftime('%Y-%m', x)` → `DATE_FORMAT(x,'%Y-%m')` (dòng 22-24) — dùng nhiều trong `routes.js` (dashboard, report).
 - `INSERT OR IGNORE` → `INSERT IGNORE`; `ON CONFLICT(...) DO UPDATE SET value=excluded.value` (app_meta) và `...amount=excluded.amount, note=excluded.note` (budgets) → `ON DUPLICATE KEY UPDATE ...=VALUES(...)` (dòng 25-27) — **chỉ 2 pattern `ON CONFLICT` này được nhận diện regex cứng**; thêm `upsert` mới theo cú pháp khác sẽ KHÔNG được dịch và lỗi trên MySQL.
+- Prepared statement dùng object binding kiểu SQLite (`run({ name: value })` với placeholder `@name`) được adapter chuẩn hóa qua `bindSqliteNamedParams()` (`mysql-sync.js`) thành placeholder positional `?` trước khi gửi sang mysql2. Không truyền object named binding trực tiếp xuống worker: MySQL sẽ hiểu `@name` là session user variable và có thể ghi `NULL` mà không báo lỗi (F20).
 
 ## B. Danh sách bảng đầy đủ (34 bảng)
 

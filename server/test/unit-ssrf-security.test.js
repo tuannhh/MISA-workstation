@@ -25,9 +25,16 @@ const { useFixedClock } = require('../test-support/clock');
 
 const monitor = require('../monitor');
 const aiRouter = require('../ai');
+const outbound = require('../safe-fetch');
 const { stripHtml, limitEventExtract } = aiRouter.testables;
 
-test.after(() => { fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); });
+// Không gọi DNS/mạng thật: safeFetch vẫn dùng global.fetch giả của từng test bên dưới, còn DNS
+// public được giả lập riêng để các test chỉ đo logic monitor/AI.
+outbound.__setTestDependencies({ lookup: async () => [{ address: '93.184.216.34', family: 4 }] });
+test.after(() => {
+  outbound.__resetTestDependencies();
+  fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
+});
 
 function fakeResponse({ ok = true, status = 200, text = '', url } = {}) {
   return { ok, status, url, text: async () => text };
@@ -141,7 +148,7 @@ test('BR-SSRF-020: matchTerms() — OR giữa nhóm AND, exclude thắng include
   assert.equal(monitor.matchTerms('MISA tuyển dụng nhân sự mới', [['misa', 'tuyen dung']], ['nhan su']), false); // exclude thắng include
 });
 
-test('BR-SSRF-010 (đặc tả lỗ hổng hiện có, KHÔNG fix ở đây — target guard xem G1B.4): resolveLink() gọi fetch thẳng tới host nội bộ/metadata do caller truyền, không có allowlist/denylist nào chặn', async (t) => {
+test('BR-SSRF-010: resolveLink() fail-closed với loopback/RFC1918/link-local metadata, không gọi fetch', async (t) => {
   const calledUrls = [];
   t.mock.method(globalThis, 'fetch', async (url) => { calledUrls.push(url); return fakeResponse({ url, text: '' }); });
   const internalTargets = [
@@ -149,16 +156,18 @@ test('BR-SSRF-010 (đặc tả lỗ hổng hiện có, KHÔNG fix ở đây — 
     'http://169.254.169.254/latest/meta-data/iam/security-credentials/',
     'http://192.168.1.1/admin',
   ];
-  for (const target of internalTargets) await monitor.resolveLink(target);
-  assert.deepEqual(calledUrls, internalTargets); // fetch nhận nguyên URL nội bộ, không bị chặn/rewrite
+  for (const target of internalTargets) {
+    assert.deepEqual(await monitor.resolveLink(target), { url: null, title: '', blocked: true });
+  }
+  assert.deepEqual(calledUrls, []);
 });
 
-test('BR-SSRF-011 (đặc tả lỗ hổng hiện có, KHÔNG fix ở đây — target guard xem G1B.4): detectFeed() gọi fetchText tới host nội bộ do người dùng nhập ở POST /monitor/sources, không có guard', async (t) => {
+test('BR-SSRF-011: detectFeed() chặn metadata URL trước outbound fetch', async (t) => {
   const calledUrls = [];
   t.mock.method(globalThis, 'fetch', async (url) => { calledUrls.push(url); return fakeResponse({ ok: false, status: 403 }); });
   const result = await monitor.detectFeed('169.254.169.254/latest/meta-data/');
-  assert.equal(result, null); // không có feed hợp lệ -> null, nhưng...
-  assert.ok(calledUrls.includes('https://169.254.169.254/latest/meta-data/')); // ...fetch vẫn đã được gọi thẳng tới IP metadata này trước đó
+  assert.equal(result, null);
+  assert.deepEqual(calledUrls, []);
 });
 
 // ===================== ai.js — stripHtml / limitEventExtract =====================

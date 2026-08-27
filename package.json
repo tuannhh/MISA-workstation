@@ -19,6 +19,7 @@
     "test:security": "DB_CLIENT=sqlite node --test server/security.test.js",
     "test:integration:sqlite": "DB_CLIENT=sqlite node --test server/test/*.test.js",
     "test:integration:mysql": "DB_CLIENT=mysql ALLOW_TEST_DB_CREATE=1 node --test server/test/*.test.js",
+    "test:verify-gate1-mapping": "node scripts/verify-gate1-mapping.mjs",
     "test:verify-g0-selftest": "node --test scripts/verify-g0.selftest.mjs"
   },
   "dependencies": {

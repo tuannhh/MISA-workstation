@@ -49,6 +49,71 @@ function translate(sql) {
   return out;
 }
 
+// better-sqlite3 accepts named parameters written as @name, while mysql2 only
+// binds positional `?` values in the worker. Convert the SQLite-style object
+// binding at this adapter boundary so every existing caller gets identical
+// semantics on MySQL (rather than letting MySQL interpret @name as a session
+// user variable, which silently produced NULL in saveMention()).
+function bindSqliteNamedParams(sql, params) {
+  if (!Array.isArray(params) || params.length !== 1 || !params[0] ||
+      typeof params[0] !== 'object' || Array.isArray(params[0])) {
+    return { sql, params };
+  }
+  const valuesObject = params[0];
+  const values = [];
+  let out = '';
+  let state = 'normal';
+  let escaped = false;
+
+  for (let i = 0; i < String(sql).length; i++) {
+    const c = String(sql)[i];
+    const next = String(sql)[i + 1];
+    if (state === 'lineComment') {
+      out += c;
+      if (c === '\n') state = 'normal';
+      continue;
+    }
+    if (state === 'blockComment') {
+      out += c;
+      if (c === '*' && next === '/') { out += next; i++; state = 'normal'; }
+      continue;
+    }
+    if (state === 'single' || state === 'double' || state === 'backtick') {
+      out += c;
+      if (escaped) { escaped = false; continue; }
+      if (c === '\\') { escaped = true; continue; }
+      const closing = state === 'single' ? "'" : state === 'double' ? '"' : '`';
+      if (c === closing) {
+        if ((state === 'single' || state === 'double') && next === closing) { out += next; i++; }
+        else state = 'normal';
+      }
+      continue;
+    }
+    if (c === '-' && next === '-' && /\s/.test(String(sql)[i + 2] || '')) {
+      out += c + next; i++; state = 'lineComment'; continue;
+    }
+    if (c === '/' && next === '*') { out += c + next; i++; state = 'blockComment'; continue; }
+    if (c === "'") { out += c; state = 'single'; escaped = false; continue; }
+    if (c === '"') { out += c; state = 'double'; escaped = false; continue; }
+    if (c === '`') { out += c; state = 'backtick'; escaped = false; continue; }
+    if (c === '@' && next === '@') { out += c + next; i++; continue; }
+    if (c === '@' && /[A-Za-z_]/.test(next || '')) {
+      let j = i + 1;
+      while (j < String(sql).length && /[A-Za-z0-9_]/.test(String(sql)[j])) j++;
+      const name = String(sql).slice(i + 1, j);
+      if (!Object.prototype.hasOwnProperty.call(valuesObject, name)) {
+        throw new Error(`Thiếu named parameter @${name} khi chạy MySQL`);
+      }
+      out += '?';
+      values.push(valuesObject[name]);
+      i = j - 1;
+      continue;
+    }
+    out += c;
+  }
+  return { sql: out, params: values };
+}
+
 // Tách state machine shutdown thành hàm thuần nhận vào bất kỳ object giống worker_threads.Worker
 // (on/once/postMessage/terminate) — Codex re-audit round 3, R3-02, cho phép test dùng fake worker
 // (EventEmitter) để kiểm mọi nhánh lỗi mà không cần spawn worker thread thật. `timeoutMs` cho
@@ -163,15 +228,17 @@ class MySQLSyncDatabase {
 
   prepare(sql) {
     const database = this;
+    const bind = (params) => bindSqliteNamedParams(sql, params);
     return {
-      all(...params) { return database._call(sql, params).rows || []; },
-      get(...params) { return (database._call(sql, params).rows || [])[0]; },
+      all(...params) { const bound = bind(params); return database._call(bound.sql, bound.params).rows || []; },
+      get(...params) { const bound = bind(params); return (database._call(bound.sql, bound.params).rows || [])[0]; },
       run(...params) {
-        const result = database._call(sql, params);
+        const bound = bind(params);
+        const result = database._call(bound.sql, bound.params);
         return { changes: result.affectedRows || 0, lastInsertRowid: result.insertId || 0 };
       },
     };
   }
 }
 
-module.exports = { MySQLSyncDatabase, translate, closeWorker };
+module.exports = { MySQLSyncDatabase, translate, closeWorker, bindSqliteNamedParams };

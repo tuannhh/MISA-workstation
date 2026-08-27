@@ -34,30 +34,34 @@ Cả 2 dùng chung 1 instance multer `memoryStorage()`, giới hạn 25MB, **kh�
 
 `mysql-sync.js:26-27` dùng regex khớp CHÍNH XÁC 2 câu `ON CONFLICT` đang có trong `db.js` (`app_meta` theo `` `key` ``, `budgets` theo `period`). Nếu thêm 1 upsert mới với cú pháp `ON CONFLICT(...)` khác (tên cột khác, nhiều cột khác), regex sẽ KHÔNG khớp → câu SQL giữ nguyên cú pháp SQLite khi gửi tới MySQL → lỗi cú pháp **chỉ xảy ra trên nhánh MySQL**, code chạy hoàn toàn bình thường khi test bằng `DB_CLIENT=sqlite`. Đây là bẫy "test pass local, vỡ production" kinh điển của lớp dịch DDL thủ công này.
 
-## 8. `npm run seed` không tự set `DB_CLIENT` — dễ reseed nhầm engine đang cấu hình
+## 8. Named binding kiểu SQLite phải đi qua adapter MySQL
+
+Các caller hiện hữu có thể dùng `db.prepare('... @name ...').run({ name: value })` theo API better-sqlite3. MySQL không hỗ trợ cách bind này trong `mysql2.query()`; `@name` bị diễn giải thành session user variable và có thể ghi `NULL` mà vẫn báo `affectedRows=1` (F20). `server/mysql-sync.js#bindSqliteNamedParams()` chuyển đổi an toàn các placeholder ngoài literal/comment thành `?` + danh sách giá trị positional. Khi thêm SQL mới, ưu tiên positional binding hoặc giữ đúng đường adapter này; không gọi worker trực tiếp với object params.
+
+## 9. `npm run seed` không tự set `DB_CLIENT` — dễ reseed nhầm engine đang cấu hình
 
 Script `seed` trong `package.json` chỉ chạy `node server/db.js --reseed`, **không kèm** `DB_CLIENT=sqlite` như `start:local`. Nếu máy đang có `.env`/biến môi trường trỏ MySQL (mặc định, xem bẫy #2) và ai đó chạy `npm run seed` với ý định "reset dữ liệu mẫu SQLite", lệnh sẽ **xoá 28/34 bảng rồi seed lại MySQL** đang trỏ tới — **không sạch hoàn toàn**, 6 bảng (`agreements`/`work_logs`/`gifts`/`benefit_usages`/`supplier_transactions`/`supplier_contacts`) không bị xoá, xem `09-db-schema.md` §E. Luôn viết rõ `DB_CLIENT=sqlite npm run seed` khi ý định là SQLite, và kiểm tra biến môi trường hiện tại trước khi chạy `npm run seed` trên bất kỳ máy nào có thể trỏ tới DB thật.
 
-## 9. `RESET_DB=1` xoá sạch dữ liệu khi khởi động server — không phải chỉ khi seed
+## 10. `RESET_DB=1` xoá sạch dữ liệu khi khởi động server — không phải chỉ khi seed
 
 Khác bẫy #8 (chỉ kích hoạt khi gọi `--reseed` tay), biến môi trường `RESET_DB=1` (`server/db.js:895-898`) kích hoạt `dropAll()` **ngay khi `node server/index.js` khởi động** (mọi lần deploy/restart trong khi biến còn đặt `=1`). Comment trong code (`db.js:894`) tự ghi rõ đây là "dùng để làm sạch dữ liệu trên môi trường live... sau đó gỡ về 0" — nghĩa là chính tác giả xác nhận đây là biến vận hành nguy hiểm có chủ đích, không phải chỉ dùng cho test. Đặt biến này rồi quên gỡ trước khi redeploy tiếp = mất dữ liệu production lần thứ 2.
 
-## 10. Hằng số `MASK` định nghĩa độc lập ở 2 nơi — sửa 1 nơi mà quên nơi kia sẽ vỡ cơ chế nhận diện che dữ liệu ở client
+## 11. Hằng số `MASK` định nghĩa độc lập ở 2 nơi — sửa 1 nơi mà quên nơi kia sẽ vỡ cơ chế nhận diện che dữ liệu ở client
 
 Server (`rbac.js:95`) và client (`public/app.js:2`) đều định nghĩa `const MASK = '●●● (đã ẩn)'` — **cùng giá trị literal nhưng không import chung** (2 codebase riêng, không có module dùng lại). Toàn bộ logic client hiển thị icon khoá/style `.mask` (`val()`, `money()`, `valDate()` ở `app.js:31-39`) dựa vào so sánh chuỗi `v === MASK`. Nếu sau này đổi text mask ở server (`rbac.js:95`) mà quên đổi ở `app.js:2`, client sẽ hiển thị chuỗi mask mới như dữ liệu thật (không nhận ra là bị che) — lỗi hiển thị âm thầm, không có type-check hay test nào bắt được vì 2 file không liên kết qua code.
 
-## 11. `POST /budgets` chỉ yêu cầu quyền `reports:view`, không phải `edit`/`create` — khác mọi route ghi khác
+## 12. `POST /budgets` chỉ yêu cầu quyền `reports:view`, không phải `edit`/`create` — khác mọi route ghi khác
 
 Mọi route ghi dữ liệu khác đều gate bằng `create`/`edit`/`delete` tương ứng hành động. `POST /budgets` (`routes.js:635`) lại gate bằng `requirePerm('reports', 'view')` — nghĩa là **bất kỳ role có quyền XEM báo cáo cũng ghi được ngân sách**, không cần quyền sửa riêng. Với ma trận hiện tại (chỉ `super_admin` có `reports`) chưa gây hở thật, nhưng nếu owner cấp quyền `reports:view` cho role mới (vd "Lãnh đạo — chỉ xem", O7) mà không biết bẫy này, role đó sẽ vô tình ghi được ngân sách — cùng nhóm rủi ro với ghi chú ở `08-permission-matrix.md` §E.3.
 
-## 12. `notify_opt_in` tắt CẢ in-app lẫn email, không chỉ email như tên gợi ý
+## 13. `notify_opt_in` tắt CẢ in-app lẫn email, không chỉ email như tên gợi ý
 
 `scheduler.js:26-27`: `optedUsers = users.filter(u => u.notify_opt_in)` — lọc TRƯỚC khi tách kênh. Email còn cần thêm điều kiện có `email` + SMTP bật, nhưng **in-app cũng bị lọc bởi đúng cờ này**. Ai đọc tên cột `notify_opt_in` mà không đọc `scheduler.js` sẽ dễ tưởng đây là "chỉ tắt email" (giữ nhắc in-app) — thực tế tắt cả 2 kênh cùng lúc.
 
-## 13. `pick()`/`buildUpdate()` bỏ qua field lạ và no-op khi rỗng — không báo lỗi
+## 14. `pick()`/`buildUpdate()` bỏ qua field lạ và no-op khi rỗng — không báo lỗi
 
 `pick(obj, allowed)` (`routes.js:22-26`) chỉ giữ field có trong mảng `XXX_COLS`; field client gửi lên nhưng không khai trong mảng bị loại **âm thầm, không lỗi, không log**. `buildUpdate()` (`routes.js:38-43`) nếu object rỗng sau `pick` (vd client gửi toàn field không được whitelist) thì `return` ngay, **không chạy UPDATE nào**, nhưng route vẫn trả `{ok:true}` như thành công. Khi thêm cột DB mới cho 1 entity, dễ quên thêm tên cột vào mảng `XXX_COLS` tương ứng — API vẫn chạy "bình thường" (không lỗi 500) nhưng field mới không bao giờ được ghi, rất khó phát hiện nếu không kiểm tra kỹ dữ liệu sau khi lưu.
 
-## 14. `attachments.kind`/`owner_type` không có CHECK constraint — mỗi module tự quy ước riêng, dễ nhầm khi thêm chỗ mới
+## 15. `attachments.kind`/`owner_type` không có CHECK constraint — mỗi module tự quy ước riêng, dễ nhầm khi thêm chỗ mới
 
 Bảng `attachments` dùng chung cho 6 owner_type (`person`, `agreement`, `work_log`, `award`, `supplier`, `event`) với `kind` mang ý nghĩa khác nhau tuỳ owner: `portrait`/`id_doc` (person), `file` (agreement/work_log), `award_doc` (award, cố định trong code), `quote` (supplier, cố định trong code), **tự do từ query string** (event — F9). Không có ràng buộc DB nào đảm bảo `kind` hợp lệ theo `owner_type` — thêm 1 module mới dùng `attachments` phải tự nhớ quy ước, không có gì ở schema nhắc hoặc chặn nếu viết sai.

@@ -1164,7 +1164,7 @@ AI-E001..AI-E012), dùng fake/fixture (KHÔNG gọi Gemini/Internet thật), c�
 Owner đã chốt phạm vi Bundle A ở tin nhắn trước: G1A.4+G1A.5+G1A.7+G1A.8 là test cho code hiện hữu,
 "phải GREEN"; G1B (RBAC v2/session/SSRF target) là spec-first riêng, CHƯA làm ở batch này.
 
-**Nội dung:** file mới `server/test/integration-ai-golden.test.js` (22 test). Kỹ thuật cách ly mạng:
+**Nội dung:** file mới `server/test/integration-ai-golden.test.js` (18 test). Kỹ thuật cách ly mạng:
 `process.env.GEMINI_API_KEY` set TRƯỚC mọi require (mỗi file test là 1 subprocess riêng theo quy
 ước `node --test server/test/*.test.js`, không ảnh hưởng file khác đang characterize nhánh
 không-key); `global.fetch` thay bằng hàng đợi (queue) response cố định theo ĐÚNG thứ tự lời gọi
@@ -1231,3 +1231,18 @@ không đổi code sản phẩm — an toàn revert bất kỳ lúc nào).
 Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
 
 **Từ đây, mọi thay đổi kiến trúc/schema/API/nghiệp vụ đáng chú ý PHẢI thêm 1 dòng vào file này kèm lý do — theo `BackEnd.SKILL/20-memory-bank-mandate.md` mục 3.**
+
+### 2026-08-27 — Codex remediation F19/F20 (G1A.7)
+
+- **F19:** bỏ `COLLATE NOCASE` khỏi hai query khớp người/cơ quan trong `server/ai.js`; `AI-E001` xanh trên SQLite và MySQL.
+- **F20:** xác định không phải race worker; adapter `server/mysql-sync.js` chưa bind SQLite-style object placeholders `@name`, khiến MySQL ghi user variable/`NULL`. Thêm `bindSqliteNamedParams()` chuyển sang positional binding và regression unit cho literal/comment/lặp tên/thiếu binding.
+- Verify focused: `node --test server/test/mysql-sync-close.test.js` 10/10; MySQL AI golden 18/18.
+- **G1A.5 DB contract:** thêm `server/test/integration-db-contract.test.js` (4 test: 34 bảng, cột migration lõi, unique username/round-trip, app_meta upsert) — xanh cả SQLite/MySQL; F15 FK parity vẫn để Wave 1.
+- **G1A.9 mapping verifier:** thêm `scripts/verify-gate1-mapping.mjs` + npm script `test:verify-gate1-mapping`; kiểm tra 145/145 route, không trùng/thiếu, file/status hợp lệ. Kết quả `236 rows, TODO=3, known-red=0`; 3 TODO đều là target có owner/wave, không phải characterization bị bỏ sót.
+- Verify full sau remediation + DB contract: `npm run test:integration:sqlite` 578 pass / 0 fail / 7 skip; `npm run test:integration:mysql` 584 pass / 0 fail / 1 skip; `npm run test:security` 6/6; `node scripts/verify-g0.mjs` PASS; `git diff --check` sạch. Bundle A vẫn cần một lượt audit closure; G1B target chưa hoàn tất.
+
+### 2026-08-27 — G1B.4 / F3 SSRF guard
+
+- Thêm `server/safe-fetch.js` làm seam outbound dùng chung; áp dụng `monitor.fetchText`, `monitor.resolveLink`, create/update monitor source và `POST /ai/award-extract`.
+- Fail-closed `400` với URL localhost/private/link-local/metadata/IPv6 private, DNS có bất kỳ IP không an toàn hoặc redirect không an toàn; không ghi source/mention, không gọi Gemini. HTTP(S) transport pin IP vừa kiểm tra bằng custom lookup để tránh DNS rebinding TOCTOU, giới hạn response 2 MiB.
+- Thêm `unit-safe-fetch.test.js` BR-SSRF-021..028; chuyển BR-SSRF-010/011 và target route BR-SSRF-016 thành green. Focused unit 27/27, route HTTP R122/R139 và AI golden SQLite xanh. Full dual-driver: SQLite 586 pass/7 skip; MySQL 592 pass/1 skip; security 6/6; G0 + mapping verifier PASS (`244 rows`, `TODO=2`).
