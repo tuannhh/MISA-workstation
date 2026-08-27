@@ -31,6 +31,7 @@ const t = router.testables;
 const { MAX_FILE_BYTES, validateSignature } = require('../spreadsheet-parser');
 const { fileFilter, aiDocumentFileFilter } = require('../uploads');
 const dbModule = require('../db');
+const auth = require('../auth');
 
 test.after(() => { fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); });
 
@@ -125,6 +126,30 @@ test('BR-VAL-014: permissionSummary() nhận string role hoặc user object, can
   assert.equal(ghost.canSeeSensitive, false);
   assert.equal(ghost.roleName, 'ghost_role'); // không có trong ROLES -> trả lại chính role
   assert.deepEqual(ghost.modules.partners, []); // module không xác định -> luôn []
+});
+
+test('BR-RBAC-003: resolvePrincipal() ưu tiên principal đã resolve, fallback duy nhất là web session', () => {
+  const fromSession = { id: 1, role: 'pr_staff' };
+  const fromAdapter = { id: 2, role: 'viewer', provider: 'web-session' };
+  assert.equal(auth.resolvePrincipal({ session: { user: fromSession } }), fromSession);
+  assert.equal(auth.resolvePrincipal({ principal: fromAdapter, session: { user: fromSession } }), fromAdapter);
+  assert.equal(auth.resolvePrincipal({ session: {} }), null);
+});
+
+test('BR-RBAC-004: requireAuth()/requirePerm() gắn req.principal nhưng không đổi matrix legacy', () => {
+  const user = { id: 1, role: 'pr_staff' };
+  const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
+  const req = { session: { user } };
+  let nextCalls = 0;
+  auth.requireAuth(req, res, () => { nextCalls += 1; });
+  assert.equal(nextCalls, 1);
+  assert.equal(req.principal, user);
+
+  auth.requirePerm('partners', 'view')(req, res, () => { nextCalls += 1; });
+  assert.equal(nextCalls, 2);
+  auth.requirePerm('reports', 'view')(req, res, () => { nextCalls += 1; });
+  assert.equal(nextCalls, 2);
+  assert.equal(res.statusCode, 403);
 });
 
 // ===================== routes.js — helpers thuần (router.testables) =====================

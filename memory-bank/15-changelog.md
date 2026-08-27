@@ -1258,3 +1258,11 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
 - Verify: SQLite 596 pass/7 skip; MySQL 602 pass/1 skip; mapping verifier 145/145, TODO=2.
   Preflight local cũ vẫn expected-red (thiếu schema); MySQL/production chỉ được flip sau artifact
   preflight, DevOps attestation, backup và smoke cutover theo W1.RBAC.0.
+
+### 2026-08-27 — W1.1 principal seam
+
+- Thêm `auth.resolvePrincipal(req)` với provider hiện tại là web session; `requireAuth`/`requirePerm`
+  gắn `req.principal` trước khi handler chạy. Đây là seam server-side cho PolicyEngine và AMIS
+  bridge tương lai, không nhận principal từ request body/header và không đổi quyền của matrix cũ.
+- Các handler legacy vẫn tương thích qua `req.session.user`; vertical slice RBAC mới sẽ dùng
+  `req.principal` thay vì tự đọc session. Regression `BR-RBAC-003/004` và auth HTTP 28/28 xanh.

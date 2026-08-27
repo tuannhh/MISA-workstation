@@ -14,6 +14,7 @@ function login(req, res) {
     return res.status(401).json({ error: 'Sai tài khoản hoặc mật khẩu.' });
   }
   req.session.user = { id: user.id, username: user.username, full_name: user.full_name, role: user.role, sensitive_perms: user.sensitive_perms };
+  req.principal = req.session.user;
   audit({ user_id: user.id, username: user.username, action: 'LOGIN', detail: 'Đăng nhập thành công' });
   res.json({ user: req.session.user, permissions: rbac.permissionSummary(req.session.user) });
 }
@@ -26,21 +27,33 @@ function me(req, res) {
   if (!req.session.user) return res.status(401).json({ error: 'Chưa đăng nhập' });
   // làm tươi từ DB (tên/quyền có thể vừa đổi)
   const u = db.prepare('SELECT id, username, full_name, role, sensitive_perms FROM users WHERE id=? AND active=1').get(req.session.user.id);
-  if (u) req.session.user = { id: u.id, username: u.username, full_name: u.full_name, role: u.role, sensitive_perms: u.sensitive_perms };
+  if (u) {
+    req.session.user = { id: u.id, username: u.username, full_name: u.full_name, role: u.role, sensitive_perms: u.sensitive_perms };
+    req.principal = req.session.user;
+  }
   res.json({ user: req.session.user, permissions: rbac.permissionSummary(req.session.user) });
+}
+
+// Principal seam W1.1. Web session là provider duy nhất hiện tại; PolicyEngine/AMIS bridge
+// sau này chỉ đọc req.principal, không được tự suy quyền từ client input.
+function resolvePrincipal(req) {
+  return req.principal || req.session?.user || null;
 }
 
 // Bắt buộc đăng nhập
 function requireAuth(req, res, next) {
-  if (!req.session.user) return res.status(401).json({ error: 'Chưa đăng nhập' });
+  const principal = resolvePrincipal(req);
+  if (!principal) return res.status(401).json({ error: 'Chưa đăng nhập' });
+  req.principal = principal;
   next();
 }
 
 // Yêu cầu quyền trên module + hành động
 function requirePerm(module, action) {
   return (req, res, next) => {
-    const u = req.session.user;
+    const u = resolvePrincipal(req);
     if (!u) return res.status(401).json({ error: 'Chưa đăng nhập' });
+    req.principal = u;
     if (!rbac.can(u.role, module, action)) {
       return res.status(403).json({ error: `Bạn không có quyền ${action} trên ${module}.` });
     }
@@ -48,4 +61,4 @@ function requirePerm(module, action) {
   };
 }
 
-module.exports = { login, logout, me, requireAuth, requirePerm };
+module.exports = { login, logout, me, resolvePrincipal, requireAuth, requirePerm };
