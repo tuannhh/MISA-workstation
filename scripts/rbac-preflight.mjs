@@ -20,6 +20,18 @@ if (driver === 'mysql') {
   close = () => db.close();
 }
 
+function asCount(value) {
+  return Number(value ?? 0);
+}
+
+async function countMissingValues(table, column) {
+  // Both identifiers originate from the fixed catalog above, never user input.
+  const rows = await query(
+    `SELECT COUNT(*) AS total, SUM(CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END) AS missing FROM ${table}`,
+  );
+  return { table, column, total: asCount(rows[0]?.total), missing: asCount(rows[0]?.missing) };
+}
+
 try {
   const columns = new Map();
   for (const table of [...activityTables, 'attachments']) {
@@ -32,10 +44,44 @@ try {
     ? !columns.get(table).has('responsible_user_id')
     : !columns.get(table).has('owner_id'));
   const attachmentsHasVisibility = columns.get('attachments').has('audience_visibility');
+  const ownership = [];
+  for (const table of activityTables) {
+    const column = table === 'gifts' ? 'responsible_user_id' : 'owner_id';
+    if (columns.get(table).has(column)) ownership.push(await countMissingValues(table, column));
+  }
+  const attachmentVisibility = attachmentsHasVisibility
+    ? await countMissingValues('attachments', 'audience_visibility')
+    : null;
   const visibilityTable = driver === 'mysql'
     ? await query("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='field_visibility'")
     : await query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='field_visibility'");
-  const report = { driver, readOnly: true, required: { activityTables, ownerColumnException: { gifts: 'responsible_user_id (owner_id là người/cơ quan nhận quà legacy)' }, attachmentVisibility: 'audience_visibility', fieldVisibilityTable: 'field_visibility' }, actual: { missingOwner, attachmentsHasVisibility, hasFieldVisibility: visibilityTable.length > 0 }, readyToFlipFailClosed: missingOwner.length === 0 && attachmentsHasVisibility && visibilityTable.length > 0 };
+  const hasUnassignedOwners = ownership.some(({ missing }) => missing > 0);
+  const hasUnclassifiedAttachments = attachmentVisibility?.missing > 0;
+  const report = {
+    driver,
+    readOnly: true,
+    required: {
+      activityTables,
+      ownerColumnException: { gifts: 'responsible_user_id (owner_id là người/cơ quan nhận quà legacy)' },
+      attachmentVisibility: 'audience_visibility',
+      fieldVisibilityTable: 'field_visibility',
+      dataReadiness: 'All direct-resource owner columns and attachment visibility must have NULL=0 before fail-closed.',
+    },
+    actual: {
+      missingOwner,
+      ownership,
+      attachmentsHasVisibility,
+      attachmentVisibility,
+      hasFieldVisibility: visibilityTable.length > 0,
+      hasUnassignedOwners,
+      hasUnclassifiedAttachments,
+    },
+    readyToFlipFailClosed: missingOwner.length === 0
+      && attachmentsHasVisibility
+      && visibilityTable.length > 0
+      && !hasUnassignedOwners
+      && !hasUnclassifiedAttachments,
+  };
   console.log(JSON.stringify(report, null, 2));
   if (!report.readyToFlipFailClosed) process.exitCode = 2;
 } finally {

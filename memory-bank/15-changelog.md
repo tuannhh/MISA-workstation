@@ -1246,3 +1246,15 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
 - Thêm `server/safe-fetch.js` làm seam outbound dùng chung; áp dụng `monitor.fetchText`, `monitor.resolveLink`, create/update monitor source và `POST /ai/award-extract`.
 - Fail-closed `400` với URL localhost/private/link-local/metadata/IPv6 private, DNS có bất kỳ IP không an toàn hoặc redirect không an toàn; không ghi source/mention, không gọi Gemini. HTTP(S) transport pin IP vừa kiểm tra bằng custom lookup để tránh DNS rebinding TOCTOU, giới hạn response 2 MiB.
 - Thêm `unit-safe-fetch.test.js` BR-SSRF-021..028; chuyển BR-SSRF-010/011 và target route BR-SSRF-016 thành green. Focused unit 27/27, route HTTP R122/R139 và AI golden SQLite xanh. Full dual-driver: SQLite 586 pass/7 skip; MySQL 592 pass/1 skip; security 6/6; G0 + mapping verifier PASS (`244 rows`, `TODO=2`).
+
+### 2026-08-27 — W1.RBAC.0 data-readiness preflight
+
+- Siết `scripts/rbac-preflight.mjs`: không còn coi việc **có cột** là đủ. Script read-only đếm
+  `NULL` của owner staff trên đủ 14 resource direct (riêng `gifts.responsible_user_id`) và
+  `attachments.audience_visibility`; chỉ trả `readyToFlipFailClosed=true` khi schema đủ **và** mọi
+  giá trị thiếu đều bằng 0.
+- Thêm regression `BR-RBAC-001/002`: một booking chưa gán owner bắt buộc giữ exit code 2; sau khi
+  gán owner thì fresh schema được qua gate. Không có route/runtime RBAC nào được bật ở slice này.
+- Verify: SQLite 596 pass/7 skip; MySQL 602 pass/1 skip; mapping verifier 145/145, TODO=2.
+  Preflight local cũ vẫn expected-red (thiếu schema); MySQL/production chỉ được flip sau artifact
+  preflight, DevOps attestation, backup và smoke cutover theo W1.RBAC.0.
