@@ -19,6 +19,7 @@ const { createResourceStack } = require('../test-support/resource-stack');
 let baseUrl;
 let cookie; // super_admin — canSeeSensitive=true, có nhóm iddoc
 let staffCookie; // pr_staff — canSeeSensitive=false, KHÔNG có nhóm iddoc
+let viewerCookie;
 let fixtures;
 const resources = createResourceStack();
 
@@ -42,6 +43,8 @@ before(async () => {
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
   const staff = fixtures.createUser('pr_staff', { username: `people_staff_${Date.now()}` });
   staffCookie = (await fixtures.login(baseUrl, { username: staff.username, password: staff.password })).cookie;
+  const viewer = fixtures.createUser('viewer', { username: `people_viewer_${Date.now()}` });
+  viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
 });
 
 after(async () => {
@@ -103,6 +106,20 @@ test('R030 not-found: id không tồn tại trả 404 {error}', async () => {
 });
 test('R030 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/people/1', { auth: false })).status, 401);
+});
+
+test('D13-011 People Detail pilot: viewer only receives configured Public fields; related collections stay private', async () => {
+  const id = await createPerson({ full_name: 'Viewer public name', phone_personal: '0900123456', bank_name: 'Restricted bank' });
+  const { db } = require('../db');
+  db.prepare('INSERT INTO field_visibility (module,field,is_public) VALUES (?,?,?)').run('partners', 'full_name', 1);
+  const res = await call('GET', `/api/people/${id}`, { as: viewerCookie });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.record, { full_name: 'Viewer public name' });
+  assert.deepEqual(body.interactions, []);
+  assert.deepEqual(body.gifts, []);
+  assert.equal('phone_personal' in body.record, false);
+  assert.equal('bank_name' in body.record, false);
 });
 
 // ---------------------------------------------------------------------------

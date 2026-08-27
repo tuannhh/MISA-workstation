@@ -1282,3 +1282,8 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   `created_by` bất biến, chuyển owner chỉ Admin/Super Admin, và projection lọc field trước khi trả
   response. Mọi deny là lỗi tường minh để handler trả 403, không xoá field âm thầm.
 - Tests D13-008..010 xanh. Chưa wire route legacy; bước tiếp theo là pilot People Detail dual-driver.
+
+### 2026-08-27 — D13 People Detail read pilot
+
+- Chuyển `GET /api/people/:id` cho đúng target role D13 qua PolicyEngine; field thiếu cấu hình bị coi private. Test HTTP D13-011 xác nhận Viewer chỉ thấy `full_name` khi field này được public rõ ràng; phone, ngân hàng, file, interactions và gifts không lộ.
+- Role 2-role legacy giữ nguyên nhánh cũ để migration không big-bang. Focused dual-driver: SQLite 34/34, MySQL 34/34.

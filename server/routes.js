@@ -6,6 +6,8 @@ const bcrypt = require('bcryptjs');
 const { db, audit, UPLOAD_DIR, metaGet, metaSet } = require('./db');
 const rbac = require('./rbac');
 const { requireAuth, requirePerm } = require('./auth');
+const { createVisibilityStore } = require('./policy-visibility-store');
+const { createPolicyService } = require('./policy-service');
 const { upload } = require('./uploads');
 const scheduler = require('./scheduler');
 const monitor = require('./monitor');
@@ -13,6 +15,8 @@ const outbound = require('./safe-fetch');
 
 const router = express.Router();
 router.use(requireAuth);
+const policyService = createPolicyService({ visibilityStore: createVisibilityStore(db) });
+const TARGET_RBAC_ROLES = new Set(['viewer', 'executor', 'admin']);
 
 // ---------- helpers ----------
 function pageParams(req) {
@@ -396,10 +400,18 @@ router.get('/people', requirePerm('partners', 'view'), (req, res) => {
   res.json({ rows: rbac.maskList('person', rows, allowed), total, page, pageSize, sensitiveVisible: senVisible(allowed) });
 });
 
-router.get('/people/:id', requirePerm('partners', 'view'), (req, res) => {
+router.get('/people/:id', (req, res) => {
   const row = db.prepare(`SELECT p.*, o.name AS org_name, o.org_type FROM people p
     LEFT JOIN organizations o ON o.id=p.org_id WHERE p.id=?`).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Không tìm thấy' });
+  // First strangler endpoint for D13. New roles deliberately do not fall back to legacy masking:
+  // no policy configuration means no fields, and related collections/files remain private until
+  // their own policy slice is implemented.
+  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+    const record = policyService.projectRecord({ principal: req.principal, entity: 'person', module: 'partners', record: row });
+    return res.json({ record, maskedFields: [], portraits: [], idDocs: [], idDocCount: 0, interactions: [], gifts: [], caretakers: [], sensitiveVisible: req.principal.role === 'admin' });
+  }
+  if (!rbac.can(req.principal?.role, 'partners', 'view')) return res.status(403).json({ error: 'Bạn không có quyền view trên partners.' });
   const allowed = senGroups(req);
   const { record, maskedFields } = rbac.maskRecord('person', row, allowed);
   const hasSensitive = rbac.SENSITIVE_FIELDS.person.some((f) => row[f]);
