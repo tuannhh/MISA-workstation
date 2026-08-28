@@ -130,3 +130,41 @@ Expected commit range/count: 1 commit.
 
 - **N1-explicit-action** — đọc trực tiếp `server/routes.js`, so khớp `requirePerm('reminders', ...)`/`requirePerm('monitoring', ...)` tại đúng 4 route side-effect; known-red assert action phải khác `'view'` (target: `ack` cho 2 route notifications + monitor alerts, `run` cho reminders/run) — hiện cả 4 đều dùng `'view'` nên RED đúng.
 - **N2-dashboard-permission** — đọc `server/routes.js` xác nhận `GET /dashboard` có gọi `requirePerm('dashboard', 'view')` (hiện KHÔNG có, route chỉ nhận `(req, res)` trần) và đọc `server/rbac.js` xác nhận `MODULES` chứa `'dashboard'` + cả 2 role trong `MATRIX` đều liệt kê `dashboard: [...'view'...]` — cả 3 điều kiện đều RED hôm nay.
+
+## Batch G1B.1-engine-completeness (2026-08-28)
+
+```md
+Batch-ID: G1B.1-engine-completeness
+Goal: đóng khoảng cách giữa bảng D13.4a ĐÃ owner-approved (02-decisions.md, đủ 6 nhóm:
+      Direct/Global/Module-admin-only/Inherited/"Global theo role") và policy-engine.js hiện tại
+      (chỉ model 3/6 nhóm — thiếu hẳn "Inherited" cho event_costs) + mở rộng test coverage phủ
+      đủ tất cả entity trong từng nhóm (trước đó chỉ test mẫu booking/gift/budget/person, chưa
+      test hết 14 Direct + 4 Global + 6 Module-admin-only).
+In scope: thêm nhóm `INHERITED` (event_cost kế thừa owner_id của event cha, theo D13.4a hàng
+      "Chi phí sự kiện" — đã owner-approved, không phải quyết định sản phẩm mới) vào
+      policy-engine.js; thêm tham số `parentOwnerId` cho canWrite/canReadField (optional,
+      backward-compatible, không đổi chữ ký gọi hiện có); mở rộng unit test phủ hết 14 Direct +
+      4 Global + 6 Module-admin-only + 1 Inherited + toàn bộ FIELD_TIER entries chưa test.
+Out of scope: gắn route nào cho event_costs hay bất kỳ resource nào khác vào PolicyEngine (đó
+      là Wave 1 strangler slice, chỉ People Detail được owner duyệt hiện tại — xem §G
+      02-decisions.md); "Tài nguyên quản trị" (users/field_visibility config/audit_log) — hành
+      vi đã đúng ngầm định (không nằm trong Direct/Global nên executor không ghi được, khớp
+      "Global theo role" trong D13.4a) nên không cần thêm set riêng, chỉ ghi chú trong test.
+Behavior mode: target-change (engine code, pure function, không DB/route) — phần lớn assertion
+      sẽ GREEN vì code hiện tại đã generic đúng cho phần lớn entity, ngoại trừ event_cost (RED
+      trước khi thêm INHERITED, GREEN sau khi thêm).
+Risk hotspots: không — pure function, không đổi route/schema, tham số mới optional nên mọi call
+      site hiện có (People Detail pilot, policy-service.js) không bị ảnh hưởng.
+Required tests: unit-policy-engine.test.js mở rộng đủ 14+4+6+1 entity; giữ nguyên 5 test D13-001
+      ..005 cũ không sửa (đã là contract đích, chỉ thêm không thay).
+Allowed known-red/TODO (owner + expiry/wave): không cần known-red — đây là closing spec gap đã
+      approved, không phải target-red chờ implementation.
+Exit criteria: mọi entity trong D13.4a có ít nhất 1 test canWrite + (nếu có FIELD_TIER) 1 test
+      classification; event_cost inherited ownership pass đúng cả 2 chiều (owner sự kiện cha ->
+      true, người khác -> false); test cũ D13-001..005 + D13-008..010 vẫn xanh nguyên văn; full
+      regression xanh.
+Expected commit range/count: 1 commit.
+```
+
+- **INHERITED (event_cost)** — D13.4a hàng "Chi phí sự kiện" đã owner-approved từ trước (không phải quyết định mới, chỉ là code chưa bắt kịp bảng): `event_costs` không có "người tạo" độc lập, kế thừa `owner_id` của `events` cha. `canWrite`/`canReadField` nhận thêm `parentOwnerId` (optional): executor ghi/đọc đủ `event_cost` khi `parentOwnerId === principal.id`, giống hệt ngữ nghĩa Direct nhưng lấy owner từ bản ghi cha thay vì chính nó. Trước khi thêm, `event_cost` không nằm trong `DIRECT`/`GLOBAL` nên executor không bao giờ ghi được dù là sự kiện của chính họ (RED so với D13.4a) — test cũ xác nhận đúng RED trước, GREEN sau khi thêm `INHERITED`.
+- **Phủ đủ entity** — mỗi 1 trong 14 Direct (không chỉ booking/gift) đều có 1 test canWrite executor-own=true/executor-other=false/admin=true; mỗi 4 Global (organization/person/supplier/important_date) có test create=true, edit=true bất kể owner, delete=false cho executor; mỗi 6 Module-admin-only (budget/scan_query/source/competitor/campaign/monitor_alert) có test executor bị chặn hoàn toàn (create/edit đều false), admin bypass; toàn bộ `FIELD_TIER` entries còn thiếu (sponsorship/budget/award/award_participation/supplier_quote/supplier_transaction/event_cost/association_fee/gift/supplier) có test `classification()`.

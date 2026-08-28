@@ -1369,3 +1369,40 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   `test:security` 6/6; `verify-g0.mjs` PASS 7/7; `test:verify-gate1-mapping` PASS 145/145, TODO=2,
   known-red=4; `git diff --check` sạch. Chưa gửi Codex audit — gộp cùng các batch G1B khác trước
   Bundle B.
+
+## 2026-08-28 — G1B.1 engine completeness: nhóm Inherited (event_cost) + phủ đủ D13.4a
+
+- Batch contract: `18-g1b-rbac-batch-contract.md#batch-g1b1-engine-completeness-2026-08-28`.
+  Phát hiện khi rà soát: bảng D13.4a đã owner-approved đủ 6 nhóm ownership (Direct/Global/
+  Module-admin-only/**Inherited**/"Global theo role"), nhưng `policy-engine.js` trước đó chỉ
+  model 3/6 nhóm — thiếu hẳn `INHERITED` cho `event_costs` ("Chi phí sự kiện", kế thừa `owner_id`
+  của `events` cha, không có người tạo độc lập). Hệ quả trước khi sửa: `event_cost` không nằm
+  trong `DIRECT`/`GLOBAL` nên `canWrite()` luôn trả `false` cho executor dù họ sở hữu chính event
+  cha — chặt hơn cả D13.4a yêu cầu (over-restrictive so với spec đã duyệt, không phải lỗ hổng lộ
+  dữ liệu, nhưng vẫn là sai lệch giữa quyết định owner và code).
+- Sửa `server/policy-engine.js`: thêm `INHERITED = Set(['event_cost'])`; `canWrite`/
+  `canReadField` nhận thêm tham số `parentOwnerId` (optional, backward-compatible — mọi call
+  site cũ như `policy-service.js`/People Detail pilot không đổi hành vi vì không truyền tham số
+  này). Executor ghi/đọc đủ `event_cost` khi `parentOwnerId === principal.id`.
+- Mở rộng `unit-policy-engine.test.js` (giữ nguyên D13-001..005 không sửa): D13-012 (14/14 Direct
+  — executor ghi bản ghi mình sở hữu, không ghi bản ghi người khác, không bao giờ xoá, admin
+  bypass), D13-013 (4/4 Global — executor sửa bất kể owner theo D13-P1/P2, không xoá được),
+  D13-014 (6/6 Module-admin-only — executor bị chặn hoàn toàn kể cả tạo mới), D13-015 (event_cost
+  Inherited — cả canWrite lẫn canReadField theo parentOwnerId), D13-016 (12 field tiền/mật còn
+  thiếu trong `FIELD_TIER` — trước đó chỉ test person + booking + generic "field lạ").
+- "Tài nguyên quản trị" (users/field_visibility config/audit_log — hàng cuối D13.4a) không cần
+  set riêng: hành vi đã đúng ngầm định vì các entity này không nằm trong Direct/Global nên
+  executor không ghi được, khớp "Global theo role" (quyết định hoàn toàn bởi D13.1) — ghi chú
+  trong batch contract, không thêm code.
+- Không đưa D13-012..016 vào `gate1-test-mapping.md` — theo đúng tiền lệ D13-001..010 (test nền
+  tảng PolicyEngine thuần, không gắn `route_id`/`business_rule_id`, tracked ở `18-g1b-rbac-batch-
+  contract.md`, không phải bảng route/job mapping).
+- Verify: `unit-policy-engine.test.js` + `unit-policy-service.test.js` 13/13 (bao gồm D13-008..010
+  cũ không đổi, xác nhận tương thích ngược); `test:integration:sqlite` 628 total/621 pass/7 skip
+  (tăng đúng 5); `test:integration:mysql` 628 total/627 pass/1 skip (tăng đúng 5); `test:security`
+  6/6; `verify-g0.mjs` PASS 7/7; `test:verify-gate1-mapping` PASS 145/145, TODO=2, known-red=4
+  (không đổi — D13 không nằm trong mapping); `git diff --check` sạch.
+- **Vẫn còn mở sau batch này (ghi rõ để không hiểu nhầm G1B.1/.2 đã đóng):** PolicyEngine hoàn
+  tất đủ ngữ nghĩa D13.4a ở tầng THUẦN LOGIC, nhưng chưa route nào khác ngoài People Detail (GET)
+  thật sự gọi tới nó — 24/25 entity trong bảng D13.4a vẫn 100% legacy 2-role ở tầng HTTP. Việc
+  gắn route là Wave 1 strangler slice tiếp theo, không phải phạm vi batch này.
