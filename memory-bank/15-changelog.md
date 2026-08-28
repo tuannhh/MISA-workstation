@@ -1344,3 +1344,28 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   `verify-g0.mjs` PASS 7/7; `test:verify-gate1-mapping` PASS 145/145, TODO=2, known-red=2;
   `git diff --check` sạch. Chưa gửi Codex audit — vẫn là 1 batch trong loạt G1B, sẽ gộp cùng các
   batch G1B khác trước khi đóng Bundle A/B theo giao thức fast-track.
+
+## 2026-08-28 — G1B.5 target N1/N2 (source-introspection)
+
+- Batch contract: `18-g1b-rbac-batch-contract.md#batch-g1b5-n1n2-2026-08-28`. N1/N2 đã RESOLVED
+  bởi owner từ 2026-08-25 (`02-decisions.md` §B.1, C0.1.3/C0.1.4) nhưng target chưa implement.
+  Đặc điểm riêng của batch này: model 2-role hiện tại cấp full CRUD trên reminders/monitoring cho
+  CẢ 2 role, nên gọi HTTP thật hôm nay không phân biệt được action `view` với action đích
+  `ack`/`run` — gap chỉ lộ ra khi có role tương lai (D13 Viewer) được cấp view nhưng không được cấp
+  write side-effect. Vì vậy test target đọc trực tiếp nguồn (route registration trong `routes.js` +
+  `MODULES`/`MATRIX` trong `rbac.js`) thay vì gọi HTTP — cùng cách tiếp cận `verify-g0.mjs` đã dùng
+  cho route catalog, không phải giảm chuẩn.
+- `server/test/target-n1-n2-explicit-permission.test.js` (7 test, không cần DB harness — thuần đọc
+  file nguồn nên chạy được cả 2 driver không khác biệt): `N1-explicit-action` (4 route side-effect
+  — `POST /notifications/:id/read`, `POST /notifications/read-all`, `POST /reminders/run`,
+  `POST /monitor/alerts/:id/read` — đều còn `requirePerm(module,'view')`, target `ack`/`run`) và
+  `N2-dashboard-permission` (`GET /dashboard` chưa có `requirePerm` nào; `rbac.js` chưa có module
+  `'dashboard'` trong `MODULES`/`MATRIX`). Cả 2 RED đúng lý do, allowlist
+  `{owner:backend, expiry:2026-12-31, wave:W1}`. Kèm 1 test characterization khoá đúng dạng nguồn
+  hiện tại mà known-red đang dựa vào, để nếu ai sửa theo hướng khác (không phải target N1/N2) thì
+  báo ngay thay vì để known-red âm thầm đổi ý nghĩa.
+- Verify: `target-n1-n2-explicit-permission.test.js` 7/7; `test:integration:sqlite` 623 total/616
+  pass/7 skip (tăng đúng 7); `test:integration:mysql` 623 total/622 pass/1 skip (tăng đúng 7);
+  `test:security` 6/6; `verify-g0.mjs` PASS 7/7; `test:verify-gate1-mapping` PASS 145/145, TODO=2,
+  known-red=4; `git diff --check` sạch. Chưa gửi Codex audit — gộp cùng các batch G1B khác trước
+  Bundle B.

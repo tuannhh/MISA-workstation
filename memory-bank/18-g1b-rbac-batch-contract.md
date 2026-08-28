@@ -94,3 +94,39 @@ Expected commit range/count: 1 commit.
 - **F2-fixation** — login lần 1 (user A) lấy cookie phiên C1, login lần 2 (user B) **tái dùng cookie C1** (mô phỏng attacker đã cắm sẵn session id C1 cho nạn nhân trước khi nạn nhân đăng nhập); vì `auth.login` không gọi `req.session.regenerate()`, cookie phiên sau khi login lại vẫn là C1 — known-red xác nhận đúng lỗ hổng fixation, sẽ tự bật GREEN thật khi W1.7 thêm regenerate.
 - **F2-ratelimit** — gửi liên tiếp N lần sai mật khẩu tới `/api/login`, hiện không có giới hạn nên toàn bộ vẫn trả `401` (không có lần nào `429`) — known-red xác nhận thiếu rate-limit.
 - **F2-logout-invalidation** — xác nhận trạng thái THẬT hiện tại (không phải known-red): sau `POST /api/logout`, dùng lại cookie cũ gọi `/api/me` phải trả `401`. `req.session.destroy()` đã xoá bản ghi phía server nên hành vi này đã đúng từ trước — ghi nhận là GREEN, không đưa vào allowlist.
+
+## Batch G1B.5-n1n2 (2026-08-28)
+
+```md
+Batch-ID: G1B.5-n1n2
+Goal: viết target-red test cho N1/N2 — 2 finding đã RESOLVED ở 02-decisions.md §B.1
+      (owner APPROVED 2026-08-25, C0.1.3/C0.1.4) nhưng target chưa implement, đúng phạm vi
+      G1B.5 trong roadmap.
+In scope: N1 (4 route side-effect hiện dùng requirePerm('reminders'|'monitoring','view') phải
+      đổi sang action tường minh ack/run — POST /notifications/:id/read,
+      POST /notifications/read-all, POST /reminders/run, POST /monitor/alerts/:id/read); N2
+      (GET /dashboard hiện KHÔNG có requirePerm nào — phải có permission dashboard:view tường
+      minh, cấp cho mọi role được phép xem dashboard trong rbac.js MATRIX).
+Out of scope: implement fix thật (đổi rbac.js MODULES/MATRIX + requirePerm ở routes.js — đó là
+      Wave 1, đổi mã hành vi thật); G1B.1/.2 (ma trận D13 ownership, batch riêng vì quy mô lớn
+      hơn nhiều).
+Behavior mode: target-change (spec-first, source-introspection — 2 role hiện tại
+      (super_admin/pr_staff) đều được cấp full CRUD trên module reminders/monitoring nên HTTP
+      request thực tế không phân biệt được 'view' vs 'ack'/'run' hôm nay; gap chỉ lộ ra khi có
+      role tương lai được cấp view nhưng không được cấp write side-effect, đúng như D13/Viewer
+      sẽ có — nên test target đọc trực tiếp nguồn route/permission thay vì gọi HTTP, giống cách
+      verify-g0.mjs đã làm cho route catalog).
+Risk hotspots: không — chỉ đọc file nguồn, không đổi runtime.
+Required tests: N1 (4 route, mỗi route 1 known-red assert đúng action tường minh, không phải
+      'view'); N2 (route /dashboard có requirePerm('dashboard','view'); rbac.js MODULES chứa
+      'dashboard'; MATRIX[super_admin].dashboard và MATRIX[pr_staff].dashboard đều chứa 'view').
+Allowed known-red/TODO (owner + expiry/wave): N1 (owner: backend, expiry: 2026-12-31, wave: W1
+      — xem 04-ROADMAP.md dòng N1); N2 (owner: backend, expiry: 2026-12-31, wave: W1 — dòng N2).
+      Cả hai đã RESOLVED ở 02-decisions.md §B.1, không phải phạm vi mới xin thêm.
+Exit criteria: known-red N1/N2 RED đúng lý do (đọc đúng nguồn hiện tại, không fail vì lỗi test);
+      full regression (security/mapping/G0/integration sqlite+mysql) vẫn xanh.
+Expected commit range/count: 1 commit.
+```
+
+- **N1-explicit-action** — đọc trực tiếp `server/routes.js`, so khớp `requirePerm('reminders', ...)`/`requirePerm('monitoring', ...)` tại đúng 4 route side-effect; known-red assert action phải khác `'view'` (target: `ack` cho 2 route notifications + monitor alerts, `run` cho reminders/run) — hiện cả 4 đều dùng `'view'` nên RED đúng.
+- **N2-dashboard-permission** — đọc `server/routes.js` xác nhận `GET /dashboard` có gọi `requirePerm('dashboard', 'view')` (hiện KHÔNG có, route chỉ nhận `(req, res)` trần) và đọc `server/rbac.js` xác nhận `MODULES` chứa `'dashboard'` + cả 2 role trong `MATRIX` đều liệt kê `dashboard: [...'view'...]` — cả 3 điều kiện đều RED hôm nay.
