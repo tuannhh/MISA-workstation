@@ -1287,3 +1287,28 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
 
 - Chuyển `GET /api/people/:id` cho đúng target role D13 qua PolicyEngine; field thiếu cấu hình bị coi private. Test HTTP D13-011 xác nhận Viewer chỉ thấy `full_name` khi field này được public rõ ràng; phone, ngân hàng, file, interactions và gifts không lộ.
 - Role 2-role legacy giữ nguyên nhánh cũ để migration không big-bang. Focused dual-driver: SQLite 34/34, MySQL 34/34.
+
+### 2026-08-28 — Ngoại lệ thứ tự phạm vi hẹp (owner) + sync verify-g0.mjs sau pilot
+
+- Phát hiện khi resume phiên: Wave 1 (`W1.RBAC.0/W1.1`/registry/`W1.POLICY`) và pilot Wave 3 đầu
+  tiên (`3e8b299`) đã lên trước khi G1B/G1C/G1.8 đóng đủ Exit gate G1 — ngược ghi chú roadmap
+  2026-08-27 "Không chuyển sang Wave 1 implementation chỉ vì test characterization đã xanh". Hỏi
+  lại owner trực tiếp thay vì tự suy đoán hay tự revert.
+- **Owner xác nhận đây là ngoại lệ chủ ý, phạm vi hẹp:** cho phép foundation/pilot fail-closed của
+  Wave 1 chạy trước để rút ngắn tiến độ, nhưng cấm cutover role hàng loạt/bật RBAC v2 mặc định toàn
+  hệ thống/chuyển production/tuyên bố Wave 1 hay Gate 1 "hoàn tất" trước khi G1B/G1C/G1.8 đóng đúng
+  Exit gate G1. Ghi vào `02-decisions.md` §G (commit `598b535`) — slice pilot mới ngoài People
+  Detail phải hỏi lại owner trước khi implement.
+- Trong lúc kiểm tra, phát hiện `node scripts/verify-g0.mjs` đã FAIL kể từ `3e8b299` (không commit
+  nào sau đó chạy lại verifier) — 2 nguyên nhân: (1) pilot bỏ `requirePerm()` literal khỏi khai báo
+  `GET /people/:id`, làm parser regex không còn suy ra được module/action; (2) `W1.RBAC.1` thêm
+  bảng `field_visibility` (có chủ ý không đưa vào `dropAll()` — xem `09-db-schema.md` §E) làm lệch
+  số bảng kỳ vọng 34→35. Sửa ở commit `6aa31bd`: thêm `PILOT_INLINE_PERM_ROUTES` (cùng tinh thần
+  `DIRECT_AUTH_ROUTE_KIND` có sẵn) khai tường minh module/action thật thay vì suy diễn ngầm, đồng
+  bộ `07-route-catalog.md`/`09-db-schema.md`. Verify: `verify-g0.mjs` PASS 7/7,
+  `test:verify-gate1-mapping` PASS (145/145, TODO=2), `test:security` 6/6,
+  `test:integration:sqlite` 602 pass/7 skip, `test:integration:mysql` 608 pass/1 skip.
+- Bài học quy trình: mọi commit chạm route/schema vẫn phải chạy `verify-g0.mjs` trong checklist
+  full regression trước handoff, kể cả sau khi Gate 0 đã đóng từ lâu — verifier vẫn là nguồn sự
+  thật máy-kiểm-được cho route catalog/permission matrix/schema facts, không "hết hạn dùng" chỉ vì
+  gate đã CLOSE.
