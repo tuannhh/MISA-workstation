@@ -59,3 +59,38 @@
 
 - `GET /people/:id` là route strangler đầu tiên: các target role `viewer`/`executor`/`admin` đi qua `policyService.projectRecord`; missing config = không trả field, Confidential/Restricted không bao giờ thành public. Collection, attachment và file trả rỗng trong pilot để không tạo read-leak qua related resource trước W1.FILE/W1.OWN.
 - User legacy vẫn qua behavior cũ, nên pilot không làm đổi quyền 2-role trước cutover. Dual-driver test D13-011 tạo viewer thật, cấu hình duy nhất `partners.full_name=public`, rồi xác nhận phone/bank/collection đều không lộ.
+
+## Batch G1B.3-session (2026-08-28)
+
+```md
+Batch-ID: G1B.3-session
+Goal: viết target-red spec test cho F2 (session hardening) theo đúng G1B.3 trong roadmap;
+      trước tiên dựng cơ chế allowlist known-red bắt buộc theo G1B.6 (chưa tồn tại trong repo —
+      không có test nào được phép RED mà không đi qua cơ chế này).
+In scope: cơ chế known-red/allowlist (server/test-support/known-red.js +
+      memory-bank/g1b-allowlist.json); 2 test target cho F2: session KHÔNG regenerate khi login
+      (fixation) và /api/login KHÔNG có rate-limit (brute force). Có kiểm tra thêm hành vi logout
+      hiện tại (không phải known-red — chỉ xác nhận trạng thái đang GREEN hay RED để ghi đúng).
+Out of scope: implement fix thật cho fixation/rate-limit (đó là W1.7, DevOps chốt backend store
+      O4); D13/G1B.1/G1B.2 (RBAC v2 resource matrix — batch riêng); đổi SESSION_SECRET fail-fast
+      (không test được qua HTTP ở tầng này, để lại TODO).
+Behavior mode: target-change (spec-first cho phần viết lại F2) + 1 infra mechanical (known-red).
+Risk hotspots: auth/session — nhưng đây là test THÊM MỚI, không sửa server/auth.js hay
+      server/app.js, nên không đổi hành vi runtime hiện có.
+Required tests: known-red self-test (allowlist thiếu id / hết hạn / test tự pass đều phải làm
+      known-red khung thất bại đúng cách); F2-fixation; F2-ratelimit; F2-logout-invalidation
+      (characterization, không phải known-red).
+Allowed known-red/TODO (owner + expiry/wave): F2-fixation (owner: backend, expiry: 2026-12-31,
+      wave: W1.7); F2-ratelimit (owner: backend, expiry: 2026-12-31, wave: W1.7) — cả hai đã có
+      trong roadmap §G1B.3/W1.7, không phải phạm vi mới xin thêm.
+Exit criteria: known-red harness tự-test xanh (chứng minh nó thật sự phát hiện allowlist
+      thiếu/hết hạn/test bất ngờ pass); 2 known-red test hiện RED đúng lý do (fail vì thiếu
+      regenerate/rate-limit, không fail vì lỗi test); logout-invalidation ghi đúng trạng thái
+      thật; full regression (security/mapping/integration sqlite+mysql) vẫn xanh.
+Expected commit range/count: 1 commit.
+```
+
+- **Known-red harness (G1B.6)** — `server/test-support/known-red.js` export `knownRed(id, name, fn)`: tra `memory-bank/g1b-allowlist.json` theo `id`; fail ngay nếu không có entry hoặc entry đã hết `expiry`; chạy `fn`, bắt lỗi — nếu `fn` **không** throw (nghĩa là hành vi đích bất ngờ đã đúng rồi), known-red tự fail để buộc promote thành test xanh thật + xoá khỏi allowlist, đúng yêu cầu G1B.6 "unexpected failure ngoài allowlist = build đỏ" (áp dụng đối xứng cho cả chiều "known-red bất ngờ pass").
+- **F2-fixation** — login lần 1 (user A) lấy cookie phiên C1, login lần 2 (user B) **tái dùng cookie C1** (mô phỏng attacker đã cắm sẵn session id C1 cho nạn nhân trước khi nạn nhân đăng nhập); vì `auth.login` không gọi `req.session.regenerate()`, cookie phiên sau khi login lại vẫn là C1 — known-red xác nhận đúng lỗ hổng fixation, sẽ tự bật GREEN thật khi W1.7 thêm regenerate.
+- **F2-ratelimit** — gửi liên tiếp N lần sai mật khẩu tới `/api/login`, hiện không có giới hạn nên toàn bộ vẫn trả `401` (không có lần nào `429`) — known-red xác nhận thiếu rate-limit.
+- **F2-logout-invalidation** — xác nhận trạng thái THẬT hiện tại (không phải known-red): sau `POST /api/logout`, dùng lại cookie cũ gọi `/api/me` phải trả `401`. `req.session.destroy()` đã xoá bản ghi phía server nên hành vi này đã đúng từ trước — ghi nhận là GREEN, không đưa vào allowlist.

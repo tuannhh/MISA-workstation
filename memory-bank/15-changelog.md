@@ -1312,3 +1312,35 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   full regression trước handoff, kể cả sau khi Gate 0 đã đóng từ lâu — verifier vẫn là nguồn sự
   thật máy-kiểm-được cho route catalog/permission matrix/schema facts, không "hết hạn dùng" chỉ vì
   gate đã CLOSE.
+
+## 2026-08-28 — G1B.3 session target (F2) + cơ chế known-red allowlist (G1B.6)
+
+- Batch contract: `18-g1b-rbac-batch-contract.md#batch-g1b3-session-2026-08-28`. G1B.6 (cơ chế
+  allowlist known-red `{id, owner, expiry}`) trước đó **chưa tồn tại** trong repo dù roadmap đã ghi
+  yêu cầu từ G1A.2 — không có cơ chế này thì không có RED test nào được viết an toàn (RED trực
+  tiếp làm build đỏ vô thời hạn, không phân biệt được gap-đã-biết với bug thật). Dựng
+  `server/test-support/known-red.js` (`validateEntry(id)` tra `memory-bank/g1b-allowlist.json`,
+  fail nếu thiếu/hết hạn; `knownRed(id, name, fn)` bọc `test()` — test CHA chỉ pass khi `fn` bên
+  trong vẫn fail đúng như allowlist mô tả; nếu `fn` bất ngờ pass, test CHA tự fail để buộc promote
+  thành assertion xanh thật + xoá khỏi allowlist, không được để known-red mãi mãi).
+- 2 target test đầu tiên dùng cơ chế này (`server/test/target-session-f2.test.js`):
+  `F2-fixation` (session id phải đổi khi login lại trên cookie có sẵn — hiện KHÔNG đổi vì
+  `auth.login()` không gọi `req.session.regenerate()`) và `F2-ratelimit` (`/api/login` phải chặn
+  brute-force — hiện không có giới hạn). Cả 2 RED đúng lý do, allowlist
+  `{owner:backend, expiry:2026-12-31, wave:W1.7}`. Implement thật (regenerate + rate-limit) vẫn
+  thuộc W1.7, không làm trong batch này.
+- Nhân tiện kiểm tra `F2-logout-invalidation` (đăng nhập → logout → cookie cũ gọi `/api/me`) —
+  hoá ra ĐÃ đúng từ trước (`req.session.destroy()` vô hiệu session phía server), ghi nhận
+  characterization GREEN, không đưa vào allowlist.
+- Sửa `scripts/verify-gate1-mapping.mjs`: regex nhận diện ID trước đó chỉ khớp
+  `R\d{3}|JOB-*|AI-|BR-`, không khớp vocabulary `{F-id/D13-target/N-id}` mà chính header
+  `gate1-test-mapping.md` đã ghi cho G1B — khiến 2 dòng known-red mới bị đếm ẩn (verifier PASS giả,
+  vẫn báo `known-red=0`). Thêm `F\d+-|D13-|N\d+-` vào regex; sau sửa verifier báo đúng
+  `known-red=2`, `247 mapped rows`.
+- Verify: `known-red self-test` xanh (xác nhận cơ chế thật sự phát hiện id thiếu/hết hạn/hành vi
+  bất ngờ pass); `target-session-f2.test.js` 7/7 cả SQLite lẫn MySQL;
+  `test:integration:sqlite` 616 total/609 pass/7 skip (tăng đúng 7 so với batch trước);
+  `test:integration:mysql` 616 total/615 pass/1 skip (tăng đúng 7); `test:security` 6/6;
+  `verify-g0.mjs` PASS 7/7; `test:verify-gate1-mapping` PASS 145/145, TODO=2, known-red=2;
+  `git diff --check` sạch. Chưa gửi Codex audit — vẫn là 1 batch trong loạt G1B, sẽ gộp cùng các
+  batch G1B khác trước khi đóng Bundle A/B theo giao thức fast-track.

@@ -11,7 +11,10 @@ const mappingPath = path.join(root, 'memory-bank/gate1-test-mapping.md');
 const catalog = fs.readFileSync(catalogPath, 'utf8');
 const mapping = fs.readFileSync(mappingPath, 'utf8');
 const routeIds = [...catalog.matchAll(/^\|\s*(R\d{3})\s*\|/gm)].map((m) => m[1]);
-const rows = mapping.split('\n').filter((line) => /^\|\s*(R\d{3}|JOB-[A-Z-]+|AI-|BR-)/.test(line));
+// G1B.6 dùng vocabulary {F-id/D13-target/N-id} cho known-red (xem header file mapping) — verifier
+// trước đây chỉ nhận diện route/job/AI/BR nên các dòng F2-*/D13-*/N-* của G1B bị mapping đếm ẩn
+// (PASS giả, không phản ánh đúng known-red thật). Bổ sung 3 prefix này để mapping thấy đủ.
+const rows = mapping.split('\n').filter((line) => /^\|\s*(R\d{3}|JOB-[A-Z-]+|AI-|BR-|F\d+-|D13-|N\d+-)/.test(line));
 const routeRows = rows.filter((line) => /^\|\s*R\d{3}\s*\|/.test(line));
 
 function fail(message) {
