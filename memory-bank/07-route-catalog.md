@@ -35,7 +35,7 @@
 | R027 | DELETE | /api/partners/:id/fees/:fid | requirePerm(partners,edit) | association_fees | org_fee | không | routes.js:312 |
 | R028 | POST | /api/partners/:id/fees/:fid/remind | requirePerm(partners,view) | important_dates | org_fee (đọc, không trả amount) | không | routes.js:316 |
 | R029 | GET | /api/people | requirePerm(partners,view) | people+organizations | contact,private,social,finance (masked) | không | routes.js:338 |
-| R030 | GET | /api/people/:id | requirePerm(partners,view) | people+attachments+interactions+gifts | contact,private,social,finance,iddoc,org_fee | không (metadata) | routes.js:361 |
+| R030 | GET | /api/people/:id | **`requirePerm(partners,view)` tương đương, kiểm INLINE trong handler (không còn literal ở khai báo route — D13 People Detail pilot `3e8b299`)**: router-level `requireAuth` + legacy 2-role nhánh `rbac.can(role,partners,view)`, role D13 mới nhánh `policyService.projectRecord()`/PolicyEngine, cùng module `partners`/action `view` — khai tường minh ở `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` | people+attachments+interactions+gifts | contact,private,social,finance,iddoc,org_fee | không (metadata) | routes.js:403 |
 | R031 | POST | /api/people | requirePerm(partners,create) | people | contact,private,social,finance (**KHÔNG stripDisallowed** — F1) | không | routes.js:383 |
 | R032 | PUT | /api/people/:id | requirePerm(partners,edit) | people | contact,private,social,finance (có stripDisallowed) | không | routes.js:391 |
 | R033 | DELETE | /api/people/:id | requirePerm(partners,delete) | people+attachments | — | có (xoá file vật lý) | routes.js:400 |

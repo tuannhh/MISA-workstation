@@ -82,6 +82,16 @@ function resolveRouterPrefix(file, appSource = read('server/app.js')) {
   return mount.prefix;
 }
 
+// Route nào KHÔNG còn requirePerm(module,action) ngay trong khai báo route (vì Wave-1 pilot D13
+// chuyển kiểm quyền vào TRONG thân handler, rẽ nhánh legacy 2-role/PolicyEngine — vd
+// server/routes.js:403 R030) phải khai TƯỜNG MINH ở đây, giống hệt tinh thần
+// DIRECT_AUTH_ROUTE_KIND phía trên: script không tự suy diễn module từ thân hàm (dễ sai/im lặng
+// PASS sai), người sửa route phải tự xác nhận bằng đọc code rồi khai đúng module/action thật —
+// nếu quên khai, route sẽ rơi về module=null và FAIL rõ ràng ở Section A thay vì PASS ngầm.
+const PILOT_INLINE_PERM_ROUTES = {
+  'GET /api/people/:id': { module: 'partners', action: 'view' }, // D13 People Detail pilot, commit 3e8b299
+};
+
 function sourceRoutes() {
   const routes = [];
   for (const file of ['server/routes.js', 'server/ai.js']) {
@@ -90,11 +100,14 @@ function sourceRoutes() {
     const regex = /router\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]([^\n]*)/g;
     for (const match of source.matchAll(regex)) {
       const permission = match[3].match(/requirePerm\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
+      const method = match[1].toUpperCase();
+      const fullPath = `${prefix}${match[2]}`;
+      const pilot = !permission ? PILOT_INLINE_PERM_ROUTES[`${method} ${fullPath}`] : null;
       routes.push({
-        method: match[1].toUpperCase(),
-        fullPath: `${prefix}${match[2]}`,
-        module: permission ? permission[1] : null,
-        action: permission ? permission[2] : null,
+        method,
+        fullPath,
+        module: permission ? permission[1] : (pilot ? pilot.module : null),
+        action: permission ? permission[2] : (pilot ? pilot.action : null),
       });
     }
   }
@@ -183,13 +196,18 @@ function verifySchema() {
   const tables = [...db.matchAll(/CREATE TABLE IF NOT EXISTS\s+([a-z_]+)/g)].map((match) => match[1]);
   const indexes = [...db.matchAll(/CREATE INDEX IF NOT EXISTS\s+([a-z_]+)/g)].map((match) => match[1]);
   const drops = [...db.matchAll(/DROP TABLE IF EXISTS\s+([a-z_]+)/g)].map((match) => match[1]);
-  ok(new Set(tables).size === 34, `tables=${new Set(tables).size}, expected 34`);
+  // Baseline Gate-0 là 34 bảng/28 drop-target. W1.RBAC.1 (commit 9ef286a, 2026-08-27) thêm bảng
+  // `field_visibility` — KHÔNG đưa vào dropAll() vì W1.RBAC.0 đã chốt bỏ dropAll()/RESET_DB làm
+  // cơ chế reset cho migration RBAC v2 (dùng fresh database/schema cutover thay thế, xem
+  // 09-db-schema.md §E + 04-ROADMAP.md W1.RBAC.1) — nên đây là 1 omission MỚI có chủ ý, không
+  // phải regression giống 6 omission Gate-0 cũ.
+  ok(new Set(tables).size === 35, `tables=${new Set(tables).size}, expected 35`);
   ok(new Set(indexes).size === 22, `indexes=${new Set(indexes).size}, expected 22`);
   ok(new Set(drops).size === 28, `drop targets=${new Set(drops).size}, expected 28`);
   const omissions = [...new Set(tables)].filter((table) => !new Set(drops).has(table)).sort();
-  const expected = ['agreements', 'benefit_usages', 'gifts', 'supplier_contacts', 'supplier_transactions', 'work_logs'].sort();
+  const expected = ['agreements', 'benefit_usages', 'gifts', 'supplier_contacts', 'supplier_transactions', 'work_logs', 'field_visibility'].sort();
   ok(JSON.stringify(omissions) === JSON.stringify(expected), `drop omissions=${omissions}, expected=${expected}`);
-  pass(`schema facts: 34 tables, 22 indexes, 28 drops; omissions=${omissions.join(',')}`);
+  pass(`schema facts: 35 tables, 22 indexes, 28 drops; omissions=${omissions.join(',')}`);
 }
 
 function verifyErrorExample() {
