@@ -201,5 +201,38 @@ D14.2 chốt human-in-the-loop đúng hướng, nhưng "AI chuẩn bị, ngườ
 | N2 | `GET /dashboard` không có `requirePerm` module cụ thể — mọi role đăng nhập xem được | **RESOLVED (owner APPROVED 2026-08-25, C0.1.4)** | Owner | **Chủ ý, không phải thiếu sót — nhưng phải tường minh**: dashboard dùng permission riêng `dashboard:view`, cấp cho **mọi role được phép xem dashboard** (không dựa vào "đăng nhập là đủ" như 1 policy module ngầm định). Sửa `rbac.js` thêm `dashboard:view` + gate route là việc Wave 1. Evidence: `PR-WORKSTATION-CODEX-G0-CLOSE-CONTRACT.md` C0.1.4. |
 | N3 | `uploadAudio` (dùng cho `/ai/award-extract`) không có `fileFilter` — chấp nhận MIME tùy ý tới 25MB, lưu RAM | **RESOLVED bằng source evidence** | — | Đã xác nhận trực tiếp qua `server/uploads.js:39-43` — không cần owner, đã đưa vào `06-threat-model.md` §D và cần fix ở Wave 1 (upload security, không chờ owner quyết) |
 
+## G. Ngoại lệ thứ tự phạm vi hẹp — Wave 1 foundation/pilot fail-closed được phép chạy trước khi G1B/G1C/G1.8 đóng (owner, 2026-08-28)
+
+> **Bối cảnh:** `04-ROADMAP.md` Exit gate G1 (mục a-e) và execution update 2026-08-27 nói rõ
+> *"Không chuyển sang Wave 1 implementation chỉ vì test characterization đã xanh"*. Nhưng commit
+> history cho thấy các việc Wave 1 (`W1.RBAC.0` preflight, `W1.1` principal seam, RBAC
+> classification registry, `W1.POLICY` service choke point) và pilot Wave 3 đầu tiên ("D13 People
+> Detail read pilot" — chuyển `GET /api/people/:id` sang PolicyEngine) đã lên trước khi G1B.1/.2/.3/
+> .5/.6, G1C.1, G1.8 đóng. Được hỏi lại trực tiếp trong phiên 2026-08-28 để xác nhận đây có phải
+> chủ ý hay lỗi trình tự.
+
+> **Owner quyết (2026-08-28, qua hội thoại chat, câu trả lời trực tiếp):** *"Owner cho phép triển
+> khai trước các foundation/pilot fail-closed của Wave 1 để rút ngắn tiến độ, nhưng không cho phép
+> bỏ exit gate. Không cutover role, không bật RBAC v2 toàn hệ thống, không chuyển production trước
+> khi G1B/G1C/G1.8 đóng. [...] Claude có thể tiếp tục People pilot, PolicyEngine, test dual-driver;
+> nhưng không được tuyên bố Wave 1/Gate 1 hoàn tất hay mở rộng quyền runtime hàng loạt."*
+
+**Phạm vi được phép (trong khi G1B/G1C/G1.8 còn mở):**
+- Foundation fail-closed: preflight read-only (`W1.RBAC.0`), seam (`W1.1` principal), registry dữ
+  liệu phân loại, `W1.POLICY` service choke point — miễn KHÔNG đổi hành vi authorization cho route
+  chưa pilot.
+- ĐÚNG 1 pilot slice runtime tại một thời điểm (hiện là People Detail, `GET /api/people/:id`) — có
+  test dual-driver (SQLite+MySQL) đi kèm mỗi thay đổi, nhánh 2-role legacy giữ nguyên song song
+  (không big-bang).
+
+**Phạm vi CẤM cho tới khi G1B/G1C/G1.8 đóng đúng Exit gate G1:**
+- Cutover role hàng loạt (chuyển toàn bộ route/module sang RBAC v2 cùng lúc).
+- Bật RBAC v2 làm đường mặc định cho mọi user/route (chỉ pilot slice đang chỉ định).
+- Chuyển sang chạy trên môi trường production thật với RBAC v2.
+- Tuyên bố Wave 1 hoặc Gate 1 "hoàn tất"/"CLOSE" — 2 việc này độc lập, không được gộp.
+
+Mọi slice pilot mới (Partner Detail, Supplier/Booking/File, ...) ngoài People Detail phải hỏi lại
+owner xác nhận nằm trong ngoại lệ này trước khi implement, không tự suy rộng phạm vi.
+
 ## C. Nguyên tắc completion (chống báo cáo ảo)
 Không tuyên bố "đạt 100% MDS/native" khi còn thiếu: owner decision, contract native host, hoặc runtime evidence trên thiết bị/host thật. Unknown ghi `UNVERIFIED`.

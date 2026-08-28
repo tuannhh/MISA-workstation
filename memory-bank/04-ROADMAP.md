@@ -131,6 +131,12 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 ## WAVE 1 — RBAC v2 nền tảng (D13) + security root-cause
 **Ước lượng:** 3-5 tuần (khối lớn nhất). Nền tảng cho mọi wave sau.
 
+> **Ngoại lệ thứ tự phạm vi hẹp (owner, 2026-08-28 — `02-decisions.md` §G):** foundation fail-closed
+> (`W1.RBAC.0`, `W1.1`, registry phân loại, `W1.POLICY`) và ĐÚNG 1 pilot slice runtime (People
+> Detail) được phép chạy trước khi G1B/G1C/G1.8 đóng đủ Exit gate G1, để rút ngắn tiến độ — nhưng
+> **KHÔNG** được cutover role hàng loạt, bật RBAC v2 mặc định toàn hệ thống, chuyển production, hay
+> tuyên bố Wave 1/Gate 1 "hoàn tất". Slice pilot mới ngoài People Detail phải hỏi lại owner trước.
+
 ### W1 — nhánh RBAC v2 (D13, gộp F1/F9/F11 + money/file policy)
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
