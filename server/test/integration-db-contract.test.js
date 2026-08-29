@@ -40,7 +40,6 @@ const REQUIRED_COLUMNS = {
   supplier_contacts: ['id', 'supplier_id', 'owner_id'],
   award_participations: ['id', 'award_id', 'owner_id'],
   benefit_usages: ['id', 'org_id', 'owner_id'],
-  bookings: ['id', 'title', 'amount', 'award_id', 'event_id'],
   reminder_log: ['id', 'date_id', 'occur_date', 'seq', 'channel', 'recipient_user_id'],
   sources: ['id', 'name', 'enabled', 'auto', 'mode'],
   mentions: ['id', 'query_id', 'link', 'matched_group'],

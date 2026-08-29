@@ -45,33 +45,44 @@ for (const { route, targetAction } of N1_ROUTES) {
         targetAction,
         `route side-effect vẫn dùng action='${action}' (tái dùng 'view' cho action ghi) — role tương lai chỉ có view sẽ vô tình ghi được`
       );
-    }
+    },
+    /vẫn dùng action='[^']*' \(tái dùng 'view' cho action ghi\)/
   );
 }
 
-knownRed('N2-dashboard-permission', 'N2 GET /dashboard PHẢI có requirePerm(dashboard,view) tường minh', () => {
-  const idx = routesSrc.indexOf("router.get('/dashboard'");
-  assert.ok(idx >= 0, 'không tìm thấy route GET /dashboard trong routes.js — route đã đổi, cập nhật test');
-  const line = routesSrc.slice(idx, routesSrc.indexOf('\n', idx));
-  assert.match(
-    line,
-    /requirePerm\('dashboard',\s*'view'\)/,
-    'route /dashboard hiện không gọi requirePerm(dashboard,view) — mọi role đăng nhập đều xem được mà không qua permission module riêng'
-  );
-});
-
-knownRed('N2-dashboard-permission', "N2 rbac.js PHẢI khai module 'dashboard' và cấp view cho mọi role được phép xem", () => {
-  assert.match(rbacSrc, /MODULES\s*=\s*\[[^\]]*'dashboard'[^\]]*\]/, "MODULES trong rbac.js chưa liệt kê 'dashboard'");
-  for (const role of ['super_admin', 'pr_staff']) {
-    const roleBlockMatch = rbacSrc.match(new RegExp(`${role}:\\s*\\{([\\s\\S]*?)\\n  \\},`));
-    assert.ok(roleBlockMatch, `không tìm thấy khối MATRIX.${role} trong rbac.js`);
+knownRed(
+  'N2-dashboard-permission',
+  'N2 GET /dashboard PHẢI có requirePerm(dashboard,view) tường minh',
+  () => {
+    const idx = routesSrc.indexOf("router.get('/dashboard'");
+    assert.ok(idx >= 0, 'không tìm thấy route GET /dashboard trong routes.js — route đã đổi, cập nhật test');
+    const line = routesSrc.slice(idx, routesSrc.indexOf('\n', idx));
     assert.match(
-      roleBlockMatch[1],
-      /dashboard:\s*\[[^\]]*'view'[^\]]*\]/,
-      `MATRIX.${role} chưa cấp dashboard:['view'] tường minh`
+      line,
+      /requirePerm\('dashboard',\s*'view'\)/,
+      'route /dashboard hiện không gọi requirePerm(dashboard,view) — mọi role đăng nhập đều xem được mà không qua permission module riêng'
     );
-  }
-});
+  },
+  /route \/dashboard hiện không gọi requirePerm\(dashboard,view\)/
+);
+
+knownRed(
+  'N2-dashboard-permission',
+  "N2 rbac.js PHẢI khai module 'dashboard' và cấp view cho mọi role được phép xem",
+  () => {
+    assert.match(rbacSrc, /MODULES\s*=\s*\[[^\]]*'dashboard'[^\]]*\]/, "MODULES trong rbac.js chưa liệt kê 'dashboard'");
+    for (const role of ['super_admin', 'pr_staff']) {
+      const roleBlockMatch = rbacSrc.match(new RegExp(`${role}:\\s*\\{([\\s\\S]*?)\\n  \\},`));
+      assert.ok(roleBlockMatch, `không tìm thấy khối MATRIX.${role} trong rbac.js`);
+      assert.match(
+        roleBlockMatch[1],
+        /dashboard:\s*\[[^\]]*'view'[^\]]*\]/,
+        `MATRIX.${role} chưa cấp dashboard:['view'] tường minh`
+      );
+    }
+  },
+  /chưa liệt kê 'dashboard'|chưa cấp dashboard:\['view'\] tường minh/
+);
 
 // Characterization — xác nhận đúng trạng thái source HIỆN TẠI mà 2 known-red ở trên dựa vào, để
 // nếu ai đó sửa routes.js/rbac.js theo hướng khác (không phải theo target N1/N2) thì test này báo

@@ -36,7 +36,23 @@ function validateEntry(id) {
   return entry;
 }
 
-function knownRed(id, name, fn) {
+// Codex audit Bundle A, finding #2 (2026-08-28): bản đầu bắt MỌI exception và coi là "hành vi
+// đích đã sai như mong đợi" — một TypeError do fixture hỏng, DB không kết nối được, hay chính
+// assertion sai câu chữ đều bị nuốt thành known-red PASS giả. `expectedError` bắt buộc (RegExp
+// hoặc predicate `(err) => boolean`) để phân biệt đúng lỗi target với lỗi setup: lỗi không khớp
+// bị NÉM LẠI nguyên văn, làm test thật sự đỏ thay vì bị che giấu.
+function errorMatchesExpected(err, expectedError) {
+  if (expectedError instanceof RegExp) return expectedError.test(err.message);
+  if (typeof expectedError === 'function') return !!expectedError(err);
+  return false;
+}
+
+function knownRed(id, name, fn, expectedError) {
+  if (!(expectedError instanceof RegExp) && typeof expectedError !== 'function') {
+    throw new Error(
+      `known-red "${id}" thiếu expectedError (RegExp hoặc predicate (err) => boolean) — bắt buộc theo G1B.6 remediation để không nuốt nhầm lỗi setup/fixture thành known-red.`
+    );
+  }
   test(`${name} [known-red:${id}]`, async (t) => {
     validateEntry(id); // throw ở đây nếu allowlist thiếu/hết hạn -> test fail đúng lý do
 
@@ -44,6 +60,7 @@ function knownRed(id, name, fn) {
     try {
       await fn(t);
     } catch (err) {
+      if (!errorMatchesExpected(err, expectedError)) throw err; // lỗi khác đúng target -> không nuốt, ném lại nguyên văn
       behaviorFailedAsExpected = true;
     }
 
@@ -54,4 +71,4 @@ function knownRed(id, name, fn) {
   });
 }
 
-module.exports = { knownRed, validateEntry };
+module.exports = { knownRed, validateEntry, errorMatchesExpected };

@@ -1406,3 +1406,46 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   tất đủ ngữ nghĩa D13.4a ở tầng THUẦN LOGIC, nhưng chưa route nào khác ngoài People Detail (GET)
   thật sự gọi tới nó — 24/25 entity trong bảng D13.4a vẫn 100% legacy 2-role ở tầng HTTP. Việc
   gắn route là Wave 1 strangler slice tiếp theo, không phải phạm vi batch này.
+
+## 2026-08-28 — Remediation Bundle A theo Codex audit (PARTIAL ACCEPT → 2 MUST-FIX)
+
+- Codex audit Bundle A (G1A.4/G1A.5/G1A.8/G1B.3/G1B.4/G1B.5/G1B.1-G1B.2 engine, commit range
+  `19f9d33`/`99ddbec`/`8c99c1a`/`d2412a8`/`a4350ba`) trả **PARTIAL ACCEPT**, nêu 2 MUST-FIX:
+- **#1 — `REQUIRED_COLUMNS.bookings` khai báo trùng 2 lần** trong
+  `server/test/integration-db-contract.test.js` (dòng 29 và 43 cũ) — JavaScript object literal
+  giữ khai báo SAU, nên `owner_id` ở khai báo đầu (đầy đủ hơn) bị đè mất khỏi cột bắt buộc, dù
+  cột thật vẫn tồn tại trong DB (test không catch được nếu ai vô tình xoá `bookings.owner_id`
+  thật). Đã gộp thành 1 khai báo duy nhất giữ `owner_id`. Verify bằng đúng thực nghiệm Codex đề
+  xuất: tạm xoá `owner_id` khỏi `REQUIRED_COLUMNS.bookings` → test **fail** đúng như kỳ vọng;
+  khôi phục lại → xanh. Nhân tiện sửa `04-ROADMAP.md` dòng G1A.5 ghi nhầm "34 bảng" (test
+  `DB-CONTRACT-001` đã luôn xác nhận đúng 35 bảng từ trước, chỉ prose bị lệch).
+- **#2 — `known-red()` bắt MỌI exception, không phân biệt lỗi target thật với lỗi setup/fixture.**
+  Bản đầu (`server/test-support/known-red.js`): bất kỳ throw nào bên trong `fn` (kể cả
+  `TypeError` do fixture hỏng, DB không kết nối, hay chính assertion sai câu chữ) đều bị coi là
+  "hành vi đích sai như mong đợi" → known-red PASS giả. Sửa: thêm tham số bắt buộc `expectedError`
+  (RegExp hoặc predicate `(err) => boolean`); lỗi không khớp bị **ném lại nguyên văn** thay vì
+  nuốt, làm test thật sự đỏ để lộ đúng bug thay vì bị che giấu bởi known-red. Cập nhật cả 6 call
+  site (`target-session-f2.test.js` 2 chỗ, `target-n1-n2-explicit-permission.test.js` 6 chỗ) với
+  regex khớp đúng message target-assertion, loại trừ message lỗi setup (ví dụ "không tìm thấy
+  route..."/"không tìm thấy khối MATRIX...").
+- Self-test hành vi thật (không chỉ test logic thuần) cho remediation #2: `server/test-support/
+  known-red-fixture.js` (file riêng, KHÔNG khớp glob `*.test.js` nên không bị `node --test`
+  nhặt nhầm) mô phỏng 3 kịch bản (lỗi khớp / lỗi không khớp / thiếu `expectedError`), chạy qua
+  **child process thật** (`execFileSync` trong `target-session-f2.test.js`) và assert đúng exit
+  code — vì `test()` của `node:test` luôn RESOLVE promise kể cả khi test con fail (chỉ đổi exit
+  code tiến trình), nên không thể tự-introspect pass/fail trong cùng process. **Bài học quy trình
+  phát hiện giữa chừng:** khi tiến trình cha VÀ tiến trình con đều chạy `node --test`, cờ `--test`
+  ở con làm sai lệch exit code (không phản ánh đúng pass/fail) — sửa bằng cách bỏ cờ `--test` ở
+  con, chạy bare `node <file>` (file tự gọi `require('node:test').test()` nên không cần cờ CLI).
+- **Codex remediation #2 phần 2 — mở rộng verifier**: `scripts/verify-gate1-mapping.mjs` trước đó
+  chỉ ĐẾM số dòng known-red trong mapping, không đối chiếu với `g1b-allowlist.json`. Thêm: mỗi
+  entry allowlist phải có đủ `id/owner/expiry/wave`, `expiry` chưa hết hạn, không trùng `id`; mỗi
+  known-red row trong mapping phải có entry allowlist tương ứng; mỗi entry allowlist phải được ít
+  nhất 1 known-red row tham chiếu (không mồ côi). Verify bằng thực nghiệm: xoá tạm `owner` khỏi 1
+  entry → verifier FAIL đúng lý do; khôi phục → PASS.
+- Verify tổng: `target-session-f2.test.js` 11/11 (SQLite), `target-n1-n2-explicit-permission.test.js`
+  7/7; `test:integration:sqlite` 632 total/625 pass/7 skip (tăng đúng 4);
+  `test:integration:mysql` 632 total/631 pass/1 skip (tăng đúng 4); `test:security` 6/6;
+  `verify-g0.mjs` PASS 7/7; `test:verify-gate1-mapping` PASS 145/145, TODO=2, known-red=4
+  (allowlist 4 entry, đã đối chiếu); `git diff --check` sạch. Chờ Codex re-audit theo 2 remediation
+  trên để ACCEPT Bundle A chính thức.
