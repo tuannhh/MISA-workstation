@@ -1572,3 +1572,25 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   runner GitHub Actions thật, không chỉ verify cục bộ.
 - **G1A.10 CLOSED 2026-08-30.** Không có backlog P2/P3 mới phát sinh từ đợt fix này — GRANT thừa
   trên máy dev cục bộ là môi trường cá nhân, không phải trạng thái cần dọn theo yêu cầu owner.
+
+## 2026-08-30 — G1C.1: khung E2E acceptance theo 4 vai trò (định nghĩa, chưa viết test)
+
+- `memory-bank/19-g1c-e2e-acceptance-framework.md` (mới) — đúng yêu cầu roadmap "không viết test
+  trước W1, chỉ định nghĩa khung ở Gate 1". Chốt công cụ Playwright (lý do: multi-context test RBAC
+  chéo vai trò, device emulation trùng ma trận viewport W4.2, `APIRequestContext` seed dữ liệu qua
+  API thật giống triết lý integration test hiện có, không phụ thuộc router cụ thể — hoạt động được
+  cả với `location.hash` hiện tại của `app.js` lẫn router thật nếu Wave 3 đổi kiến trúc).
+  **Chưa cài `@playwright/test`** vào `package.json` — để dành cho lúc viết test thật đầu tiên
+  (Wave 3, slice People Detail), tránh tải browser binary ~500MB cho một quyết định thuần tài liệu.
+- Quy ước thư mục `e2e/journeys/<role>.spec.js` + 4 journey đại diện đúng ranh giới D13.1
+  (`02-decisions.md` §D) mỗi vai trò — không lặp lại toàn bộ CRUD (đã phủ G1A/G1B), chỉ chứng minh
+  UI thật sự gọi đúng PolicyEngine qua 1 đại diện/vai trò. Khối `Native-Mobile` mỗi journey giữ
+  `test.fixme()` tới khi W4.1 (WebView-host runtime) hạ cánh — Native-Mobile composition hiện chưa
+  tồn tại cho bất kỳ flow nào (F5, `FAIL/MISSING` toàn bộ, xem `08-permission-matrix.md` §B.3).
+- Cố tình **không** thêm `e2e/` hay script `test:e2e` vào `.github/workflows/regression.yml` — chạy
+  CI cho một bộ toàn `test.fixme()` không chứng minh gì thêm ngoài "file tồn tại", trong khi cài đặt
+  Playwright thật nên làm cùng lúc với slice có test thật đầu tiên.
+- Verify: `node scripts/verify-g0.mjs` vẫn PASS sau khi thêm file thứ 21 vào `memory-bank/`
+  (`docs.length` đọc động bằng `readdirSync`, không hardcode số lượng); `git diff --check` sạch.
+- Cập nhật `04-ROADMAP.md` dòng G1C.1: "khung ĐÃ ĐỊNH NGHĨA", không đổi Exit Contract (vẫn "GREEN
+  sau W1, không phải điều kiện mở W1" — chưa tuyên bố G1C xong).

@@ -117,7 +117,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 ### G1C — Acceptance E2E (GREEN sau Wave 1, mới theo C0.6) — journey đại diện 4 vai trò
 | # | Task | Evidence Contract |
 |---|---|---|
-| G1C.1 | Journey đại diện cho mỗi vai trò (Viewer/Nhân viên thực thi/Admin/Super Admin) qua Desktop + Native-Mobile composition, sau khi W1/slice UI tương ứng xong — không viết trước W1, chỉ định nghĩa khung ở Gate 1 | test / all / GREEN sau W1, không phải điều kiện mở W1 |
+| G1C.1 | **Khung ĐÃ ĐỊNH NGHĨA 2026-08-30** (`19-g1c-e2e-acceptance-framework.md`) — chưa có test thật, đúng yêu cầu "không viết trước W1". Chốt: công cụ Playwright (chưa cài `@playwright/test`, để dành khi slice đầu tiên có test thật); quy ước thư mục `e2e/journeys/<role>.spec.js`; 4 journey đại diện đúng ranh giới D13.1 mỗi vai trò (Viewer: field private bị ẩn/không có nút sửa; Nhân viên thực thi: tự xem đủ bản ghi mình owner + bị chặn sửa bản ghi người khác + không có nút xoá; Admin: gán lại owner + xoá được nhưng không thấy audit_log/API key config; Super Admin: audit_log + đổi role + API key config, Admin truy cập trực tiếp phải 403); khối `Native-Mobile` mỗi journey giữ `test.fixme()` tới khi W4.1 hạ cánh. Chưa đưa vào CI `regression` (cố tình — tránh cài công cụ nặng chỉ để chạy 0 test thật). | test / all / GREEN sau W1, không phải điều kiện mở W1 |
 
 ### Perf baseline (song song, KHÔNG block)
 | # | Task | Evidence Contract |
