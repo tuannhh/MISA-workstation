@@ -141,7 +141,19 @@ test(
     assert.equal(result.signal, null, 'process con không được bị kill do treo (timeout) — init failure phải crash nhanh, không hang');
     assert.notEqual(result.status, 0, 'require("../db") với database chưa tồn tại phải làm process thoát khác 0, không âm thầm PASS');
     assert.ok(!result.stdout.includes('DB_LOADED_OK'), 'không được in DB_LOADED_OK khi init() thất bại');
-    assert.match(result.stderr, /Unknown database/i, 'lỗi phải nêu rõ nguyên nhân (database không tồn tại), không phải lỗi mơ hồ');
+    // Lỗi thật phụ thuộc quyền GRANT của user 'pr_media' trên MySQL server đang chạy test:
+    // docker-compose.yml/CI service chỉ GRANT đúng 1 database "pr_media" (least-privilege, khớp
+    // production) — với setup đó, MySQL trả "Access denied" TRƯỚC khi kịp kiểm tra db có tồn tại
+    // hay không, vì user chưa từng có bất kỳ privilege nào khớp tên db random này. Nếu server có
+    // wildcard GRANT thừa kế từ lịch sử phát triển cũ (vd `pr_media_test_%`) thì mới thấy được
+    // "Unknown database" thật. Phát hiện qua CI thật (GitHub Actions, MySQL service container mới
+    // hoàn toàn) khác với máy dev cục bộ (container chạy lâu ngày, có GRANT thừa từ thiết kế cũ) —
+    // chấp nhận cả 2 vì cả 2 đều là lỗi rõ ràng, không mơ hồ (không phải ECONNREFUSED/timeout).
+    assert.match(
+      result.stderr,
+      /Access denied|Unknown database/i,
+      'lỗi phải nêu rõ nguyên nhân (không có quyền hoặc database không tồn tại), không phải lỗi mơ hồ'
+    );
   }
 );
 
