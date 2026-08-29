@@ -1531,3 +1531,44 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   1 GitHub Actions run xanh thật — YAML parse/verify cục bộ không thể xác nhận MySQL service
   container hay runner Actions hoạt động đúng. Việc này cần owner action (push), không phải việc
   Claude có thể tự làm mà không xin phép.
+
+## 2026-08-30 — G1A.10 CLOSED: GitHub Actions run xanh thật + fix lệch môi trường MySQL
+
+- Owner đồng ý push nhánh `ci/g1a10-regression-workflow` lên remote `misa` và mở PR #1
+  (`ci/g1a10-regression-workflow` → `main`) để kích hoạt trigger `pull_request` của
+  `regression.yml` (trigger `push` chỉ áp dụng nhánh `main`, không tự chạy khi push nhánh khác).
+- **Lần chạy đầu tiên FAIL thật** (run
+  [`33264742127`](https://github.com/tuannhh/MISA-workstation/actions/runs/33264742127), commit
+  `3d26864`): `test:integration:mysql` fail đúng 1 test —
+  `server/test/smoke-failure.test.js` ("DB init failure sau khi worker đã spawn"), kỳ vọng
+  `stderr` khớp `/Unknown database/i` nhưng thực tế nhận `Access denied for user 'pr_media'@'%'
+  to database 'pr_media_test_never_created_...'`.
+- Điều tra root cause bằng `docker compose exec db mysql -uroot ... -e "SHOW GRANTS FOR
+  'pr_media'@'%'"` trên máy dev cục bộ: phát hiện 1 `GRANT ALL PRIVILEGES ON
+  \`pr_media_test_%\`.* TO 'pr_media'@'%'` — GRANT wildcard này là tàn dư từ một thiết kế cũ hơn
+  (bản kế hoạch ban đầu của G1A.1 từng đề xuất grant wildcard idempotent kiểu này trước khi
+  `db-harness.js` được refactor sang grant đúng tên database cụ thể mỗi lần
+  `createMysqlTestDb()`), không nằm trong code/harness/docker-compose hiện tại — chỉ tồn tại vì
+  container MySQL dev cục bộ đã chạy liên tục nhiều ngày, chưa từng bị xoá volume.
+  Container MySQL của GitHub Actions luôn khởi tạo sạch từ `services.mysql` trong
+  `regression.yml`, chỉ có đúng quyền `MYSQL_USER=pr_media`/`MYSQL_DATABASE=pr_media` do MySQL
+  Docker image tự cấp — đúng mô hình least-privilege khớp `docker-compose.yml`/production thật.
+  Với quyền đó, MySQL trả `Access denied` TRƯỚC khi kịp kiểm tra database có tồn tại hay không
+  (vì user chưa từng có bất kỳ privilege nào khớp tên database ngẫu nhiên đó) — đây là hành vi
+  MySQL đúng, không phải bug trong `body-parser`/`db.js`/harness.
+- **Quyết định của owner:** đây là khác biệt môi trường hợp lệ (container sạch theo
+  least-privilege ⇒ `Access denied`; máy dev có GRANT thừa cũ ⇒ `Unknown database`), cả 2 đều
+  chứng minh đúng mục tiêu test (DB init thất bại rõ ràng, process thoát khác 0, không âm thầm
+  seed nhầm/PASS giả). Sửa assertion chấp nhận cả 2 thông điệp
+  (`/Access denied|Unknown database/i`). **Không sửa GRANT MySQL, không nới quyền, không đổi
+  harness/docker-compose** — giữ nguyên mô hình least-privilege hiện tại làm chuẩn.
+- Vá trong commit `f9c57ee`. Verify lại trước khi push: `smoke-failure.test.js` chạy riêng 6/6
+  pass (1 skip SQLite-only); `test:integration:sqlite` 628/635 pass 7 skip;
+  `test:integration:mysql` 634/635 pass 1 skip; `git diff --check` sạch.
+- **Run xanh thật:**
+  [`33264995903`](https://github.com/tuannhh/MISA-workstation/actions/runs/33264995903), commit
+  `f9c57ee`, `conclusion: success` — job `regression` (npm audit, npm run build, test:security,
+  verify-g0, verify-gate1-mapping, test:integration:sqlite/mysql, git diff --check) đều pass trên
+  runner GitHub Actions thật, không chỉ verify cục bộ.
+- **G1A.10 CLOSED 2026-08-30.** Không có backlog P2/P3 mới phát sinh từ đợt fix này — GRANT thừa
+  trên máy dev cục bộ là môi trường cá nhân, không phải trạng thái cần dọn theo yêu cầu owner.
