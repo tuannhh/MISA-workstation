@@ -69,4 +69,4 @@ function parseSpreadsheet(file) {
   });
 }
 
-module.exports = { MAX_FILE_BYTES, isSpreadsheet, parseSpreadsheet, redactTextForAi };
+module.exports = { MAX_FILE_BYTES, isSpreadsheet, validateSignature, parseSpreadsheet, redactTextForAi };

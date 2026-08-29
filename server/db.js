@@ -91,6 +91,7 @@ function init() {
     filename TEXT NOT NULL,    -- tên file lưu trên đĩa
     original_name TEXT,
     mime TEXT,
+    audience_visibility TEXT NOT NULL DEFAULT 'private', -- D13: public/private, server enforces ceiling
     is_primary INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -436,6 +437,7 @@ function init() {
     url TEXT,                                  -- link RSS / feed
     enabled INTEGER NOT NULL DEFAULT 1,
     auto INTEGER NOT NULL DEFAULT 1,           -- 1 = do hệ thống seed (được reconcile); 0 = user tự thêm (giữ nguyên)
+    mode VARCHAR(20) NOT NULL DEFAULT 'rss',   -- rss / site (quét RSS feed hay quét trực tiếp trang web)
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   -- Tin/bài quét được
@@ -515,6 +517,16 @@ function init() {
     \`key\` TEXT PRIMARY KEY,
     value TEXT
   );
+  -- D13: cấu hình hiển thị theo field. Thiếu dòng luôn được PolicyEngine coi là private.
+  CREATE TABLE IF NOT EXISTS field_visibility (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    module TEXT NOT NULL,
+    field TEXT NOT NULL,
+    is_public INTEGER NOT NULL DEFAULT 0,
+    updated_by INTEGER REFERENCES users(id),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(module, field)
+  );
   -- Chiến dịch truyền thông
   CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -568,12 +580,39 @@ function seedMonitoringDefaults() {
   } catch (e) { console.error('[seedMonitoringDefaults]', e.message); }
 }
 
+// Lỗi "duplicate column" (đã có cột từ lần chạy trước) là idempotency bình thường của add() bên
+// dưới — mỗi lần app khởi động lại chạy qua toàn bộ migrate(), các ALTER TABLE của những lần chạy
+// trước chắc chắn khớp mẫu này, phải bỏ qua âm thầm. Mọi lỗi KHÁC (cú pháp không tương thích MySQL,
+// quyền, mất kết nối...) PHẢI làm app dừng khởi động ngay — không được chỉ log rồi tiếp tục chạy
+// với schema thiếu, vì đó chính là cơ chế đã khiến F17 (cột sources.mode) biến mất hoàn toàn trên
+// MySQL trong thời gian dài mà không ai biết (xem 01-audit-findings.md §F17).
+function isIgnorableMigrationError(message) {
+  return /duplicate column|already exists/i.test(String(message || ''));
+}
+
 // Thêm cột còn thiếu cho DB cũ (idempotent) — để deploy không cần reseed, không mất dữ liệu
 function migrate() {
-  const add = (sql) => { try { db.exec(sql); } catch {} };
+  const add = (sql) => {
+    try { db.exec(sql); }
+    catch (e) {
+      const msg = String(e.message || '');
+      if (isIgnorableMigrationError(msg)) return;
+      console.error('[migrate] lỗi ALTER TABLE (dừng khởi động):', sql, '->', msg);
+      throw e;
+    }
+  };
   add("ALTER TABLE users ADD COLUMN sensitive_perms TEXT");
   add("ALTER TABLE users ADD COLUMN email TEXT");
   add("ALTER TABLE users ADD COLUMN notify_opt_in INTEGER NOT NULL DEFAULT 1");
+  // RBAC v2 foundation. Existing files start private; no route reads this value until the
+  // PolicyEngine + backfill gate is complete, so this additive migration cannot expose data.
+  add("ALTER TABLE attachments ADD COLUMN audience_visibility VARCHAR(20) NOT NULL DEFAULT 'private'");
+  // D13 ownership foundation. Gifts đã dùng owner_id cho người/cơ quan nhận quà nên dùng tên
+  // responsible_user_id cho nhân viên phụ trách (owner policy), tránh đổi nghĩa dữ liệu legacy.
+  for (const table of ['bookings', 'interactions', 'awards', 'events', 'sponsorships', 'agreements', 'work_logs', 'association_fees', 'supplier_quotes', 'supplier_transactions', 'supplier_contacts', 'award_participations', 'benefit_usages']) {
+    add(`ALTER TABLE ${table} ADD COLUMN owner_id INTEGER`);
+  }
+  add('ALTER TABLE gifts ADD COLUMN responsible_user_id INTEGER');
   add("ALTER TABLE people ADD COLUMN phone_other TEXT");
   add("ALTER TABLE bookings ADD COLUMN award_id INTEGER");
   add("ALTER TABLE bookings ADD COLUMN event_id INTEGER");
@@ -587,7 +626,11 @@ function migrate() {
   add("ALTER TABLE scan_runs ADD COLUMN neg INTEGER DEFAULT 0");
   // Giám sát: nhóm từ khóa đã khớp (để đo hiệu quả từng từ khóa) + nguồn dạng website thường (quét qua Google Search)
   add("ALTER TABLE mentions ADD COLUMN matched_group TEXT");
-  add("ALTER TABLE sources ADD COLUMN mode TEXT NOT NULL DEFAULT 'rss'");
+  // Dùng VARCHAR (không phải TEXT) vì MySQL không cho phép cột TEXT/BLOB có DEFAULT literal
+  // (lỗi "BLOB, TEXT, GEOMETRY or JSON column can't have a default value") — với TEXT, ALTER TABLE
+  // này từng fail SILENT trên MySQL (add() nuốt hết lỗi), khiến cột `mode` không tồn tại và mọi
+  // lượt quét thật (POST /api/monitor/scan) trả 500 "Unknown column 'mode' in 'where clause'".
+  add("ALTER TABLE sources ADD COLUMN mode VARCHAR(20) NOT NULL DEFAULT 'rss'");
   // Đối tác bộ ngành (gov)
   add("ALTER TABLE organizations ADD COLUMN admin_level TEXT");
   add("ALTER TABLE organizations ADD COLUMN agency_block TEXT");
@@ -892,12 +935,42 @@ if (require.main === module && process.argv.includes('--reseed')) {
 
 // Khi khởi động server: nếu đặt RESET_DB=1 (env) thì XÓA SẠCH + seed lại rồi tiếp tục chạy.
 // Dùng để làm sạch dữ liệu trên môi trường live: đặt RESET_DB=1, redeploy, sau đó gỡ về 0.
-if (process.env.RESET_DB === '1') {
-  console.log('⚠ RESET_DB=1 → đang xóa sạch & seed lại dữ liệu…');
-  dropAll();
+//
+// Bọc try/catch quanh dropAll()/init()/seed() (Codex re-audit round 3, R3-01): connection/worker
+// MySQL đã được tạo xong ở dòng khởi tạo `db` phía trên TRƯỚC khi các hàm này chạy — nếu một
+// trong số chúng throw (vd MYSQL_DATABASE trỏ tới schema chưa tồn tại), phải đóng worker NGAY tại
+// đây trước khi rethrow, vì sau khi throw thì `require('./db')` không hoàn tất và không ai ở tầng
+// gọi nhận được `closeDb()` để tự đóng — worker mồ côi đó giữ event loop sống vô hạn, khiến một
+// `before()` hook trong `node:test` gọi require() này không bao giờ tự thoát process (phải
+// SIGKILL). Không `await` vì đây là code đồng bộ ở module-scope, nhưng worker/timer mà close()
+// tạo ra vẫn giữ process sống đủ lâu để tự thoát sạch (graceful hoặc force-terminate sau 3s)
+// trước khi phần còn lại của chương trình kết thúc — không cần chờ đồng bộ tại đây.
+try {
+  if (process.env.RESET_DB === '1') {
+    console.log('⚠ RESET_DB=1 → đang xóa sạch & seed lại dữ liệu…');
+    dropAll();
+  }
+  init();
+  seed();
+} catch (error) {
+  // Không giả định db.close() luôn trả Promise (Codex re-audit round 4 CLOSE, N4-01): SQLite
+  // (node:sqlite DatabaseSync.close()) trả `undefined` — gọi `.catch()` trực tiếp lên đó ném
+  // TypeError và CHE MẤT lỗi init/seed gốc (đúng lỗi cần chẩn đoán). MySQL's close() trả Promise
+  // thật. Bọc qua Promise.resolve(...) để cả hai trường hợp đều an toàn, và try/catch quanh chính
+  // lệnh gọi để phòng db.close() throw đồng bộ — cleanup ở đây luôn là best-effort, không được để
+  // lỗi cleanup thay thế lỗi gốc.
+  if (typeof db.close === 'function') {
+    try {
+      Promise.resolve(db.close()).catch(() => {});
+    } catch { /* best-effort, không che lỗi init/seed gốc */ }
+  }
+  throw error;
 }
 
-init();
-seed();
+// Đóng connection/worker (MySQL) hoặc file handle (SQLite) — cần cho test harness teardown
+// (Codex G1A1-audit A1); production không cần gọi, process tự thoát khi container bị kill.
+function closeDb() {
+  return typeof db.close === 'function' ? db.close() : undefined;
+}
 
-module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet };
+module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb, isIgnorableMigrationError };

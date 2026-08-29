@@ -29,7 +29,27 @@ async function getConnection() {
   return connection;
 }
 
-parentPort.on('message', async ({ shared, sql, params }) => {
+parentPort.on('message', async (msg) => {
+  if (msg && msg.shutdown) {
+    // Không nuốt lỗi connection.end() (Codex re-audit round 2, R2-02): báo lại cho parent qua
+    // shutdownAck trước khi thoát, để MySQLSyncDatabase.close() có thể reject thay vì âm thầm
+    // coi shutdown là thành công dù connection đóng lỗi.
+    let shutdownError = null;
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (error) {
+        shutdownError = { message: error.message, code: error.code };
+      }
+      connection = null;
+    }
+    try {
+      parentPort.postMessage({ shutdownAck: true, error: shutdownError });
+    } catch { /* worker đang thoát, best-effort */ }
+    process.exit(shutdownError ? 1 : 0);
+    return;
+  }
+  const { shared, sql, params } = msg;
   const state = new Int32Array(shared, 0, 2);
   const output = new Uint8Array(shared, 8);
   try {

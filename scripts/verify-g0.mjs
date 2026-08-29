@@ -1,0 +1,275 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const read = (name) => fs.readFileSync(path.join(root, name), 'utf8');
+const ok = (condition, message) => {
+  if (!condition) throw new Error(message);
+};
+const pass = (message) => console.log(`PASS  ${message}`);
+const clean = (value) => value.replaceAll('**', '').replaceAll('`', '').trim();
+
+function expandRouteIds(value) {
+  const ids = [];
+  for (const match of value.matchAll(/R(\d{3})(?:-R(\d{3}))?/g)) {
+    const first = Number(match[1]);
+    const last = Number(match[2] || match[1]);
+    ok(last >= first, `invalid route range ${match[0]}`);
+    for (let id = first; id <= last; id += 1) ids.push(`R${String(id).padStart(3, '0')}`);
+  }
+  return ids;
+}
+
+function markdownRows(markdown, rowPattern) {
+  return markdown.split('\n')
+    .filter((line) => rowPattern.test(line))
+    .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()));
+}
+
+function assertPartition(actual, expected, label) {
+  const counts = new Map();
+  for (const id of actual) counts.set(id, (counts.get(id) || 0) + 1);
+  const missing = expected.filter((id) => !counts.has(id));
+  const duplicate = [...counts].filter(([, count]) => count !== 1).map(([id, count]) => `${id}×${count}`);
+  const unknown = [...counts.keys()].filter((id) => !expected.includes(id));
+  ok(!missing.length && !duplicate.length && !unknown.length,
+    `${label}: missing=[${missing}] duplicate=[${duplicate}] unknown=[${unknown}]`);
+}
+
+// authKind cho 3 route auth trực tiếp (không qua router. nào) — đây vẫn là tri thức nghiệp vụ
+// phải hard-code (route nào công khai/route nào tự check session), NHƯNG chính route đó
+// (method+path+handler) được PARSE THẬT từ server/app.js, không hard-code khống — nếu route bị
+// đổi/xoá/đổi tên handler, hàm này FAIL thay vì im lặng báo PASS (Codex G1A1-audit A5).
+const DIRECT_AUTH_ROUTE_KIND = { login: 'public', logout: 'no-middleware', me: 'handler-session-check' };
+
+function parseDirectAppRoutes(appSource = read('server/app.js')) {
+  const regex = /app\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]\s*,\s*auth\.(\w+)\)/g;
+  const routes = [];
+  for (const match of appSource.matchAll(regex)) {
+    const [, method, fullPath, handler] = match;
+    const authKind = DIRECT_AUTH_ROUTE_KIND[handler];
+    ok(authKind, `server/app.js có route auth.${handler} chưa khai báo authKind trong DIRECT_AUTH_ROUTE_KIND — cập nhật verify-g0.mjs`);
+    routes.push({ method: method.toUpperCase(), fullPath, module: null, authKind });
+  }
+  ok(routes.length === 3, `server/app.js phải có đúng 3 route auth trực tiếp (login/logout/me), parse được ${routes.length}`);
+  return routes;
+}
+
+// Parse app.use(prefix, routerVar) + const routerVar = require('./file') từ server/app.js — thay
+// vì hard-code cặp [file, prefix] (Codex re-audit round 2, R2-03): nếu mount thật sự đổi (vd
+// '/api' -> '/v2'), hàm này phải phản ánh đúng giá trị đó, để verifyRoutesAndMatrices() bên dưới
+// phát hiện route full path không còn khớp catalog — thay vì âm thầm PASS với prefix cũ hard-code.
+function parseRouterMounts(appSource = read('server/app.js')) {
+  const varToFile = new Map();
+  for (const match of appSource.matchAll(/const\s+(\w+)\s*=\s*require\(\s*['"]\.\/(\w+)['"]\s*\)/g)) {
+    varToFile.set(match[1], `server/${match[2]}.js`);
+  }
+  const mounts = [];
+  for (const match of appSource.matchAll(/app\.use\(\s*['"]([^'"]+)['"]\s*,\s*(\w+)\s*\)/g)) {
+    const file = varToFile.get(match[2]);
+    if (file) mounts.push({ prefix: match[1], file });
+  }
+  return mounts;
+}
+
+function resolveRouterPrefix(file, appSource = read('server/app.js')) {
+  const mount = parseRouterMounts(appSource).find((entry) => entry.file === file);
+  ok(mount, `server/app.js không tìm thấy app.use(prefix, router) cho ${file} — parse mount thất bại`);
+  return mount.prefix;
+}
+
+// Route nào KHÔNG còn requirePerm(module,action) ngay trong khai báo route (vì Wave-1 pilot D13
+// chuyển kiểm quyền vào TRONG thân handler, rẽ nhánh legacy 2-role/PolicyEngine — vd
+// server/routes.js:403 R030) phải khai TƯỜNG MINH ở đây, giống hệt tinh thần
+// DIRECT_AUTH_ROUTE_KIND phía trên: script không tự suy diễn module từ thân hàm (dễ sai/im lặng
+// PASS sai), người sửa route phải tự xác nhận bằng đọc code rồi khai đúng module/action thật —
+// nếu quên khai, route sẽ rơi về module=null và FAIL rõ ràng ở Section A thay vì PASS ngầm.
+const PILOT_INLINE_PERM_ROUTES = {
+  'GET /api/people/:id': { module: 'partners', action: 'view' }, // D13 People Detail pilot, commit 3e8b299
+};
+
+function sourceRoutes() {
+  const routes = [];
+  for (const file of ['server/routes.js', 'server/ai.js']) {
+    const prefix = resolveRouterPrefix(file);
+    const source = read(file);
+    const regex = /router\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]([^\n]*)/g;
+    for (const match of source.matchAll(regex)) {
+      const permission = match[3].match(/requirePerm\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
+      const method = match[1].toUpperCase();
+      const fullPath = `${prefix}${match[2]}`;
+      const pilot = !permission ? PILOT_INLINE_PERM_ROUTES[`${method} ${fullPath}`] : null;
+      routes.push({
+        method,
+        fullPath,
+        module: permission ? permission[1] : (pilot ? pilot.module : null),
+        action: permission ? permission[2] : (pilot ? pilot.action : null),
+      });
+    }
+  }
+  routes.push(...parseDirectAppRoutes());
+  return routes;
+}
+
+function verifyRoutesAndMatrices() {
+  const catalog = read('memory-bank/07-route-catalog.md');
+  const matrix = read('memory-bank/08-permission-matrix.md');
+  const catalogRows = markdownRows(catalog, /^\| R\d{3} \|/);
+  ok(catalogRows.length === 145, `catalog rows=${catalogRows.length}, expected 145`);
+
+  const ids = catalogRows.map((row) => row[0]);
+  const expectedIds = Array.from({ length: 145 }, (_, index) => `R${String(index + 1).padStart(3, '0')}`);
+  assertPartition(ids, expectedIds, 'route catalog IDs');
+
+  const source = sourceRoutes();
+  ok(source.length === 145, `source literal routes=${source.length}, expected 145`);
+  const sourceByKey = new Map(source.map((route) => [`${route.method} ${route.fullPath}`, route]));
+  ok(sourceByKey.size === 145, 'source contains duplicate method/path pairs');
+
+  const catalogById = new Map();
+  for (const row of catalogRows) {
+    const [id, method, fullPath, auth] = row;
+    const route = sourceByKey.get(`${method} ${fullPath}`);
+    ok(route, `${id} ${method} ${fullPath} does not match source`);
+    const authText = clean(auth);
+    if (route.module) {
+      ok(authText.includes(`requirePerm(${route.module},${route.action})`),
+        `${id} auth mismatch: source=${route.module}:${route.action}, catalog=${authText}`);
+    } else if (route.authKind === 'public') {
+      ok(authText.includes('no-auth'), `${id} login must be documented public/no-auth`);
+    } else if (route.authKind === 'no-middleware') {
+      ok(authText.includes('no auth middleware'), `${id} logout has no auth middleware`);
+    } else if (route.authKind === 'handler-session-check') {
+      ok(authText.includes('handler tự kiểm tra session'), `${id} me auth is a handler check`);
+    } else {
+      ok(authText.includes('requireAuth'), `${id} is protected by router.use(requireAuth)`);
+    }
+    catalogById.set(id, route);
+  }
+  pass('route catalog: 145 unique IDs and exact source method/path/auth');
+
+  const sectionA = matrix.slice(matrix.indexOf('## A.'), matrix.indexOf('## B.'));
+  const sectionARows = markdownRows(sectionA, /^\| (partners|reminders|interactions|reports|awards|suppliers|events|admin|monitoring|\*\(không)/);
+  const sectionAIds = sectionARows.flatMap((row) => expandRouteIds(row[3]));
+  assertPartition(sectionAIds, expectedIds, 'Section A authorization partition');
+  for (const row of sectionARows) {
+    const documentedModule = clean(row[0]).startsWith('*(không') ? null : clean(row[0]);
+    for (const id of expandRouteIds(row[3])) {
+      ok(catalogById.get(id).module === documentedModule,
+        `${id} Section A module=${documentedModule}, source=${catalogById.get(id).module}`);
+    }
+  }
+  pass('authorization matrix Section A: 145 unique IDs and exact source module partition');
+
+  const flowRows = markdownRows(matrix, /^\| F\d{3} \|/);
+  ok(flowRows.length === 34, `UI flow rows=${flowRows.length}, expected 34`);
+  const flowIds = flowRows.map((row) => row[0]);
+  ok(new Set(flowIds).size === flowRows.length, 'duplicate flow_id in UI-flow matrix');
+  const mappedIds = [];
+  for (const row of flowRows) {
+    ok(row.length === 8, `${row[0]} must have 8 columns, got ${row.length}`);
+    mappedIds.push(...expandRouteIds(row[2]));
+    ok(row[3].includes('D-') && row[4].includes('D-'), `${row[0]} missing Desktop profile for a current role`);
+    ok(row[5].includes('N-MISSING') && row[6].includes('N-MISSING'), `${row[0]} missing Native row/profile for a current role`);
+    ok(row[7].length > 0, `${row[0]} missing disabled/masked evidence status`);
+  }
+  assertPartition(mappedIds, expectedIds, 'UI-flow route mapping');
+  pass('UI-flow matrix: 145 routes -> exactly 1 of 34 flows; 2 roles x Desktop/Native present');
+}
+
+function verifyGemini() {
+  const count = (file) => [...read(file).matchAll(/\bgemini\.(?:genJSON|genText|genImage|groundedSearch)\s*\(/g)].length;
+  const ai = count('server/ai.js');
+  const monitor = count('server/monitor.js');
+  ok(ai === 6 && monitor === 7, `Gemini expressions ai=${ai}, monitor=${monitor}; expected 6/7`);
+  ok(read('memory-bank/06-threat-model.md').includes('12 logical') || read('memory-bank/06-threat-model.md').includes('12 luồng'),
+    'threat model must document 12 logical Gemini flows');
+  pass('Gemini inventory: ai.js=6, monitor.js=7, 13 expressions / 12 logical flows');
+}
+
+function verifySchema() {
+  const db = read('server/db.js');
+  const tables = [...db.matchAll(/CREATE TABLE IF NOT EXISTS\s+([a-z_]+)/g)].map((match) => match[1]);
+  const indexes = [...db.matchAll(/CREATE INDEX IF NOT EXISTS\s+([a-z_]+)/g)].map((match) => match[1]);
+  const drops = [...db.matchAll(/DROP TABLE IF EXISTS\s+([a-z_]+)/g)].map((match) => match[1]);
+  // Baseline Gate-0 là 34 bảng/28 drop-target. W1.RBAC.1 (commit 9ef286a, 2026-08-27) thêm bảng
+  // `field_visibility` — KHÔNG đưa vào dropAll() vì W1.RBAC.0 đã chốt bỏ dropAll()/RESET_DB làm
+  // cơ chế reset cho migration RBAC v2 (dùng fresh database/schema cutover thay thế, xem
+  // 09-db-schema.md §E + 04-ROADMAP.md W1.RBAC.1) — nên đây là 1 omission MỚI có chủ ý, không
+  // phải regression giống 6 omission Gate-0 cũ.
+  ok(new Set(tables).size === 35, `tables=${new Set(tables).size}, expected 35`);
+  ok(new Set(indexes).size === 22, `indexes=${new Set(indexes).size}, expected 22`);
+  ok(new Set(drops).size === 28, `drop targets=${new Set(drops).size}, expected 28`);
+  const omissions = [...new Set(tables)].filter((table) => !new Set(drops).has(table)).sort();
+  const expected = ['agreements', 'benefit_usages', 'gifts', 'supplier_contacts', 'supplier_transactions', 'work_logs', 'field_visibility'].sort();
+  ok(JSON.stringify(omissions) === JSON.stringify(expected), `drop omissions=${omissions}, expected=${expected}`);
+  pass(`schema facts: 35 tables, 22 indexes, 28 drops; omissions=${omissions.join(',')}`);
+}
+
+function verifyErrorExample() {
+  const contract = read('memory-bank/05-error-contract.md');
+  const message = contract.match(/^\s*"message":\s*"([^"]+)"/m)?.[1];
+  const error = contract.match(/^\s*"error":\s*"([^"]+)"/m)?.[1];
+  ok(message && message === error, `error example mismatch: message=${message}, error=${error}`);
+  pass('error contract example: message === error');
+}
+
+function verifyMarkdownLinks() {
+  const docs = fs.readdirSync(path.join(root, 'memory-bank')).filter((name) => name.endsWith('.md'));
+  const broken = [];
+  for (const doc of docs) {
+    const source = read(`memory-bank/${doc}`)
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`[^`\n]+`/g, '');
+    for (const match of source.matchAll(/(?<!!)\[[^\]]+\]\(([^)]+)\)/g)) {
+      let target = match[1].trim().replace(/^<|>$/g, '').split('#')[0];
+      if (!target || /^(?:https?:|mailto:)/.test(target) || target.includes('://')) continue;
+      target = decodeURIComponent(target);
+      const resolved = path.resolve(root, 'memory-bank', target);
+      if (!fs.existsSync(resolved)) broken.push(`${doc} -> ${target}`);
+    }
+  }
+  ok(!broken.length, `broken Markdown links:\n${broken.join('\n')}`);
+  pass(`Markdown internal links: 0 broken across ${docs.length} memory-bank files`);
+}
+
+function verifyRemediationScope() {
+  const baseArg = process.argv.find((arg) => arg.startsWith('--base='));
+  if (!baseArg) return;
+  const base = baseArg.slice('--base='.length);
+  const changed = execFileSync('git', ['diff', '--name-only', base], { cwd: root, encoding: 'utf8' })
+    .trim().split('\n').filter(Boolean);
+  const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8' })
+    .trim().split('\n').filter(Boolean);
+  const names = [...new Set([...changed, ...untracked])];
+  const scoped = names.filter((name) => name !== '.DS_Store');
+  const invalid = scoped.filter((name) => !name.startsWith('memory-bank/') && name !== 'scripts/verify-g0.mjs');
+  ok(!invalid.length, `remediation touched product files: ${invalid.join(',')}`);
+  pass(`remediation scope from ${base}: memory-bank + verification script only (${scoped.length} files; unrelated .DS_Store ignored)`);
+}
+
+// Export để scripts/verify-g0.selftest.mjs có thể import và chứng minh parser thật sự FAIL
+// khi route auth bị đổi/xoá (Codex G1A1-audit A5, "negative test chống false-positive") —
+// guard khối chạy-thật dưới đây để import không tự chạy toàn bộ verify.
+export { parseDirectAppRoutes, DIRECT_AUTH_ROUTE_KIND, parseRouterMounts, resolveRouterPrefix };
+
+function main() {
+  try {
+    verifyRoutesAndMatrices();
+    verifyGemini();
+    verifySchema();
+    verifyErrorExample();
+    verifyMarkdownLinks();
+    verifyRemediationScope();
+    console.log('\nG0 verification checks passed.');
+  } catch (error) {
+    console.error(`FAIL  ${error.message}`);
+    process.exitCode = 1;
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) main();

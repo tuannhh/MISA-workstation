@@ -6,12 +6,17 @@ const bcrypt = require('bcryptjs');
 const { db, audit, UPLOAD_DIR, metaGet, metaSet } = require('./db');
 const rbac = require('./rbac');
 const { requireAuth, requirePerm } = require('./auth');
+const { createVisibilityStore } = require('./policy-visibility-store');
+const { createPolicyService } = require('./policy-service');
 const { upload } = require('./uploads');
 const scheduler = require('./scheduler');
 const monitor = require('./monitor');
+const outbound = require('./safe-fetch');
 
 const router = express.Router();
 router.use(requireAuth);
+const policyService = createPolicyService({ visibilityStore: createVisibilityStore(db) });
+const TARGET_RBAC_ROLES = new Set(['viewer', 'executor', 'admin']);
 
 // ---------- helpers ----------
 function pageParams(req) {
@@ -62,6 +67,43 @@ function stripDisallowed(entity, data, set) {
     if (f in data && !(g && set.has(g))) delete data[f];
   }
   return data;
+}
+// Kỳ ngân sách phải dạng YYYY-MM (POST /budgets)
+function isValidBudgetPeriod(period) { return /^\d{4}-\d{2}$/.test(period || ''); }
+// Thông tin tối thiểu để tạo tài khoản mới (POST /admin/users)
+function isValidNewUserPayload({ username, password, full_name, role }) {
+  return !!(username && password && full_name && rbac.ROLES[role]);
+}
+// Chỉ giữ tên nhóm dữ liệu mật hợp lệ (POST/PUT /admin/users) — chống ghi nhóm lạ vào sensitive_perms
+function sanitizeSensitivePerms(list) { return list.filter((g) => rbac.ALL_GROUPS.includes(g)); }
+// Net Sentiment Ratio = (tích cực - tiêu cực) / (tích cực + tiêu cực), 0 khi mẫu số rỗng — dùng
+// chung cho /monitor/dashboard (tổng + trend 14 ngày) và /monitor/campaigns/:id/mentions (trước
+// đây bị lặp lại 3 nơi với công thức giống nhau, nay gộp 1 hàm để tránh lệch nhau khi sửa sau).
+function nsrOf(positive, negative) {
+  const denom = positive + negative;
+  return denom ? +((positive - negative) / denom).toFixed(2) : 0;
+}
+// Cấp độ rủi ro chăm sóc theo số ngày chưa tương tác (POST /reports — mục careRisk)
+function careRiskLevel(days) {
+  if (days >= 30) return { level: 5, label: 'Cấp 5: Nguy hiểm', action: 'Đối ngoại khẩn cấp' };
+  if (days >= 21) return { level: 4, label: 'Cấp 4: Cảnh báo', action: 'Sắp xếp gặp/gọi ngay' };
+  if (days >= 14) return { level: 3, label: 'Cấp 3: Cần theo dõi', action: 'Lên lịch chăm sóc' };
+  if (days >= 7) return { level: 2, label: 'Cấp 2: Ổn', action: '' };
+  return { level: 1, label: 'Cấp 1: Đồng hành', action: '' };
+}
+// Xếp tin đã lâu-không-chăm-sóc vào mốc 1/3/6/12 tháng (GET /reports/care-alerts), null nếu <30 ngày
+function bucketOf(days) { return days >= 365 ? '12m' : days >= 180 ? '6m' : days >= 90 ? '3m' : days >= 30 ? '1m' : null; }
+// Khủng hoảng truyền thông = số tin tiêu cực về thương hiệu trong 24h vượt ngưỡng (GET /monitor/dashboard)
+function crisisOf(neg24Count) { return neg24Count >= 3; }
+// Sắc thái -> điểm số khi PR sửa tay (PUT /monitor/mentions/:id) — khác thang điểm AI ở monitor.js#analyzeBatch
+function sentimentScore(sentiment) {
+  return sentiment === 'positive' ? 0.6 : sentiment === 'negative' ? -0.6 : sentiment === 'neutral' ? 0 : null;
+}
+// Tổng chi phí 1 giải thưởng = chi phí gốc + ngân sách các lần tham gia + chi phí truyền thông đã booking (GET /reports/awards)
+function awardCostOf(award, participations, mediaCost) {
+  const cost = award.cost || 0;
+  const partBudget = participations.reduce((s, p) => s + (p.budget || 0), 0);
+  return { cost, partBudget, mediaCost, totalCost: cost + partBudget + mediaCost };
 }
 // ----- Phân công người chăm sóc (assignments) -----
 function getCaretakers(type, id) {
@@ -358,10 +400,18 @@ router.get('/people', requirePerm('partners', 'view'), (req, res) => {
   res.json({ rows: rbac.maskList('person', rows, allowed), total, page, pageSize, sensitiveVisible: senVisible(allowed) });
 });
 
-router.get('/people/:id', requirePerm('partners', 'view'), (req, res) => {
+router.get('/people/:id', (req, res) => {
   const row = db.prepare(`SELECT p.*, o.name AS org_name, o.org_type FROM people p
     LEFT JOIN organizations o ON o.id=p.org_id WHERE p.id=?`).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Không tìm thấy' });
+  // First strangler endpoint for D13. New roles deliberately do not fall back to legacy masking:
+  // no policy configuration means no fields, and related collections/files remain private until
+  // their own policy slice is implemented.
+  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+    const record = policyService.projectRecord({ principal: req.principal, entity: 'person', module: 'partners', record: row });
+    return res.json({ record, maskedFields: [], portraits: [], idDocs: [], idDocCount: 0, interactions: [], gifts: [], caretakers: [], sensitiveVisible: req.principal.role === 'admin' });
+  }
+  if (!rbac.can(req.principal?.role, 'partners', 'view')) return res.status(403).json({ error: 'Bạn không có quyền view trên partners.' });
   const allowed = senGroups(req);
   const { record, maskedFields } = rbac.maskRecord('person', row, allowed);
   const hasSensitive = rbac.SENSITIVE_FIELDS.person.some((f) => row[f]);
@@ -634,7 +684,7 @@ router.get('/budgets', requirePerm('reports', 'view'), (req, res) => {
 });
 router.post('/budgets', requirePerm('reports', 'view'), (req, res) => {
   const { period, amount, note } = req.body || {};
-  if (!/^\d{4}-\d{2}$/.test(period || '')) return res.status(400).json({ error: 'Kỳ phải dạng YYYY-MM' });
+  if (!isValidBudgetPeriod(period)) return res.status(400).json({ error: 'Kỳ phải dạng YYYY-MM' });
   db.prepare(`INSERT INTO budgets (period, amount, note) VALUES (?,?,?)
     ON CONFLICT(period) DO UPDATE SET amount=excluded.amount, note=excluded.note`).run(period, Number(amount) || 0, note || null);
   logEdit(req, 'EDIT', 'budget', null, `${period}: ${amount}`);
@@ -644,31 +694,38 @@ router.post('/budgets', requirePerm('reports', 'view'), (req, res) => {
 // =====================================================================
 //  REPORTS (Tab Báo cáo — chỉ lãnh đạo/quản lý)
 // =====================================================================
+// mysql2 trả SUM()/COUNT(CASE...) dạng string (DECIMAL/BIGINT) trong khi better-sqlite3 trả
+// number — bọc Number() cho field `key` trên từng dòng của mảng breakdown, để tránh tái diễn lớp
+// bug F14/F16 (nối chuỗi/so sánh sai khi client dùng giá trị này để tính tổng/sắp xếp/vẽ chart).
+function numField(rows, key = 'amount') { rows.forEach((r) => { r[key] = Number(r[key]); }); return rows; }
+
 router.get('/reports', requirePerm('reports', 'view'), (req, res) => {
   const from = req.query.from || '0000-01-01';
   const to = req.query.to || '9999-12-31';
   const bArgs = [from, to];
-  const spendByMonth = db.prepare(`SELECT substr(booked_date,1,7) period, SUM(amount) amount, COUNT(*) cnt
-    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY period ORDER BY period`).all(...bArgs);
-  const spendByOrg = db.prepare(`SELECT org_name name, SUM(amount) amount, COUNT(*) cnt
-    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY org_id ORDER BY amount DESC`).all(...bArgs);
-  const spendByPerson = db.prepare(`SELECT subject_name name, org_name, SUM(amount) amount, COUNT(*) cnt
-    FROM bookings WHERE status!='Hủy' AND subject_type='person' AND booked_date BETWEEN ? AND ? GROUP BY subject_id ORDER BY amount DESC`).all(...bArgs);
-  const spendByType = db.prepare(`SELECT content_type name, SUM(amount) amount, COUNT(*) cnt
-    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY content_type ORDER BY amount DESC`).all(...bArgs);
-  const spendByStaff = db.prepare(`SELECT COALESCE(u.full_name,'(Không rõ)') name, SUM(b.amount) amount, COUNT(*) cnt
+  const spendByMonth = numField(db.prepare(`SELECT substr(booked_date,1,7) period, SUM(amount) amount, COUNT(*) cnt
+    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY period ORDER BY period`).all(...bArgs));
+  const spendByOrg = numField(db.prepare(`SELECT org_name name, SUM(amount) amount, COUNT(*) cnt
+    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY org_id ORDER BY amount DESC`).all(...bArgs));
+  const spendByPerson = numField(db.prepare(`SELECT subject_name name, org_name, SUM(amount) amount, COUNT(*) cnt
+    FROM bookings WHERE status!='Hủy' AND subject_type='person' AND booked_date BETWEEN ? AND ? GROUP BY subject_id ORDER BY amount DESC`).all(...bArgs));
+  const spendByType = numField(db.prepare(`SELECT content_type name, SUM(amount) amount, COUNT(*) cnt
+    FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ? GROUP BY content_type ORDER BY amount DESC`).all(...bArgs));
+  const spendByStaff = numField(db.prepare(`SELECT COALESCE(u.full_name,'(Không rõ)') name, SUM(b.amount) amount, COUNT(*) cnt
     FROM bookings b LEFT JOIN users u ON u.id=b.created_by
-    WHERE b.status!='Hủy' AND b.booked_date BETWEEN ? AND ? GROUP BY b.created_by ORDER BY amount DESC`).all(...bArgs);
+    WHERE b.status!='Hủy' AND b.booked_date BETWEEN ? AND ? GROUP BY b.created_by ORDER BY amount DESC`).all(...bArgs));
   const totalSpend = db.prepare(`SELECT COALESCE(SUM(amount),0) s, COUNT(*) c FROM bookings WHERE status!='Hủy' AND booked_date BETWEEN ? AND ?`).get(...bArgs);
-  const fulfillment = db.prepare(`SELECT status, COUNT(*) cnt, COALESCE(SUM(amount),0) amount FROM bookings WHERE booked_date BETWEEN ? AND ? GROUP BY status`).all(...bArgs);
-  const budget = db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM budgets WHERE period BETWEEN ? AND ?`).get(from.slice(0, 7), to.slice(0, 7));
+  totalSpend.s = Number(totalSpend.s);
+  const fulfillment = numField(db.prepare(`SELECT status, COUNT(*) cnt, COALESCE(SUM(amount),0) amount FROM bookings WHERE booked_date BETWEEN ? AND ? GROUP BY status`).all(...bArgs));
+  const budget = { s: Number(db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM budgets WHERE period BETWEEN ? AND ?`).get(from.slice(0, 7), to.slice(0, 7)).s) };
 
   // Quan hệ
-  const tiers = db.prepare(`SELECT
+  const tiersRaw = db.prepare(`SELECT
       SUM(CASE WHEN relationship_score>=75 THEN 1 ELSE 0 END) t1,
       SUM(CASE WHEN relationship_score>=50 AND relationship_score<75 THEN 1 ELSE 0 END) t2,
       SUM(CASE WHEN relationship_score>=25 AND relationship_score<50 THEN 1 ELSE 0 END) t3,
       SUM(CASE WHEN relationship_score<25 THEN 1 ELSE 0 END) t4 FROM people`).get();
+  const tiers = { t1: Number(tiersRaw.t1) || 0, t2: Number(tiersRaw.t2) || 0, t3: Number(tiersRaw.t3) || 0, t4: Number(tiersRaw.t4) || 0 };
   const byBeat = db.prepare(`SELECT COALESCE(NULLIF(beat,''),'(Khác)') name, COUNT(*) cnt FROM people GROUP BY name ORDER BY cnt DESC`).all();
 
   // Rủi ro chăm sóc: lâu chưa tương tác
@@ -678,12 +735,7 @@ router.get('/reports', requirePerm('reports', 'view'), (req, res) => {
     WHERE p.status!='Ngừng hợp tác'`).all()
     .map((p) => {
       const days = p.last_date ? Math.round((Date.now() - new Date(p.last_date + 'T00:00:00Z')) / 86400000) : 999;
-      let level = 1, label = 'Cấp 1: Đồng hành', action = '';
-      if (days >= 30) { level = 5; label = 'Cấp 5: Nguy hiểm'; action = 'Đối ngoại khẩn cấp'; }
-      else if (days >= 21) { level = 4; label = 'Cấp 4: Cảnh báo'; action = 'Sắp xếp gặp/gọi ngay'; }
-      else if (days >= 14) { level = 3; label = 'Cấp 3: Cần theo dõi'; action = 'Lên lịch chăm sóc'; }
-      else if (days >= 7) { level = 2; label = 'Cấp 2: Ổn'; action = ''; }
-      return { ...p, days, level, label, action };
+      return { ...p, days, ...careRiskLevel(days) };
     }).filter((p) => p.level >= 3).sort((a, b) => b.days - a.days).slice(0, 20);
 
   // Tương tác
@@ -701,16 +753,16 @@ router.get('/reports', requirePerm('reports', 'view'), (req, res) => {
   };
 
   // Chi phí sự kiện (theo nhóm + theo sự kiện) — nối vào báo cáo cho chính xác
-  const evByCategory = db.prepare(`SELECT ec.category, COALESCE(SUM(ec.amount),0) amount FROM event_costs ec
-    JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ? GROUP BY ec.category`).all(from, to);
-  const evByEvent = db.prepare(`SELECT e.name, e.mode, COALESCE(SUM(ec.amount),0) amount FROM events e
-    LEFT JOIN event_costs ec ON ec.event_id=e.id WHERE e.start_time BETWEEN ? AND ? GROUP BY e.id ORDER BY amount DESC`).all(from, to);
-  const evTotal = db.prepare(`SELECT COALESCE(SUM(ec.amount),0) s FROM event_costs ec JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ?`).get(from, to).s;
+  const evByCategory = numField(db.prepare(`SELECT ec.category, COALESCE(SUM(ec.amount),0) amount FROM event_costs ec
+    JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ? GROUP BY ec.category`).all(from, to));
+  const evByEvent = numField(db.prepare(`SELECT e.name, e.mode, COALESCE(SUM(ec.amount),0) amount FROM events e
+    LEFT JOIN event_costs ec ON ec.event_id=e.id WHERE e.start_time BETWEEN ? AND ? GROUP BY e.id ORDER BY amount DESC`).all(from, to));
+  const evTotal = Number(db.prepare(`SELECT COALESCE(SUM(ec.amount),0) s FROM event_costs ec JOIN events e ON e.id=ec.event_id WHERE e.start_time BETWEEN ? AND ?`).get(from, to).s);
 
   // Hội phí hiệp hội (theo hạn đóng trong kỳ)
-  const feeByOrg = db.prepare(`SELECT o.name, COALESCE(SUM(f.amount),0) amount FROM association_fees f JOIN organizations o ON o.id=f.org_id
-    WHERE f.due_date BETWEEN ? AND ? GROUP BY f.org_id ORDER BY amount DESC`).all(from, to);
-  const feeTotal = db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM association_fees WHERE due_date BETWEEN ? AND ?`).get(from, to).s;
+  const feeByOrg = numField(db.prepare(`SELECT o.name, COALESCE(SUM(f.amount),0) amount FROM association_fees f JOIN organizations o ON o.id=f.org_id
+    WHERE f.due_date BETWEEN ? AND ? GROUP BY f.org_id ORDER BY amount DESC`).all(from, to));
+  const feeTotal = Number(db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM association_fees WHERE due_date BETWEEN ? AND ?`).get(from, to).s);
 
   res.json({
     range: { from, to },
@@ -733,11 +785,14 @@ router.get('/reports/by-staff', requirePerm('reports', 'view'), (req, res) => {
     const orgs = cnt('org', u.id), people = cnt('person', u.id), awards = cnt('award', u.id);
     const spend = db.prepare(`SELECT COALESCE(SUM(amount),0) s, COUNT(*) c FROM bookings WHERE created_by=? AND status!='Hủy' AND booked_date BETWEEN ? AND ?`).get(u.id, from, to);
     const inter = db.prepare('SELECT COUNT(*) c FROM interactions WHERE created_by=? AND date BETWEEN ? AND ?').get(u.id, from, to).c;
-    const avg = db.prepare(`SELECT ROUND(AVG(p.relationship_score)) a FROM assignments x JOIN people p ON p.id=x.subject_id WHERE x.user_id=? AND x.subject_type='person'`).get(u.id).a;
+    const avgRaw = db.prepare(`SELECT ROUND(AVG(p.relationship_score)) a FROM assignments x JOIN people p ON p.id=x.subject_id WHERE x.user_id=? AND x.subject_type='person'`).get(u.id).a;
     // đầu mối người được giao quá 30 ngày không tương tác
     const overdue = db.prepare(`SELECT COUNT(*) c FROM assignments x JOIN people p ON p.id=x.subject_id WHERE x.user_id=? AND x.subject_type='person'
       AND COALESCE((SELECT MAX(date) FROM interactions i WHERE i.partner_type='person' AND i.partner_id=p.id),'0000') < date('now','-30 day')`).get(u.id).c;
-    return { id: u.id, full_name: u.full_name, role: u.role, orgs, people, awards, assigned: orgs + people + awards, spend: spend.s, bookings: spend.c, interactions: inter, avgScore: avg, overdue };
+    // mysql2 trả SUM()/AVG() dạng string (DECIMAL) trong khi better-sqlite3 trả number — Number()
+    // để tránh tái diễn lớp bug F14/F16 (nối chuỗi thay vì cộng số khi client dùng spend để tính
+    // toán tiếp). avgScore giữ null khi không có đầu mối (AVG rỗng), không ép về 0 gây sai lệch.
+    return { id: u.id, full_name: u.full_name, role: u.role, orgs, people, awards, assigned: orgs + people + awards, spend: Number(spend.s), bookings: spend.c, interactions: inter, avgScore: avgRaw == null ? null : Number(avgRaw), overdue };
   }).filter((r) => r.assigned > 0 || r.spend > 0 || r.interactions > 0).sort((a, b) => b.assigned - a.assigned);
   res.json({ rows });
 });
@@ -752,7 +807,8 @@ router.get('/reports/by-unit', requirePerm('reports', 'view'), (req, res) => {
       (SELECT MAX(date) FROM interactions i WHERE i.partner_type='org' AND i.partner_id=o.id) last_inter,
       (SELECT COUNT(*) FROM people p WHERE p.org_id=o.id) people_cnt
     FROM organizations o ORDER BY spend DESC, inter_cnt DESC`).all(from, to, from, to, from, to);
-  rows.forEach((r) => { r.caretakers = getCaretakers('org', r.id).map((u) => u.full_name); });
+  // mysql2 trả SUM() dạng string (DECIMAL) — Number() để tránh tái diễn lớp bug F14/F16.
+  rows.forEach((r) => { r.spend = Number(r.spend); r.caretakers = getCaretakers('org', r.id).map((u) => u.full_name); });
   res.json({ rows });
 });
 
@@ -763,11 +819,14 @@ router.get('/reports/awards', requirePerm('reports', 'view'), (req, res) => {
   const awards = db.prepare('SELECT * FROM awards ORDER BY submission_deadline').all();
   const rows = awards.map((a) => {
     const parts = db.prepare('SELECT * FROM award_participations WHERE award_id=? AND year BETWEEN ? AND ? ORDER BY year DESC').all(a.id, yFrom, yTo);
-    const partBudget = parts.reduce((s, p) => s + (p.budget || 0), 0);
-    const mediaCost = db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM bookings WHERE award_id=? AND status!='Hủy'`).get(a.id).s;
+    // mysql2 trả SUM() dạng string (DECIMAL) — Number() ở đây để tránh tái diễn lớp bug F14/F16:
+    // awardCostOf() cộng mediaCost trực tiếp vào totalCost (cost + partBudget + mediaCost), nếu
+    // mediaCost là string thì "+" sẽ nối chuỗi thay vì cộng số (vd totalCost="0300000" thay vì 300000).
+    const mediaCost = Number(db.prepare(`SELECT COALESCE(SUM(amount),0) s FROM bookings WHERE award_id=? AND status!='Hủy'`).get(a.id).s);
+    const { cost, partBudget, totalCost } = awardCostOf(a, parts, mediaCost);
     return {
       id: a.id, name: a.name, organizer: a.organizer, status: a.status, scope: a.scope,
-      cost: a.cost || 0, partBudget, mediaCost, totalCost: (a.cost || 0) + partBudget + mediaCost,
+      cost, partBudget, mediaCost, totalCost,
       participations: parts.map((p) => ({ year: p.year, status: p.status, result: p.result, budget: p.budget })),
       caretakers: getCaretakers('award', a.id).map((u) => u.full_name),
     };
@@ -788,7 +847,6 @@ router.get('/reports/care-alerts', requirePerm('reports', 'view'), (req, res) =>
     return [i, b].filter(Boolean).sort().pop() || null;
   };
   const now = Date.now();
-  const bucketOf = (days) => days >= 365 ? '12m' : days >= 180 ? '6m' : days >= 90 ? '3m' : days >= 30 ? '1m' : null;
   const build = (type, id, name, sub) => {
     const last = type === 'person' ? lastActivityPerson(id) : lastActivityOrg(id);
     const days = last ? Math.round((now - new Date(last + 'T00:00:00Z')) / 86400000) : 9999;
@@ -1075,7 +1133,7 @@ router.get('/events', requirePerm('events', 'view'), (req, res) => {
       (SELECT COALESCE(SUM(amount),0) FROM event_costs ec WHERE ec.event_id=e.id) AS total_cost
     FROM events e LEFT JOIN organizations o ON o.id=e.organizer_org_id
     ${where} ORDER BY (e.start_time IS NULL), e.start_time DESC LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
-  rows = rows.map((r) => ({ ...r, daysToStart: deadlineInfo(r.start_time).days }));
+  rows = rows.map((r) => ({ ...r, total_cost: Number(r.total_cost), daysToStart: deadlineInfo(r.start_time).days }));
   maskMoney(req, rows, 'total_cost');
   res.json({ rows, total, page, pageSize });
 });
@@ -1164,7 +1222,7 @@ router.get('/dashboard', (req, res) => {
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
   const ym = `${year}-${mm}`;
   const yr = String(year);
-  const one = (sql, ...a) => db.prepare(sql).get(...a).c;
+  const one = (sql, ...a) => Number(db.prepare(sql).get(...a).c);
   // Phóng viên (báo chí): nhân sự cấp/loại "Phóng viên" thuộc cơ quan báo chí
   const PV = `o.org_type='press' AND (p.level='Phóng viên' OR p.category='Phóng viên')`;
 
@@ -1191,14 +1249,14 @@ router.get('/dashboard', (req, res) => {
     events: {
       hostMonth: one(`SELECT COUNT(*) c FROM events WHERE mode='host' AND start_time IS NOT NULL AND strftime('%Y-%m', start_time)=?`, ym),
       sponsorMonth: one(`SELECT COUNT(*) c FROM events WHERE mode='join' AND start_time IS NOT NULL AND strftime('%Y-%m', start_time)=?`, ym),
-      keynoteMonth: db.prepare(`SELECT COALESCE(SUM(misa_keynotes),0) c FROM events
-        WHERE start_time IS NOT NULL AND strftime('%Y-%m', start_time)=?`).get(ym).c,
+      keynoteMonth: Number(db.prepare(`SELECT COALESCE(SUM(misa_keynotes),0) c FROM events
+        WHERE start_time IS NOT NULL AND strftime('%Y-%m', start_time)=?`).get(ym).c),
     },
   };
 
   // Biểu đồ: gom theo tháng (mảng 12 phần tử) hoặc theo nhóm phân loại
-  const monthly = (rows) => { const a = Array(12).fill(0); rows.forEach((r) => { const m = parseInt(r.m, 10); if (m >= 1 && m <= 12) a[m - 1] = r.c; }); return a; };
-  const grouped = (sql, ...a) => db.prepare(sql).all(...a).map((r) => ({ label: r.label, value: r.c }));
+  const monthly = (rows) => { const a = Array(12).fill(0); rows.forEach((r) => { const m = parseInt(r.m, 10); if (m >= 1 && m <= 12) a[m - 1] = Number(r.c); }); return a; };
+  const grouped = (sql, ...a) => db.prepare(sql).all(...a).map((r) => ({ label: r.label, value: Number(r.c) }));
 
   const charts = {
     reportersByBeat: grouped(`SELECT COALESCE(NULLIF(p.beat,''),'Chưa phân loại') label, COUNT(*) c
@@ -1235,9 +1293,9 @@ router.get('/admin/users', requirePerm('admin', 'view'), (req, res) => {
 });
 router.post('/admin/users', requirePerm('admin', 'create'), (req, res) => {
   const { username, password, full_name, role, email, sensitive_perms } = req.body || {};
-  if (!username || !password || !full_name || !rbac.ROLES[role]) return res.status(400).json({ error: 'Thiếu thông tin hợp lệ' });
+  if (!isValidNewUserPayload({ username, password, full_name, role })) return res.status(400).json({ error: 'Thiếu thông tin hợp lệ' });
   if (db.prepare('SELECT 1 FROM users WHERE username=?').get(username)) return res.status(409).json({ error: 'Tài khoản đã tồn tại' });
-  const sp = Array.isArray(sensitive_perms) ? JSON.stringify(sensitive_perms.filter((g) => rbac.ALL_GROUPS.includes(g))) : null;
+  const sp = Array.isArray(sensitive_perms) ? JSON.stringify(sanitizeSensitivePerms(sensitive_perms)) : null;
   const r = db.prepare('INSERT INTO users (username,password_hash,full_name,role,email,sensitive_perms) VALUES (?,?,?,?,?,?)')
     .run(username, bcrypt.hashSync(String(password), 10), full_name, role, email || null, sp);
   logEdit(req, 'CREATE', 'user', r.lastInsertRowid, username);
@@ -1250,7 +1308,7 @@ router.put('/admin/users/:id', requirePerm('admin', 'edit'), (req, res) => {
   if (role && rbac.ROLES[role]) { fields.push('role=?'); vals.push(role); }
   if (email != null) { fields.push('email=?'); vals.push(email || null); }
   if (notify_opt_in != null) { fields.push('notify_opt_in=?'); vals.push(Number(notify_opt_in) ? 1 : 0); }
-  if (Array.isArray(sensitive_perms)) { fields.push('sensitive_perms=?'); vals.push(JSON.stringify(sensitive_perms.filter((g) => rbac.ALL_GROUPS.includes(g)))); }
+  if (Array.isArray(sensitive_perms)) { fields.push('sensitive_perms=?'); vals.push(JSON.stringify(sanitizeSensitivePerms(sensitive_perms))); }
   if (active != null) { fields.push('active=?'); vals.push(Number(active) ? 1 : 0); }
   if (password) { fields.push('password_hash=?'); vals.push(bcrypt.hashSync(String(password), 10)); }
   if (fields.length) { db.prepare(`UPDATE users SET ${fields.join(',')} WHERE id=?`).run(...vals, req.params.id); }
@@ -1299,19 +1357,18 @@ router.get('/monitor/dashboard', requirePerm('monitoring', 'view'), (req, res) =
   const sent = { positive: 0, neutral: 0, negative: 0 };
   db.prepare(`SELECT sentiment, COUNT(*) c FROM mentions WHERE category='brand' AND sentiment IS NOT NULL AND ${inP} GROUP BY sentiment`)
     .all(from, to).forEach((r) => { sent[r.sentiment] = r.c; });
-  const denom = sent.positive + sent.negative;
-  const nsr = denom ? +((sent.positive - sent.negative) / denom).toFixed(2) : 0;
+  const nsr = nsrOf(sent.positive, sent.negative);
   // khủng hoảng: tiêu cực thương hiệu 24h
   const since24 = new Date(Date.now() + 7 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
   const neg24 = c(`SELECT COUNT(*) c FROM mentions WHERE category='brand' AND sentiment='negative' AND published_at>=?`, since24);
-  const crisis = neg24 >= 3;
+  const crisis = crisisOf(neg24);
   // trend 14 ngày: volume thương hiệu + NSR ngày
   const days = [];
   for (let i = 13; i >= 0; i--) days.push(new Date(Date.now() + 7 * 3600 * 1000 - i * 86400000).toISOString().slice(0, 10));
   const byDay = {};
   db.prepare(`SELECT published_at d, sentiment, COUNT(*) c FROM mentions WHERE category='brand' AND published_at>=? GROUP BY published_at, sentiment`)
     .all(days[0]).forEach((r) => { (byDay[r.d] = byDay[r.d] || { p: 0, n: 0, z: 0 }); if (r.sentiment === 'positive') byDay[r.d].p = r.c; else if (r.sentiment === 'negative') byDay[r.d].n = r.c; else byDay[r.d].z = r.c; });
-  const trend = days.map((d) => { const x = byDay[d] || { p: 0, n: 0, z: 0 }; const tot = x.p + x.n + x.z; const dn = x.p + x.n; return { date: d, total: tot, nsr: dn ? +((x.p - x.n) / dn).toFixed(2) : 0 }; });
+  const trend = days.map((d) => { const x = byDay[d] || { p: 0, n: 0, z: 0 }; return { date: d, total: x.p + x.n + x.z, nsr: nsrOf(x.p, x.n) }; });
   const alerts = db.prepare(`SELECT * FROM monitor_alerts ORDER BY id DESC LIMIT 10`).all();
   const lastRun = db.prepare(`SELECT * FROM scan_runs ORDER BY id DESC LIMIT 1`).get();
   const sourceCount = c(`SELECT COUNT(*) c FROM sources WHERE enabled=1`);
@@ -1358,7 +1415,7 @@ router.put('/monitor/mentions/:id', requirePerm('monitoring', 'edit'), (req, res
   // sửa sắc thái -> ghi audit + đánh dấu human
   if ('sentiment' in req.body && req.body.sentiment !== cur.sentiment) {
     const ns = req.body.sentiment || null;
-    const score = ns === 'positive' ? 0.6 : ns === 'negative' ? -0.6 : ns === 'neutral' ? 0 : null;
+    const score = sentimentScore(ns);
     db.prepare(`UPDATE mentions SET sentiment=?, sentiment_score=?, sentiment_by='human' WHERE id=?`).run(ns, score, cur.id);
     const u = req.session.user;
     db.prepare(`INSERT INTO sentiment_audit (mention_id, old_sentiment, new_sentiment, user_id, username) VALUES (?,?,?,?,?)`)
@@ -1457,18 +1514,35 @@ router.get('/monitor/sources', requirePerm('monitoring', 'view'), (req, res) => 
 router.post('/monitor/sources', requirePerm('monitoring', 'create'), async (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.url) return res.status(400).json({ error: 'Thiếu tên/URL' });
+  let requestedUrl;
+  try {
+    requestedUrl = outbound.normalizeHttpUrl(b.url);
+    await outbound.validateOutboundUrl(requestedUrl);
+  } catch (error) {
+    if (error instanceof outbound.SafeFetchError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
   // Người dùng chỉ cần dán link website bình thường — tự dò xem có RSS không, nếu không thì quét bằng Google Search (site:)
   let feedUrl = null;
-  try { feedUrl = await monitor.detectFeed(b.url); } catch {}
+  try { feedUrl = await monitor.detectFeed(requestedUrl); } catch {}
   const mode = feedUrl ? 'rss' : 'site';
-  const finalUrl = feedUrl || (/^https?:\/\//i.test(b.url) ? b.url : `https://${b.url}`);
+  const finalUrl = feedUrl || requestedUrl;
   const r = db.prepare('INSERT INTO sources (name, type, url, enabled, auto, mode) VALUES (?,?,?,?,0,?)').run(b.name, b.type || 'news', finalUrl, b.enabled === false ? 0 : 1, mode);
   logEdit(req, 'CREATE', 'source', r.lastInsertRowid, b.name);
   res.json({ id: r.lastInsertRowid, mode });
 });
-router.put('/monitor/sources/:id', requirePerm('monitoring', 'edit'), (req, res) => {
+router.put('/monitor/sources/:id', requirePerm('monitoring', 'edit'), async (req, res) => {
   const b = req.body || {}; const data = {};
   ['name', 'type', 'url'].forEach((k) => { if (k in b) data[k] = b[k]; });
+  if ('url' in data) {
+    try {
+      data.url = outbound.normalizeHttpUrl(data.url);
+      await outbound.validateOutboundUrl(data.url);
+    } catch (error) {
+      if (error instanceof outbound.SafeFetchError) return res.status(400).json({ error: error.message });
+      throw error;
+    }
+  }
   if ('enabled' in b) data.enabled = b.enabled ? 1 : 0;
   if (Object.keys(data).length) buildUpdate('sources', req.params.id, data);
   logEdit(req, 'EDIT', 'source', req.params.id); res.json({ ok: true });
@@ -1553,8 +1627,7 @@ router.get('/monitor/campaigns/:id/results', requirePerm('monitoring', 'view'), 
   const bd = { positive: 0, neutral: 0, negative: 0, none: 0 };
   const bySource = {};
   hit.forEach((m) => { bd[m.sentiment || 'none']++; bySource[m.source_type || 'khác'] = (bySource[m.source_type || 'khác'] || 0) + 1; });
-  const denom = bd.positive + bd.negative;
-  const nsr = denom ? +((bd.positive - bd.negative) / denom).toFixed(2) : 0;
+  const nsr = nsrOf(bd.positive, bd.negative);
   // đối thủ trong chiến dịch: tin nhắc TÊN đối thủ KÈM từ khóa chiến dịch (lọc trong 'hit')
   const compRes = comps.map((c) => {
     const name = typeof c === 'string' ? c : (c && c.name) || '';
@@ -1579,5 +1652,15 @@ router.get('/monitor/campaigns/:id/evaluate', requirePerm('monitoring', 'view'),
   try { res.json(await monitor.evaluateCampaign(campOut(cp))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Expose các helper thuần (không đụng DB/request thật) để unit test (G1A.2) gọi trực tiếp —
+// KHÔNG đổi hành vi router, chỉ thêm 1 property lên object router (Express Router bỏ qua property
+// lạ, chỉ quan tâm .get/.post/.use/stack nội bộ).
+router.testables = {
+  pageParams, pick, jsonField, senGroups, senVisible, canMoney, maskMoney, stripDisallowed,
+  isValidBudgetPeriod, isValidNewUserPayload, sanitizeSensitivePerms,
+  nextOccurrence, decorateDates, deadlineInfo, jarr, periodOf, campOut,
+  nsrOf, careRiskLevel, bucketOf, crisisOf, sentimentScore, awardCostOf,
+};
 
 module.exports = router;

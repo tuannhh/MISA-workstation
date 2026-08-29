@@ -1,0 +1,70 @@
+name: regression
+
+# G1A.10 — CI `regression` xanh (memory-bank/04-ROADMAP.md). Chạy đúng bộ full-regression mà
+# 17-fast-track-collaboration.md yêu cầu trước mỗi lần bàn giao batch: security suite, verifier
+# G0/G1A.9, integration test cả 2 driver, và npm audit (không cho phép lỗ hổng mới lọt qua mà
+# không ai biết — không tự động "audit fix", chỉ CẢNH BÁO để xử lý có chủ đích như G1A.10 đã làm).
+"on":
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    services:
+      # Cấu hình khớp docker-compose.yml (MYSQL_USER/PASSWORD/DATABASE/ROOT_PASSWORD) để
+      # server/test-support/db-harness.js bootstrap bằng root mặc định không cần biến môi trường
+      # TEST_MYSQL_* nào thêm.
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: pr_media
+          MYSQL_USER: pr_media
+          MYSQL_PASSWORD: pr_media
+          MYSQL_ROOT_PASSWORD: change-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pchange-root-password"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: npm audit (không tự động fix — exit criterion là 0 vulnerabilities, không lọc theo mức)
+        run: npm audit
+
+      - name: build (Vite/PostCSS — nanoid/postcss vừa nâng version, phải chạy build thật trên CI, không chỉ kiểm tra server không require() trực tiếp)
+        run: npm run build
+
+      - name: test:security (unit business-rule/AI-egress characterization)
+        run: npm run test:security
+
+      - name: verify-g0.mjs (route catalog/permission matrix/schema facts — G0, vẫn chạy mọi lần đổi route/schema)
+        run: node scripts/verify-g0.mjs
+
+      - name: verify-g0 selftest
+        run: npm run test:verify-g0-selftest
+
+      - name: verify-gate1-mapping.mjs (G1A.9 — 145/145 route + known-red/allowlist đối chiếu)
+        run: npm run test:verify-gate1-mapping
+
+      - name: test:integration:sqlite
+        run: npm run test:integration:sqlite
+
+      - name: test:integration:mysql
+        env:
+          ALLOW_TEST_DB_CREATE: '1'
+        run: npm run test:integration:mysql
+
+      - name: git diff --check (khoảng trắng cuối dòng/conflict marker sót lại)
+        run: git diff --check

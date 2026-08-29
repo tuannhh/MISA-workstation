@@ -9,6 +9,7 @@
 const { db, metaGet } = require('./db');
 const cfg = require('./config');
 const gemini = require('./gemini');
+const outbound = require('./safe-fetch');
 
 // Số ngày quét/lookback (cấu hình ở Settings) — dùng cho Google News + grounding
 function scanDays() { const n = parseInt(metaGet('scan_days', '30'), 10); return n >= 1 && n <= 365 ? n : 30; }
@@ -34,16 +35,12 @@ function decodeEntities(s) {
 }
 
 async function fetchText(url, timeoutMs = 12000) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      signal: ctrl.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MISA-PR-Monitor/1.0)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
-  } finally { clearTimeout(t); }
+  const res = await outbound.safeFetch(url, {
+    timeoutMs,
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MISA-PR-Monitor/1.0)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
 }
 
 // ---------------- parse RSS/Atom ----------------
@@ -165,14 +162,16 @@ async function analyzePending(limit = 30) {
 // ---------------- mở rộng quét bằng Gemini Google Search grounding ----------------
 const UA2 = { 'User-Agent': 'Mozilla/5.0 (compatible; MISA-PR-Monitor/1.0)' };
 async function resolveLink(uri) {
-  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 12000);
   try {
-    const res = await fetch(uri, { signal: ctrl.signal, headers: UA2, redirect: 'follow' });
+    const res = await outbound.safeFetch(uri, { timeoutMs: 12000, headers: UA2 });
     const body = await res.text().catch(() => '');
     const m = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     return { url: res.url || uri, title: m ? decodeEntities(m[1]).replace(/\s+/g, ' ').trim() : '' };
-  } catch { return { url: uri, title: '' }; }
-  finally { clearTimeout(t); }
+  } catch (error) {
+    // Không giữ/lưu URL bị chặn để một kết quả grounding không thể biến thành SSRF ở lượt quét sau.
+    if (error instanceof outbound.SafeFetchError) return { url: null, title: '', blocked: true };
+    return { url: uri, title: '' };
+  }
 }
 function classifyHost(host) {
   host = String(host || '').replace(/^www\./, '');
@@ -195,6 +194,7 @@ async function groundIngest(q) {
   for (const ch of r.chunks) {
     fetched++;
     const info = await resolveLink(ch.uri);
+    if (!info.url) continue;
     let host = ''; try { host = new URL(info.url).hostname; } catch { host = String(ch.title || ''); }
     const [stype, sname] = classifyHost(host);
     const title = info.title || ch.title || sname;
@@ -220,6 +220,7 @@ async function siteGroundIngest(source, q) {
   for (const ch of r.chunks) {
     fetched++;
     const info = await resolveLink(ch.uri);
+    if (!info.url) continue;
     const h2 = hostOf(info.url);
     if (host && h2 && h2 !== host && !h2.endsWith('.' + host)) continue; // chỉ giữ bài đúng site đã khai báo
     const title = info.title || ch.title || source.name;
@@ -436,4 +437,10 @@ function applySchedule() {
 }
 function start() { applySchedule(); }
 
-module.exports = { runScan, analyzePending, detectCrisis, aiMisaHighlights, aiCompetitorAnalysis, evaluateCampaign, groundIngest, start, applySchedule, parseFeed, matchTerms, detectFeed, keywordStats };
+module.exports = {
+  runScan, analyzePending, detectCrisis, aiMisaHighlights, aiCompetitorAnalysis, evaluateCampaign, groundIngest,
+  start, applySchedule, parseFeed, matchTerms, detectFeed, keywordStats,
+  // Thêm để unit test (G1A.2) — hàm thuần/DI-được, KHÔNG đổi hành vi các export trên.
+  fetchText, resolveLink, classifyHost, hostOf, stripTags, decodeEntities,
+  analyzeBatch, SENT_SCHEMA,
+};

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "F2-fixation",
+    "owner": "backend",
+    "expiry": "2026-12-31",
+    "wave": "W1.7",
+    "note": "auth.login() không gọi req.session.regenerate() — session id không đổi khi đăng nhập lại trên cookie đã tồn tại (fixation)."
+  },
+  {
+    "id": "F2-ratelimit",
+    "owner": "backend",
+    "expiry": "2026-12-31",
+    "wave": "W1.7",
+    "note": "POST /api/login không có rate-limit — không giới hạn số lần thử sai mật khẩu."
+  },
+  {
+    "id": "N1-explicit-action",
+    "owner": "backend",
+    "expiry": "2026-12-31",
+    "wave": "W1",
+    "note": "4 route side-effect (notifications/:id/read, notifications/read-all, reminders/run, monitor/alerts/:id/read) vẫn dùng requirePerm(module,'view') thay vì action tường minh ack/run — RESOLVED 02-decisions.md §B.1 N1, chưa implement."
+  },
+  {
+    "id": "N2-dashboard-permission",
+    "owner": "backend",
+    "expiry": "2026-12-31",
+    "wave": "W1",
+    "note": "GET /dashboard không có requirePerm nào; rbac.js chưa có module 'dashboard' — RESOLVED 02-decisions.md §B.1 N2, chưa implement."
+  }
+]

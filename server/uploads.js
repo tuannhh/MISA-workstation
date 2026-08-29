@@ -49,13 +49,16 @@ const AI_SPREADSHEET_MIMES = new Set([
   'text/csv', 'application/csv', 'text/plain', 'application/octet-stream',
 ]);
 const AI_SPREADSHEET_EXTENSIONS = new Set(['.xlsx', '.xls', '.xlsb', '.csv']);
-const uploadAiDocument = multer({
-  storage: multer.memoryStorage(),
-  fileFilter: (req, file, cb) => AI_SPREADSHEET_MIMES.has(String(file.mimetype || '').toLowerCase())
+function aiDocumentFileFilter(req, file, cb) {
+  return AI_SPREADSHEET_MIMES.has(String(file.mimetype || '').toLowerCase())
     && AI_SPREADSHEET_EXTENSIONS.has(path.extname(file.originalname || '').toLowerCase())
     ? cb(null, true)
-    : cb(new Error('Chỉ chấp nhận file Excel hoặc CSV.')),
+    : cb(new Error('Chỉ chấp nhận file Excel hoặc CSV.'));
+}
+const uploadAiDocument = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: aiDocumentFileFilter,
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
 });
 
-module.exports = { upload, uploadAudio, uploadAiDocument, UPLOAD_DIR };
+module.exports = { upload, uploadAudio, uploadAiDocument, UPLOAD_DIR, fileFilter, aiDocumentFileFilter };
