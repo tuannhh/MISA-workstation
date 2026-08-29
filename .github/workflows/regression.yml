@@ -40,8 +40,11 @@ jobs:
 
       - run: npm ci
 
-      - name: npm audit (không tự động fix — chỉ chặn nếu có lỗ hổng mới chưa xử lý có chủ đích)
-        run: npm audit --audit-level=high
+      - name: npm audit (không tự động fix — exit criterion là 0 vulnerabilities, không lọc theo mức)
+        run: npm audit
+
+      - name: build (Vite/PostCSS — nanoid/postcss vừa nâng version, phải chạy build thật trên CI, không chỉ kiểm tra server không require() trực tiếp)
+        run: npm run build
 
       - name: test:security (unit business-rule/AI-egress characterization)
         run: npm run test:security
