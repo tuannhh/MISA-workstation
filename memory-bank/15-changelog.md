@@ -1504,3 +1504,30 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   pass/7 skip (tăng đúng 3); `test:integration:mysql` 635 total/634 pass/1 skip (tăng đúng 3);
   `test:security` 6/6; `verify-g0.mjs` PASS 7/7; `test:verify-g0-selftest` 6/6;
   `test:verify-gate1-mapping` PASS 145/145 TODO=2 known-red=4; `npm audit` 0 vulnerabilities.
+
+## 2026-08-29 — G1A.10 remediation: Codex CONDITIONAL ACCEPT, 2 MUST-FIX trên CI workflow
+
+- Codex audit độc lập batch G1A.10 (commit `fdbd858`): xác nhận `npm ci` sạch, `npm audit` 0
+  vulnerabilities, dependency test 3/3, production build Vite pass (6182 module), full
+  regression khớp số liệu đã báo cáo, YAML parse hợp lệ. Verdict: **CONDITIONAL ACCEPT** — cần
+  1 commit remediation nhỏ trên `.github/workflows/regression.yml` trước khi coi phần code/config
+  là ACCEPT.
+- **C1 (MUST-FIX):** `npm audit --audit-level=high` không khớp exit criterion "0 vulnerabilities"
+  — một lỗ hổng mức low/moderate phát sinh sau này sẽ không làm CI fail. Sửa: bỏ `--audit-level`,
+  dùng `npm audit` thuần (fail với bất kỳ vulnerability nào).
+- **C2 (MUST-FIX):** CI chưa có step chạy build tool thật (`npm run build`) dù vừa nâng version
+  nanoid/postcss — test `unit-dependency-audit.test.js` chỉ xác nhận server không `require()`
+  trực tiếp 2 gói này, không chứng minh Vite/PostCSS build thật vẫn chạy được trên runner GitHub.
+  Sửa: thêm step `npm run build` ngay sau `npm ci`.
+- Vá cả 2 trong commit `09a40c3`. Verify local trước khi commit: `npm run build` → 6182 module
+  transformed, output `public/assets/` khớp byte-for-byte bản đã commit (`git diff` sạch, build
+  không làm bẩn working tree vì `outDir` build lại đúng nội dung đã có); `npm audit` (không
+  audit-level) vẫn 0 vulnerabilities; YAML re-parse bằng `python3 yaml.safe_load` xác nhận cấu
+  trúc/thứ tự step đúng, `on:` vẫn là string key (đã quote từ G1A.10 gốc). Không chạy lại full
+  integration suite — remediation chỉ đổi CI-workflow config, không chạm server code/test contract
+  (khớp `17-fast-track-collaboration.md` §4 dòng "remediation chỉ sửa tài liệu": broken-link/
+  parser/verifier/diff check tương ứng là đủ).
+- **Chưa CLOSE G1A.10:** Codex nêu rõ điều kiện đóng cuối cùng là owner phải `push` và có ít nhất
+  1 GitHub Actions run xanh thật — YAML parse/verify cục bộ không thể xác nhận MySQL service
+  container hay runner Actions hoạt động đúng. Việc này cần owner action (push), không phải việc
+  Claude có thể tự làm mà không xin phép.
