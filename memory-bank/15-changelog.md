@@ -1449,3 +1449,24 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   `verify-g0.mjs` PASS 7/7; `test:verify-gate1-mapping` PASS 145/145, TODO=2, known-red=4
   (allowlist 4 entry, đã đối chiếu); `git diff --check` sạch. Chờ Codex re-audit theo 2 remediation
   trên để ACCEPT Bundle A chính thức.
+
+## 2026-08-28 — Bundle A: Codex ACCEPT chính thức (sau remediation `163093b`)
+
+- Codex re-audit remediation `163093b` và trả **ACCEPT** — không mở thêm vòng remediation nào.
+  Xác nhận cả 2 MUST-FIX đã đúng: `bookings.owner_id` giờ được kiểm tra thật trong DB contract
+  (khai báo trùng đã loại bỏ); known-red chỉ xanh khi lỗi khớp đúng target expectation, lỗi
+  fixture/setup bị ném lại — self-test child-process đã kiểm chứng đủ 3 chiều (match/mismatch/
+  thiếu expectation); mapping verifier đã đối chiếu 2 chiều với allowlist (thiếu field/hết hạn/
+  trùng/mồ côi đều fail). Re-verify tại HEAD: SQLite 625 pass/7 skip, MySQL 631 pass/1 skip,
+  security 6/6, G0 verifier PASS, gate-1 mapping 145/145 TODO=2 known-red=4 allowlist=4,
+  `git diff --check` sạch (chỉ `.DS_Store` untracked).
+- **Đóng chính thức (Codex ACCEPT Bundle A 2026-08-28):** G1A.4, G1A.5, G1A.8, G1B.3, G1B.4,
+  G1B.5, G1B.6, và phần ENGINE của G1B.1/G1B.2 (không phải route-wiring — Codex nhấn mạnh rõ
+  ràng trong verdict: "G1B.1/G1B.2 mới hoàn tất phần engine; chưa được đánh dấu đóng toàn gate
+  cho tới khi có strangler route-wiring và target tests tương ứng").
+- **Vẫn giữ nguyên phạm vi, không tự ý mở rộng theo verdict này:** F2/N1/N2 vẫn là target-red có
+  kiểm soát (chưa phải lỗ hổng đã sửa — implement thật vẫn thuộc W1.7/Wave 1); route-wiring RBAC
+  v2 cho 24/25 entity ngoài People Detail vẫn chưa làm, thuộc Wave 1 strangler slice tiếp theo,
+  có thể cần xin owner nếu vượt phạm vi pilot đã duyệt (`02-decisions.md` §G).
+- Cập nhật `04-ROADMAP.md`: đánh dấu XONG/Codex ACCEPT cho G1A.4/G1A.5/G1A.8/G1B.3/G1B.4/G1B.5/
+  G1B.6; G1B.1/G1B.2 ghi rõ "ACCEPT phần engine, CHƯA đóng cả gate" để không hiểu nhầm sau này.
