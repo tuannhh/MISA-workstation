@@ -1470,3 +1470,37 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   có thể cần xin owner nếu vượt phạm vi pilot đã duyệt (`02-decisions.md` §G).
 - Cập nhật `04-ROADMAP.md`: đánh dấu XONG/Codex ACCEPT cho G1A.4/G1A.5/G1A.8/G1B.3/G1B.4/G1B.5/
   G1B.6; G1B.1/G1B.2 ghi rõ "ACCEPT phần engine, CHƯA đóng cả gate" để không hiểu nhầm sau này.
+
+## 2026-08-28 — G1A.10: npm audit vá + regression test + CI `regression` job
+
+- `npm audit` trước khi sửa: 3 lỗ hổng transitive — `body-parser<1.20.6` (DoS, GHSA-v422-hmwv-36x6),
+  `nanoid<3.3.18` (High, vòng lặp vô hạn khi size=0, GHSA-2v37-7h3g-55p8),
+  `postcss<=8.5.22` (Moderate, đọc file `.map` tuỳ ý, GHSA-fxqj-rqcc-2cmp). Không chạy
+  `npm audit fix` mù: đọc source từng lỗ hổng trước.
+- `body-parser` (duy nhất có đường chạy runtime thật — 2 gói kia chỉ là devDependency của
+  postcss/tailwind/vite, `grep` xác nhận server không `require()` trực tiếp): đọc
+  `node_modules/raw-body/index.js` xác nhận cơ chế đúng như advisory — `bytes.parse(limit)` trả
+  `null` khi limit không hợp lệ, sau đó `readStream()` bỏ qua CẢ HAI điều kiện kiểm tra kích thước
+  (`limit !== null && ...`) vì `limit === null` → size enforcement bị tắt hoàn toàn, không phải
+  lỗi ở `raw-body` (không đổi version) mà ở `body-parser` không validate trước khi truyền `null`
+  xuống. Bản vá 1.20.6 thêm `if (limit === null) throw new TypeError(...)` ngay lúc setup
+  middleware (fail-fast).
+- Áp dụng `npm audit fix` sau khi hiểu rõ cơ chế (patch-level, không đổi range trong
+  `package.json`: body-parser 1.20.5→1.20.6, nanoid 3.3.16→3.3.18, postcss 8.5.19→8.5.26).
+  `npm audit` sau vá: **0 vulnerabilities**.
+- `server/test/unit-dependency-audit.test.js` (3 test): xác nhận `bodyParser.json({limit:
+  'not-a-real-limit'})` throw đúng `TypeError` (bản vá hoạt động thật, không chỉ tin theo advisory
+  suông); xác nhận cấu hình thật của app (`limit:'2mb'`) không bị ảnh hưởng (không regression);
+  ghi chú rõ nanoid/postcss không cần test hành vi runtime vì không có đường chạy trong server.
+- `.github/workflows/regression.yml` (mới) — job tên đúng `regression` khớp roadmap: service
+  container MySQL 8.4 cấu hình khớp `docker-compose.yml` (user/password/database/root-password),
+  chạy tuần tự `npm audit --audit-level=high` → `test:security` → `verify-g0.mjs` →
+  `verify-g0-selftest` → `verify-gate1-mapping` → `test:integration:sqlite` →
+  `test:integration:mysql` → `git diff --check`. Trigger `push` (main) + `pull_request`.
+  **Chưa verify chạy thật trên GitHub Actions** (cần push/PR đầu tiên) — mọi lệnh bên trong đã
+  verify xanh cục bộ riêng lẻ, nhưng bản thân workflow YAML (runner, service networking, cache)
+  chỉ xác nhận được khi thực sự chạy trên GitHub.
+- Verify cục bộ: `unit-dependency-audit.test.js` 3/3; `test:integration:sqlite` 635 total/628
+  pass/7 skip (tăng đúng 3); `test:integration:mysql` 635 total/634 pass/1 skip (tăng đúng 3);
+  `test:security` 6/6; `verify-g0.mjs` PASS 7/7; `test:verify-g0-selftest` 6/6;
+  `test:verify-gate1-mapping` PASS 145/145 TODO=2 known-red=4; `npm audit` 0 vulnerabilities.
