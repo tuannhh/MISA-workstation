@@ -1652,3 +1652,18 @@ còn database của lần chạy; `data/uploads/*.txt` (ngoài quarantine) rỗn
 remediation. Kết quả đo cuối: throughput ~47–69 rps không tăng theo concurrency (1→50), latency p50
 tăng tuyến tính 3.4ms→832ms, errorRate=0 — kết luận F7 (nghẽn cổ chai 1 connection + Atomics.wait)
 không đổi.
+
+## 2026-08-30 — G1A.6: UI characterization smoke toàn bộ module (Codex)
+
+- Thêm `server/test/ui-characterization.test.js` với 4 rule `UI-CHAR-001..004`, script
+  `npm run test:ui-characterization` và mapping join được trong `gate1-test-mapping.md`.
+  Test khóa 14 module desktop, contract Vue shell ↔ legacy `app.js`, 34 flow/145 route và trạng
+  thái `N-MISSING` cho hai role; nó chủ đích phân biệt **characterization xanh** với MDS/native pass.
+- Runtime browser với `DATA_DIR` tạm: quản lý phòng mở đủ 14 hash root; chuyên viên bị ẩn Báo cáo/
+  Quản trị và direct hash quay về Dashboard; ở 375×812 vẫn là desktop shell responsive, không có
+  `.mds-mobile-app` hay bottom nav. Evidence và đường đi Wave 3/4 ở
+  [`20-ui-characterization.md`](20-ui-characterization.md).
+- Checkpoint: SQLite 632/639 pass (7 skip), MySQL 638/639 pass (1 skip), security 6/6,
+  `verify-g0.mjs` và Gate-1 mapping đều PASS (145/145 route, 253 rows, TODO=2, known-red=4).
+  G1A.6/Gate 1 test-net đóng; **F5 Native-Mobile vẫn P0 FAIL/MISSING**, không thay đổi điều kiện
+  release MDS/native thật.

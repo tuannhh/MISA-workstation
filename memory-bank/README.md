@@ -24,6 +24,9 @@
 | [15-changelog.md](15-changelog.md) | G0.2 — lịch sử phát triển theo mốc kiến trúc/tính năng, kèm lý do |
 | [16-coding-rules.md](16-coding-rules.md) | G0.2 — §A quy tắc/pattern legacy (mô tả, không phải chuẩn) + **§B quy tắc BẮT BUỘC cho code mới** (thêm 2026-08-25 theo Codex C0.4.9) |
 | [17-fast-track-collaboration.md](17-fast-track-collaboration.md) | Protocol owner-approved để Claude triển khai theo batch và Codex audit theo rủi ro: Batch Contract, Evidence Bundle, test checkpoints, severity/gate và phân công UI |
+| [18-g1b-rbac-batch-contract.md](18-g1b-rbac-batch-contract.md) | Batch contracts G1B cho session, explicit action/permission và PolicyEngine |
+| [19-g1c-e2e-acceptance-framework.md](19-g1c-e2e-acceptance-framework.md) | G1C.1 — khung acceptance E2E theo 4 vai trò, chỉ định nghĩa trước Wave 1 |
+| [20-ui-characterization.md](20-ui-characterization.md) | G1A.6 — baseline UI desktop/compact, runtime evidence và ranh giới không suy diễn Native-Mobile pass |
 
 ## Tổng quan sản phẩm (1 đoạn)
 
