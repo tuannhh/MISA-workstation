@@ -1698,3 +1698,22 @@ tính 4.4ms→889ms, errorRate=0 — kết luận F7 không đổi qua cả 3 l�
   `verify-g0.mjs` và Gate-1 mapping đều PASS (145/145 route, 253 rows, TODO=2, known-red=4).
   G1A.6/Gate 1 test-net đóng; **F5 Native-Mobile vẫn P0 FAIL/MISSING**, không thay đổi điều kiện
   release MDS/native thật.
+
+## 2026-08-30 — G1.8 CLOSED: Codex ACCEPT sau 2 vòng remediation
+
+Codex re-audit round 2 (commit `018c7af`): **ACCEPTED — G1.8 CLOSED.** Chạy độc lập
+`server/test/perf-baseline-failure.test.js` 1/1 pass (ép MySQL bootstrap lỗi, script exit khác 0,
+số thư mục `pr-media-test-*` không đổi); `verify-g0.mjs` + Gate 1 mapping xanh (145/145 route, 253
+mapped, TODO=2, known-red=4 có allowlist); artifact `2026-08-30T03-44-04-278Z.json` có `gitSha=
+018c7af` đúng commit sửa; throughput 48.84–61.24rps, p50 tăng 4.38ms→889.4ms khi concurrency 1→50.
+**Chốt rõ:** F7 (1 connection MySQL + `Atomics.wait` chặn main thread) **vẫn là backlog hiệu năng
+cho Wave 2.3/2.4** — có artifact đo không có nghĩa là đã xử lý tận gốc; ngưỡng SLO/topology
+production do DevOps chốt ở W2.3, quyết định fix/không fix (pool hoá, worker pool, v.v.) thuộc
+W2.4 nếu SLO không đạt. Không cần sửa thêm trong phạm vi G1.8.
+
+**Exit gate G1 — soát lại lần cuối sau khi G1A.6 + G1.8 đều CLOSED:** (a) mapping 145/145 — PASS;
+(b) G1A GREEN đầy đủ — **G1A.1–.10 đều XONG/CLOSED, bao gồm cả G1A.6 (Codex)**; (c) G1B mọi RED có
+allowlist hợp lệ — PASS (Bundle A 2026-08-28); (d) G1C khung đã định nghĩa — PASS (G1C.1); (e)
+G1.8 có artifact — PASS (CLOSED, Codex ACCEPT). **Không còn mục nào treo — toàn bộ 5 điều kiện Exit
+gate G1 đã đạt**, cả phần Claude lẫn phần Codex (G1A.6). Chuyển sang Wave 1 theo phạm vi owner đã
+duyệt (`02-decisions.md` §G: foundation fail-closed + pilot slice People Detail).
