@@ -570,6 +570,45 @@ Exit criteria: full regression (test:security 6/6, sqlite 754/8 skip, mysql 761/
 Expected commit range/count: 1 commit.
 ```
 
+## Batch RBAC-EXP-B5 (2026-08-30)
+
+```md
+Batch-ID: RBAC-EXP-B5
+Goal: batch 5/6 -- gan PolicyEngine cho 3 entity Direct nhom "nha cung cap con"
+      (supplier_contact/supplier_transaction/supplier_quote), dung y het mau da lap lai 3 lan
+      truoc (award_participation B4, booking/interaction B3) -- khong con rui ro thiet ke moi,
+      chi con dung nghia entity/cot dung.
+In scope: (a) Schema: `supplier_quotes`/`supplier_transactions`/`supplier_contacts` cung thieu
+      `created_by` that (giong award_participations/event_costs o B4) -- them ALTER TABLE truoc
+      khi wiring. (b) `GET /api/suppliers/:id`: quotes/transactions doi tu maskMoney/org_fee legacy
+      sang `projectRecord()` (entity `supplier_quote`/`supplier_transaction`, che unit_price/value);
+      contacts KHONG co field Confidential nen giu nguyen (chi can gate ghi/xoa). (c)
+      `supplier_contact`/`supplier_transaction`/`supplier_quote`: CRUD owner_id-gate dung mau B3/
+      B4; ca 3 DELETE deu SUA DUNG tu map nham 'edit' (executor xoa duoc) sang 'delete' that (chi
+      Admin/Super Admin) -- dung y het pattern da lap lai o B4 cho award_participation/event_cost.
+      `supplier_quote` khong co route PUT (CHARACTERIZATION co san, chi POST+DELETE) nen khong can
+      wiring PUT. `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` them 8 route + `07-route-
+      catalog.md` (R075-R080, R084-R085 va sua mo ta masking R074) cap nhat theo mau da dung.
+Out of scope: 6 Direct entity con lai (sponsorship/agreement/work_log/gift/association_fee/
+      benefit_usage) -- batch RBAC-EXP-B6 (batch cuoi cung cua ke hoach 6 batch).
+Behavior mode: TARGET-CHANGE tiep tuc dung mau owner_id-gate cua Direct, khong co bien the thiet ke
+      moi nao trong batch nay -- thuan tuy lap lai pattern da xac nhan dung o B3/B4.
+Risk hotspots: (1) 3/3 DELETE deu tung map nham 'edit' (executor xoa duoc) -- giong dung 3 cho da
+      sua o B4 (award_participation/event_cost) va tung o B3 (booking) -- xac nhan qua test rieng
+      cho tung entity (D13-067/069/070: DELETE luon 403 cho executor ke ca ban ghi cua chinh minh);
+      (2) `supplier_quote` khong co route PUT that -- khong nham tao ra PUT moi ngoai scope
+      CHARACTERIZATION hien co.
+Required tests: `integration-suppliers.test.js` D13-066 (viewer tao ca 3 loai deu 403), D13-067
+      (supplier_contact: executor tao 200 + owner_id dung, PUT nguoi khac 403/cua minh 200, DELETE
+      luon 403), D13-068+D13-069 (supplier_transaction: che value theo owner, PUT nguoi khac 403/
+      cua minh 200, DELETE luon 403, admin DELETE 200), D13-070 (supplier_quote: che unit_price
+      theo owner, DELETE luon 403, admin DELETE 200).
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 759/8 skip, mysql 766/1 skip, mapping
+      145/145, verify-g0.mjs PASS, git diff --check sach) deu xanh.
+Expected commit range/count: 1 commit.
+```
+
 ## Batch RBAC-EXP-B2 (2026-08-30)
 
 ```md

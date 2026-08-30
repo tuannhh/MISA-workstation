@@ -382,3 +382,60 @@ test('R086 happy CHARACTERIZATION: không gửi file nào vẫn trả 200 (route
 test('R086 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await uploadFiles('/api/suppliers/1/files', [{ name: 'x.pdf' }], { auth: false })).status, 401);
 });
+
+// ---------------------------------------------------------------------------
+// D13-066..072 — batch RBAC-EXP-B5 (3/6 entity Direct — supplier_contact/supplier_transaction/
+// supplier_quote): mỗi loại có owner_id riêng, executor chỉ sửa được bản ghi CHÍNH mình tạo,
+// không bao giờ xoá được (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b5)
+// ---------------------------------------------------------------------------
+test('D13-066: viewer tạo contact/transaction/quote đều 403', async () => {
+  const id = await createSupplier();
+  assert.equal((await call('POST', `/api/suppliers/${id}/contacts`, { body: { full_name: 'x' }, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/suppliers/${id}/transactions`, { body: { value: 1 }, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/suppliers/${id}/quotes`, { body: { item: 'x' }, as: viewerCookie })).status, 403);
+});
+test('D13-067: supplier_contact — executor tạo trả 200, owner_id = chính executor; PUT contact người khác 403, PUT của mình 200; DELETE (kể cả của mình) luôn 403', async () => {
+  const { db } = require('../db');
+  const id = await createSupplier();
+  const myCid = (await (await call('POST', `/api/suppliers/${id}/contacts`, { body: { full_name: 'Của executor' }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM supplier_contacts WHERE id=?').get(myCid);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'suppliers_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+  assert.equal((await call('PUT', `/api/suppliers/${id}/contacts/${myCid}`, { body: { full_name: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  const othersCid = (await (await call('POST', `/api/suppliers/${id}/contacts`, { body: { full_name: 'Của người khác' } })).json()).id;
+  assert.equal((await call('PUT', `/api/suppliers/${id}/contacts/${othersCid}`, { body: { full_name: 'x' }, as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/suppliers/${id}/contacts/${myCid}`, { as: executorCookie })).status, 403);
+});
+test('D13-068: supplier_transaction — executor tạo trả 200, owner_id đúng; thấy value trên giao dịch mình tạo, KHÔNG thấy value trên giao dịch người khác', async () => {
+  const id = await createSupplier();
+  const myTid = (await (await call('POST', `/api/suppliers/${id}/transactions`, { body: { purpose: 'Của executor', value: 111 }, as: executorCookie })).json()).id;
+  const othersTid = (await (await call('POST', `/api/suppliers/${id}/transactions`, { body: { purpose: 'Của người khác', value: 222 } })).json()).id;
+  const detail = await (await call('GET', `/api/suppliers/${id}`, { as: executorCookie })).json();
+  assert.equal('value' in detail.transactions.find((t) => t.id === myTid), true);
+  assert.equal('value' in detail.transactions.find((t) => t.id === othersTid), false);
+});
+test('D13-069: supplier_transaction — executor PUT giao dịch người khác 403, PUT của mình 200; DELETE (kể cả của mình) luôn 403; admin xoá 200', async () => {
+  const id = await createSupplier();
+  const myTid = (await (await call('POST', `/api/suppliers/${id}/transactions`, { body: { purpose: 'Trước sửa' }, as: executorCookie })).json()).id;
+  assert.equal((await call('PUT', `/api/suppliers/${id}/transactions/${myTid}`, { body: { purpose: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  const othersTid = (await (await call('POST', `/api/suppliers/${id}/transactions`, { body: { purpose: 'Của người khác 2' } })).json()).id;
+  assert.equal((await call('PUT', `/api/suppliers/${id}/transactions/${othersTid}`, { body: { purpose: 'x' }, as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/suppliers/${id}/transactions/${myTid}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/suppliers/${id}/transactions/${myTid}`)).status, 200);
+});
+test('D13-070: supplier_quote — executor tạo trả 200, owner_id đúng; thấy unit_price trên báo giá mình tạo, KHÔNG thấy trên báo giá người khác; DELETE (kể cả của mình) luôn 403', async () => {
+  const { db } = require('../db');
+  const id = await createSupplier();
+  const myQid = (await (await call('POST', `/api/suppliers/${id}/quotes`, { body: { item: 'Của executor', unit_price: 500 }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM supplier_quotes WHERE id=?').get(myQid);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'suppliers_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+  const othersQid = (await (await call('POST', `/api/suppliers/${id}/quotes`, { body: { item: 'Của người khác', unit_price: 900 } })).json()).id;
+  const detail = await (await call('GET', `/api/suppliers/${id}`, { as: executorCookie })).json();
+  assert.equal('unit_price' in detail.quotes.find((q) => q.id === myQid), true);
+  assert.equal('unit_price' in detail.quotes.find((q) => q.id === othersQid), false);
+  assert.equal((await call('DELETE', `/api/suppliers/${id}/quotes/${myQid}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/suppliers/${id}/quotes/${myQid}`)).status, 200);
+});

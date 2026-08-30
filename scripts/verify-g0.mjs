@@ -142,6 +142,17 @@ const PILOT_INLINE_PERM_ROUTES = {
   'POST /api/events/:id/costs': { module: 'events', action: 'create' },
   'PUT /api/events/:id/costs/:cid': { module: 'events', action: 'edit' },
   'DELETE /api/events/:id/costs/:cid': { module: 'events', action: 'delete' },
+  // D13 batch RBAC-EXP-B5 (3/6 entity Direct — supplier_contact/supplier_transaction/
+  // supplier_quote) — PolicyEngine không điều kiện.
+  'POST /api/suppliers/:id/contacts': { module: 'suppliers', action: 'create' },
+  'PUT /api/suppliers/:id/contacts/:cid': { module: 'suppliers', action: 'edit' },
+  // truoc batch nay map nham vao 'edit' (executor xoa duoc) -- sua dung 'delete' (Admin/Super Admin).
+  'DELETE /api/suppliers/:id/contacts/:cid': { module: 'suppliers', action: 'delete' },
+  'POST /api/suppliers/:id/transactions': { module: 'suppliers', action: 'create' },
+  'PUT /api/suppliers/:id/transactions/:tid': { module: 'suppliers', action: 'edit' },
+  'DELETE /api/suppliers/:id/transactions/:tid': { module: 'suppliers', action: 'delete' },
+  'POST /api/suppliers/:id/quotes': { module: 'suppliers', action: 'create' },
+  'DELETE /api/suppliers/:id/quotes/:qid': { module: 'suppliers', action: 'delete' },
 };
 
 function sourceRoutes() {

@@ -2394,3 +2394,30 @@ Verify: security 6/6, SQLite 754 pass/8 skip, MySQL 761 pass/1 skip, mapping 145
 `verify-g0.mjs` PASS, `git diff --check` sạch. **Còn lại: 9 Direct entity (sponsorship/agreement/
 work_log/gift/association_fee/supplier_quote/supplier_transaction/supplier_contact/benefit_usage)
 — batch RBAC-EXP-B5..B6 tiếp theo.**
+
+## Wave 1: batch RBAC-EXP-B5 — gắn PolicyEngine cho 3 entity Direct "nhà cung cấp con" (supplier_contact/supplier_transaction/supplier_quote)
+
+Batch 5/6, đúng y hệt mẫu đã lặp lại 3 lần trước (award_participation B4, booking/interaction B3)
+— không còn rủi ro thiết kế mới, chỉ còn đúng nghĩa entity/cột.
+
+- `supplier_quotes`/`supplier_transactions`/`supplier_contacts` cũng thiếu `created_by` thật
+  (giống `award_participations`/`event_costs` ở B4) — thêm `ALTER TABLE` trước khi wiring.
+- `GET /api/suppliers/:id`: quotes/transactions đổi từ maskMoney/org_fee legacy sang
+  `projectRecord()` (che `unit_price`/`value`); contacts không có field Confidential nên giữ
+  nguyên, chỉ cần gate ghi/xoá.
+- Cả 3 entity: CRUD owner_id-gate đúng mẫu B3/B4; **cả 3 DELETE đều sửa đúng** từ map nhầm 'edit'
+  (executor xoá được) sang 'delete' thật (chỉ Admin/Super Admin) — cùng pattern đã lặp lại ở B4
+  cho award_participation/event_cost. `supplier_quote` không có route PUT (CHARACTERIZATION có
+  sẵn, chỉ POST+DELETE) nên không cần wiring PUT.
+- `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` + `07-route-catalog.md` (R075-R080, R084-R085 +
+  sửa mô tả masking R074) cập nhật theo mẫu đã dùng.
+
+Test mới: D13-066 (viewer tạo cả 3 loại đều 403), D13-067 (supplier_contact: executor tạo 200 +
+owner_id đúng, PUT người khác 403/của mình 200, DELETE luôn 403), D13-068+D13-069
+(supplier_transaction: che `value` theo owner, PUT người khác 403/của mình 200, DELETE luôn 403,
+admin DELETE 200), D13-070 (supplier_quote: che `unit_price` theo owner, DELETE luôn 403, admin
+DELETE 200).
+
+Verify: security 6/6, SQLite 759 pass/8 skip, MySQL 766 pass/1 skip, mapping 145/145 PASS,
+`verify-g0.mjs` PASS, `git diff --check` sạch. **Còn lại: 6 Direct entity (sponsorship/agreement/
+work_log/gift/association_fee/benefit_usage) — batch RBAC-EXP-B6 (batch cuối cùng) tiếp theo.**

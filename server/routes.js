@@ -1196,50 +1196,92 @@ router.get('/suppliers/list', requirePerm('suppliers', 'view'), (req, res) => {
 router.get('/suppliers/:id', requirePerm('suppliers', 'view'), (req, res) => {
   const row = db.prepare('SELECT * FROM suppliers WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Không tìm thấy' });
-  const quotes = db.prepare('SELECT * FROM supplier_quotes WHERE supplier_id=? ORDER BY stt, id').all(row.id);
+  // D13 (RBAC v2, batch RBAC-EXP-B5 5/6): quotes/transactions la entity Direct rieng
+  // (supplier_quote/supplier_transaction), che unit_price/value qua projectRecord() thay
+  // maskMoney/org_fee legacy. contacts (supplier_contact) khong co field Confidential.
+  const quotes = db.prepare('SELECT * FROM supplier_quotes WHERE supplier_id=? ORDER BY stt, id').all(row.id)
+    .map((q) => policyService.projectRecord({ principal: req.principal, entity: 'supplier_quote', module: 'supplier_quotes', record: q }));
   const files = db.prepare(`SELECT id, original_name, mime FROM attachments WHERE owner_type='supplier' AND owner_id=? ORDER BY id`).all(row.id);
-  maskMoney(req, quotes, 'unit_price');
-  let transactions = db.prepare('SELECT * FROM supplier_transactions WHERE supplier_id=? ORDER BY signed_date DESC').all(row.id);
-  if (!senGroups(req).has('org_fee')) transactions = transactions.map((t) => ({ ...t, value: t.value != null ? rbac.MASK : t.value }));
+  const transactions = db.prepare('SELECT * FROM supplier_transactions WHERE supplier_id=? ORDER BY signed_date DESC').all(row.id)
+    .map((t) => policyService.projectRecord({ principal: req.principal, entity: 'supplier_transaction', module: 'supplier_transactions', record: t }));
   const dates = decorateDates(db.prepare(`SELECT * FROM important_dates WHERE subject_type='supplier' AND subject_id=? ORDER BY event_date`).all(row.id));
   const contacts = db.prepare('SELECT * FROM supplier_contacts WHERE supplier_id=? ORDER BY id').all(row.id);
-  // D13 (RBAC v2, batch RBAC-EXP-B2 2/6 Global): record chinh chay PolicyEngine (che service_fee_pct/
-  // deposit_pct theo classification_tier). quotes/transactions/contacts la Direct entity khac
-  // (supplier_quote/supplier_transaction/supplier_contact), chua co policy slice rieng, giu nguyen
-  // maskMoney/org_fee legacy.
+  // record chinh chay PolicyEngine (che service_fee_pct/deposit_pct theo classification_tier).
   const record = policyService.projectRecord({ principal: req.principal, entity: 'supplier', module: 'suppliers', record: row });
   res.json({ record, quotes, files, transactions, dates, contacts });
 });
 const SCONTACT_COLS = ['full_name', 'position', 'phone', 'email', 'role', 'note'];
-router.post('/suppliers/:id/contacts', requirePerm('suppliers', 'edit'), (req, res) => {
-  const data = pick(req.body, SCONTACT_COLS); data.supplier_id = req.params.id;
+router.post('/suppliers/:id/contacts', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'supplier_contact', input: pick(req.body, SCONTACT_COLS) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên suppliers.');
+    throw err;
+  }
+  data.supplier_id = req.params.id;
   const r = buildInsert('supplier_contacts', data);
   logEdit(req, 'CREATE', 'supplier_contact', r.lastInsertRowid, req.body.full_name);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/suppliers/:id/contacts/:cid', requirePerm('suppliers', 'edit'), (req, res) => {
+router.put('/suppliers/:id/contacts/:cid', (req, res) => {
+  const existing = db.prepare('SELECT * FROM supplier_contacts WHERE id=? AND supplier_id=?').get(req.params.cid, req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'supplier_contact', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên suppliers.');
+    throw err;
+  }
   buildUpdate('supplier_contacts', req.params.cid, pick(req.body, SCONTACT_COLS));
   logEdit(req, 'EDIT', 'supplier_contact', req.params.cid, req.body.full_name);
   res.json({ ok: true });
 });
-router.delete('/suppliers/:id/contacts/:cid', requirePerm('suppliers', 'edit'), (req, res) => {
+router.delete('/suppliers/:id/contacts/:cid', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'supplier_contact', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên suppliers.');
+    throw err;
+  }
   db.prepare('DELETE FROM supplier_contacts WHERE id=? AND supplier_id=?').run(req.params.cid, req.params.id);
   logEdit(req, 'DELETE', 'supplier_contact', req.params.cid);
   res.json({ ok: true });
 });
 const STX = STRANS_COLS;
-router.post('/suppliers/:id/transactions', requirePerm('suppliers', 'edit'), (req, res) => {
-  const data = pick(req.body, STX); data.supplier_id = req.params.id;
+router.post('/suppliers/:id/transactions', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'supplier_transaction', input: pick(req.body, STX) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên suppliers.');
+    throw err;
+  }
+  data.supplier_id = req.params.id;
   const r = buildInsert('supplier_transactions', data);
   logEdit(req, 'CREATE', 'supplier_transaction', r.lastInsertRowid, req.body.contract_no || req.body.purpose);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/suppliers/:id/transactions/:tid', requirePerm('suppliers', 'edit'), (req, res) => {
+router.put('/suppliers/:id/transactions/:tid', (req, res) => {
+  const existing = db.prepare('SELECT * FROM supplier_transactions WHERE id=? AND supplier_id=?').get(req.params.tid, req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'supplier_transaction', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên suppliers.');
+    throw err;
+  }
   buildUpdate('supplier_transactions', req.params.tid, pick(req.body, STX));
   logEdit(req, 'EDIT', 'supplier_transaction', req.params.tid, req.body.contract_no || req.body.purpose);
   res.json({ ok: true });
 });
-router.delete('/suppliers/:id/transactions/:tid', requirePerm('suppliers', 'edit'), (req, res) => {
+router.delete('/suppliers/:id/transactions/:tid', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'supplier_transaction', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên suppliers.');
+    throw err;
+  }
   db.prepare('DELETE FROM supplier_transactions WHERE id=? AND supplier_id=?').run(req.params.tid, req.params.id);
   res.json({ ok: true });
 });
@@ -1272,11 +1314,25 @@ router.delete('/suppliers/:id', (req, res) => {
   db.prepare('DELETE FROM suppliers WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'supplier', req.params.id); res.json({ ok: true });
 });
-router.post('/suppliers/:id/quotes', requirePerm('suppliers', 'edit'), (req, res) => {
-  const data = pick(req.body, QUOTE_COLS); data.supplier_id = req.params.id;
+router.post('/suppliers/:id/quotes', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'supplier_quote', input: pick(req.body, QUOTE_COLS) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên suppliers.');
+    throw err;
+  }
+  data.supplier_id = req.params.id;
   const r = buildInsert('supplier_quotes', data); res.json({ id: r.lastInsertRowid });
 });
-router.delete('/suppliers/:id/quotes/:qid', requirePerm('suppliers', 'edit'), (req, res) => {
+router.delete('/suppliers/:id/quotes/:qid', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'supplier_quote', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên suppliers.');
+    throw err;
+  }
   db.prepare('DELETE FROM supplier_quotes WHERE id=? AND supplier_id=?').run(req.params.qid, req.params.id); res.json({ ok: true });
 });
 router.post('/suppliers/:id/files', requirePerm('suppliers', 'edit'), upload.array('files', 5), (req, res) => {

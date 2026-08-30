@@ -619,6 +619,10 @@ function migrate() {
   // ke thua owner_id cua event cha, khong tu co chu so huu rieng — D13.4a).
   add('ALTER TABLE award_participations ADD COLUMN created_by INTEGER');
   add('ALTER TABLE event_costs ADD COLUMN created_by INTEGER');
+  // D13 batch RBAC-EXP-B5: cung ly do nhu tren, cho 3 entity Direct nhom supplier con lai.
+  for (const table of ['supplier_quotes', 'supplier_transactions', 'supplier_contacts']) {
+    add(`ALTER TABLE ${table} ADD COLUMN created_by INTEGER`);
+  }
   add("ALTER TABLE people ADD COLUMN phone_other TEXT");
   add("ALTER TABLE bookings ADD COLUMN award_id INTEGER");
   add("ALTER TABLE bookings ADD COLUMN event_id INTEGER");
