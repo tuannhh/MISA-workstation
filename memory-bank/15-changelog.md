@@ -2141,3 +2141,26 @@ trên threshold quality/schema-validity/latency/cost.
 
 Không đổi UI (Codex lane), không đụng RBAC v2 pilot, không tốn ngân sách ngoài batch này. **W2.6 nay
 đã đóng — Exit gate W2 hoàn tất phần model migration.**
+
+## Wave 1: batch W1.7 tune rate-limit theo owner (quá 5 lần sai → khoá 30 phút)
+
+Batch Contract: rà roadmap phát hiện F2-fixation/F2-ratelimit (W1.7) thật ra ĐÃ implement thật từ
+commit `70e9f93` cùng ngày (regenerate session + rate-limit) — tài liệu roadmap (dòng W1.7/G1B.3)
+chưa cập nhật theo kịp, đã sửa lại cho khớp thực tế. Owner chốt cụ thể ngưỡng: quá 5 lần sai liên
+tiếp thì khoá tài khoản (IP+username) 30 phút — khác cấu hình mặc định cũ (cửa sổ 15 phút tính từ
+lần sai đầu tiên, ngữ nghĩa khác: có thể hết khoá sớm hơn 15 phút tuỳ thời điểm).
+
+- `server/login-rate-limiter.js` viết lại đúng ngữ nghĩa "khoá 30 phút kể từ lần sai LÀM CHẠM
+  NGƯỠNG" (không phải từ lần sai đầu tiên): `lockedUntil` thay `resetAt`, chỉ đặt mốc khoá khi
+  `count>=maxAttempts`. Thêm tham số `now` (mặc định `Date.now`) để test được chính xác mốc thời
+  gian mà không cần chờ thật 30 phút — không đổi hành vi production.
+- `server/auth.js`: message lỗi 429 nói rõ "quá 5 lần... 30 phút" (đã grep xác nhận không test nào
+  khoá cứng theo text cũ trước khi đổi).
+- Test mới `server/test/unit-login-rate-limiter.test.js` (7 test, `BR-AUTH-001..007`): ngưỡng 5
+  lần, khoá đúng 30 phút (biên 29:59/30:00), reset sau khi hết khoá, `recordSuccess()` xoá sạch lịch
+  sử, khoá theo từng cặp IP+username riêng, không tự gia hạn khi không có request nào gọi thêm
+  trong lúc đang khoá. Mapping thêm 8 dòng.
+
+Verify: security 6/6, SQLite 685 pass/8 skip (+7), MySQL 692 pass/1 skip (+7), mapping 281 rows
+PASS, `verify-g0.mjs` PASS, `verify-g0-selftest` 6/6, `git diff --check` sạch. Không đổi UI, không
+đụng RBAC v2 pilot, không đổi durable session store (vẫn chờ DevOps O4).

@@ -15,7 +15,7 @@ function login(req, res) {
   const username = String((req.body || {}).username || '').trim();
   const password = String((req.body || {}).password || '');
   if (loginRateLimiter.isBlocked(req, username)) {
-    return sendError(req, res, 429, 'RATE_LIMITED', 'Quá nhiều lần đăng nhập sai, vui lòng thử lại sau.');
+    return sendError(req, res, 429, 'RATE_LIMITED', 'Tài khoản tạm khoá do nhập sai mật khẩu quá 5 lần, vui lòng thử lại sau 30 phút.');
   }
   const user = findUser(username);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
