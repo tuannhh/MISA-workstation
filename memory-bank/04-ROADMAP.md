@@ -113,7 +113,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 ### G1B — Target RBAC v2 + security suite (KNOWN-RED, allowlist) — spec-first cho phần VIẾT LẠI (D13/F1/F2/F3/F9)
 | # | Task | Evidence Contract |
 |---|---|---|
-| G1B.1 | **Engine hoàn tất đủ D13.4a — Codex ACCEPT phần engine trong Bundle A 2026-08-28** (CHƯA đóng cả gate, xem ghi chú Codex cuối dòng) (`18-g1b-rbac-batch-contract.md#batch-g1b1-engine-completeness-2026-08-28`): thêm nhóm `INHERITED` (event_cost kế thừa owner_id của event cha — hàng "Chi phí sự kiện" D13.4a đã owner-approved, code trước đó thiếu) vào `policy-engine.js`; mở rộng `unit-policy-engine.test.js` phủ đủ 14 Direct + 4 Global + 6 Module-admin-only + 1 Inherited (D13-012..016, tất cả GREEN — engine đã đúng generic cho phần lớn, chỉ event_cost RED trước khi thêm INHERITED). **Còn thiếu để đóng G1B.1/.2 thật sự:** gắn PolicyEngine vào ROUTE của 24 entity này (hiện chỉu People Detail — GET — được gắn, mọi entity khác vẫn 100% legacy 2-role, HTTP thật chưa phân biệt được `view` khỏi ownership) — đây là Wave 1 strangler slice tiếp theo, cần Batch Contract riêng + khả năng cần xin owner nếu vượt phạm vi pilot đã duyệt (`02-decisions.md` §G). Money/file (G1B.2) đã có nền: `classification_tier=Confidential` cho field tiền (D13-016), file visibility ceiling (D13.3b) chưa test HTTP vì chưa có route file nào gắn PolicyEngine. | test / — / engine GREEN đủ D13.4a; route-wiring HTTP vẫn RED/chưa làm cho 24/25 entity (chỉ People Detail read) |
+| G1B.1 | **Engine hoàn tất đủ D13.4a — Codex ACCEPT phần engine trong Bundle A 2026-08-28** (CHƯA đóng cả gate, xem ghi chú Codex cuối dòng) (`18-g1b-rbac-batch-contract.md#batch-g1b1-engine-completeness-2026-08-28`): thêm nhóm `INHERITED` (event_cost kế thừa owner_id của event cha — hàng "Chi phí sự kiện" D13.4a đã owner-approved, code trước đó thiếu) vào `policy-engine.js`; mở rộng `unit-policy-engine.test.js` phủ đủ 14 Direct + 4 Global + 6 Module-admin-only + 1 Inherited (D13-012..016, tất cả GREEN — engine đã đúng generic cho phần lớn, chỉ event_cost RED trước khi thêm INHERITED). **Owner đã duyệt mở rộng route-wiring ra toàn bộ 24 entity còn lại (2026-08-30), tự chọn cách chia batch — không còn cần xin thêm cho scope chung, chỉ còn tiến độ từng batch.** Tiến độ route-wiring (ghi/create/edit/delete, GET/view của TẤT CẢ entity kể cả `person` vẫn còn khoảng trống chung — xem ghi chú batch RBAC-EXP-B1): `person` (pilot, GET detail + PUT/DELETE + file) XONG; **Batch 1/6 — 6 entity Module-admin-only (budget/scan_query/source/competitor/campaign/monitor_alert) XONG 2026-08-30** (`18-g1b-rbac-batch-contract.md#batch-rbac-exp-b1-module-admin-2026-08-30`); còn 18 entity (14 Direct + 3 Global + 1 Inherited) chưa làm — batch RBAC-EXP-B2..B6 tiếp theo. Money/file (G1B.2) đã có nền: `classification_tier=Confidential` cho field tiền (D13-016), file visibility ceiling (D13.3b) chưa test HTTP vì chưa có route file nào gắn PolicyEngine ngoài `person`. | test / — / engine GREEN đủ D13.4a; route-wiring: person + 6/24 entity (Module-admin-only) XONG, 18/24 còn lại RED/chưa làm |
 | G1B.2 | Money/file policy = 1 phần của G1B.1 (không còn suite riêng): field tiền chỉ là field `classification_tier=Confidential` — **engine đã phủ đủ (D13-016)**; direct-ID file access theo trần server-derived + per-file visibility (D13.3b); derived/aggregate (`grandTotal` kiểu) không rò rỉ field bị ẩn (D13.4b) — 2 mục sau vẫn cần route wiring thật, chưa làm | test / — / classification engine GREEN, file/aggregate vẫn RED allowlist `D13` |
 | G1B.3 | **Test target-red XONG — Codex ACCEPT Bundle A 2026-08-28** (`server/test/target-session-f2.test.js`, batch contract `18-g1b-rbac-batch-contract.md#batch-g1b3-session-2026-08-28`). Dựng cơ chế allowlist known-red bắt buộc theo G1B.6 (`server/test-support/known-red.js` + `memory-bank/g1b-allowlist.json`) vì trước đó chưa tồn tại. `F2-logout-invalidation` hoá ra đã GREEN sẵn (`session.destroy()` đã vô hiệu cookie cũ) — ghi nhận characterization, không đưa vào allowlist. **Implement thật (W1.7) ĐÃ XONG 2026-08-30** — `F2-fixation`/`F2-ratelimit` promote sang assertion xanh thật, xoá khỏi allowlist (xem W1.7 execution update). | test / — / GREEN thật, 0 known-red finding (chỉ còn `INFRA-known-red-selftest`, không phải finding) |
 | G1B.4 | **XONG — F3 CLOSED 2026-08-27, Codex ACCEPT Bundle A 2026-08-28.** `safeFetch` chung chặn localhost/RFC1918/link-local/metadata/IPv6 private, DNS trả địa chỉ private, URL credential và redirect; transport pin IP đã verify để tránh DNS rebinding TOCTOU, cap body 2 MiB. Áp dụng monitor, grounding, create/update source và award-extract. Test BR-SSRF-010/011, BR-SSRF-021..028, R122/R139 xanh. `OUTBOUND_ALLOWED_HOSTS` là allowlist runtime tùy chọn, fail-closed khi được cấu hình. | code+test / all / GREEN |
@@ -362,6 +362,56 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > regression: security 6/6, SQLite 692/8 skip (+7), MySQL 699/1 skip (+7), mapping 281 rows PASS,
 > `verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi UI, không đụng RBAC v2 pilot. **F15 đóng
 > hẳn — không còn P2 nào trong backlog Wave 1 từ finding này.**
+
+> **Execution update — 2026-08-30 (RBAC-EXP-B1: mở rộng PolicyEngine — batch 1/6, 6 entity
+> Module-admin-only):** owner duyệt mở rộng route-wiring PolicyEngine từ pilot 1 entity (`person`)
+> ra toàn bộ 24 entity còn lại (`02-decisions.md` §D13.4a), tự chọn cách chia batch cho an toàn.
+> Trước khi code, khảo sát lại đúng hiện trạng (agent riêng, chỉ báo cáo — không tự đề xuất kế
+> hoạch) phát hiện 2 khoảng trống hệ thống cần ghi nhận rõ (không chặn batch này, nhưng ảnh hưởng
+> mọi batch sau): (1) `rbac.js` MATRIX chỉ có 2 role (`super_admin`/`pr_staff`) — **139/145 route
+> vẫn dùng `requirePerm` cũ nên user mang 1 trong 3 role D13 (viewer/executor/admin) sẽ bị 403 trên
+> MỌI route CHƯA gắn PolicyEngine**, kể cả route GET/view; (2) hiện **KHÔNG có cách nào tạo user
+> mang role D13 qua API/UI thật** — chỉ tạo được qua `fixtures.createUser()` (insert thẳng DB, bỏ
+> qua validator `isValidNewUserPayload`). Cả 2 điểm này KHÔNG phải lỗi phát sinh từ batch nay — là
+> hệ quả tất yếu của rollout từng phần (route-wiring đi trước, migrate MATRIX + UI tạo user D13 đi
+> sau) — nhưng phải xử lý ở batch riêng, có quyết định owner riêng, không lẫn vào việc "gắn
+> PolicyEngine vào route".
+>
+> Chọn chia 24 entity thành 6 batch theo nhóm ngữ nghĩa D13.4a (không làm gộp 1 lần): Module-admin-
+> only (6, batch này) → Global còn lại (3) → Direct chia 4 cụm theo nghiệp vụ (sự kiện+event_cost,
+> giải thưởng, nhà cung cấp, còn lại) — Module-admin-only đi trước vì luật đơn giản nhất (executor
+> bị chặn HOÀN TOÀN mọi hành động ghi, không cần so sánh chủ sở hữu), phù hợp dựng khuôn mẫu chắc
+> trước khi sang các nhóm phức tạp hơn.
+>
+> Batch 1/6 (Batch Contract `18-g1b-rbac-batch-contract.md#batch-rbac-exp-b1-module-admin-2026-08-30`):
+> gắn PolicyEngine vào 14 route ghi (POST/PUT/DELETE) của 6 entity `budget/scan_query/source/
+> competitor/campaign/monitor_alert` trong `server/routes.js`. Thêm 1 hàm dùng chung
+> `moduleAdminOnlyGate(entity, legacyModule, action)` (route-level middleware, thay `requirePerm`
+> trực tiếp) — dùng chung cho cả 6 entity vì luật giống hệt nhau, an toàn hơn chép tay 14 khối dual-
+> branch riêng lẻ; nhánh legacy (super_admin/pr_staff) gọi lại đúng `requirePerm(legacyModule,
+> action)` nguyên bản, giữ nguyên action string gốc (vd `budgets` dùng `'view'` không phải `'edit'`,
+> `monitor_alerts` dùng `'ack'` không phải `'edit'`) để không đổi quyền legacy dù PolicyEngine không
+> phân biệt theo action cho nhóm Module-admin-only. **Không đụng route GET/view của 6 entity này** —
+> vẫn dùng `requirePerm` cũ (khoảng trống MATRIX ở trên vẫn còn với GET, ghi nhận rõ trong Batch
+> Contract, không phải phạm vi batch này).
+>
+> Test mới `server/test/integration-rbac-exp-b1-module-admin.test.js` (17 test, `D13-025..030`): mỗi
+> entity xác nhận viewer/executor create-edit-delete đều 403 (executor bị chặn cả create — đúng
+> điểm khác biệt D13.4a so với Direct/Global), admin (target role) full CRUD 200; riêng `source`
+> tách test create (chỉ xác nhận vượt qua PolicyEngine — 400 SSRF chứ không phải 403 — vì
+> `outbound.validateOutboundUrl` chặn mọi URL loopback bất kể role) khỏi edit/delete (dựng bản ghi
+> nền qua DB trực tiếp). 2 test cũ phải sửa theo cho khớp shape mã mới (không đổi hành vi, chỉ đổi
+> cách đo): `scripts/verify-g0.mjs` thêm 14 route vào `PILOT_INLINE_PERM_ROUTES` (script quét literal
+> `requirePerm(...)` trên dòng đăng ký route, nay route dùng `moduleAdminOnlyGate(...)` nên phải khai
+> tường minh y hệt cách pilot `person` đã làm); `target-n1-n2-explicit-permission.test.js` mở rộng
+> `requirePermArgsFor()` nhận dạng thêm pattern `moduleAdminOnlyGate(...)` (route `POST /monitor/
+> alerts/:id/read` không còn literal `requirePerm` trên dòng đăng ký).
+>
+> Full regression: security 6/6, SQLite 709/8 skip (+17 so trước batch), MySQL 716/1 skip (+17),
+> mapping 145/145 route + 288 dòng PASS, `verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi
+> UI, không có regression trên route legacy (super_admin/pr_staff giữ nguyên 100% hành vi cũ, xác
+> nhận qua test R050/R051/R116-R134 cũ vẫn xanh). **Batch 2/6 (Global còn lại: organization/
+> supplier/important_date) là bước tiếp theo.**
 
 ---
 

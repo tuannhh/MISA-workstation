@@ -759,10 +759,29 @@ router.delete('/bookings/:id', requirePerm('partners', 'delete'), (req, res) => 
 // =====================================================================
 //  BUDGETS (ngân sách theo tháng)
 // =====================================================================
+// D13 batch RBAC-EXP-B1 (module-admin-only, 6 entity: budget/scan_query/source/competitor/
+// campaign/monitor_alert): luật giống hệt nhau nên dùng chung 1 gate — target role đi qua
+// PolicyEngine (fail-closed 403, executor luôn bị chặn mọi hành động ghi vì đây là nhóm chỉ
+// admin/super_admin được sửa); user legacy 2-role giữ nguyên requirePerm cũ, không đổi hành vi.
+function moduleAdminOnlyGate(entity, legacyModule, action) {
+  return (req, res, next) => {
+    if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+      try {
+        policyService.assertWritable({ principal: req.principal, entity, action });
+        return next();
+      } catch (err) {
+        if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', `Bạn không có quyền ${action} trên ${legacyModule}.`);
+        return next(err);
+      }
+    }
+    return requirePerm(legacyModule, action)(req, res, next);
+  };
+}
+
 router.get('/budgets', requirePerm('reports', 'view'), (req, res) => {
   res.json({ rows: db.prepare('SELECT * FROM budgets ORDER BY period').all() });
 });
-router.post('/budgets', requirePerm('reports', 'view'), (req, res) => {
+router.post('/budgets', moduleAdminOnlyGate('budget', 'reports', 'view'), (req, res) => {
   const { period, amount, note } = req.body || {};
   if (!isValidBudgetPeriod(period)) return res.status(400).json({ error: 'Kỳ phải dạng YYYY-MM' });
   db.prepare(`INSERT INTO budgets (period, amount, note) VALUES (?,?,?)
@@ -1552,7 +1571,7 @@ router.put('/monitor/settings', requirePerm('monitoring', 'edit'), (req, res) =>
   logEdit(req, 'EDIT', 'monitor_settings', null);
   res.json({ ok: true });
 });
-router.post('/monitor/alerts/:id/read', requirePerm('monitoring', 'ack'), (req, res) => {
+router.post('/monitor/alerts/:id/read', moduleAdminOnlyGate('monitor_alert', 'monitoring', 'ack'), (req, res) => {
   db.prepare(`UPDATE monitor_alerts SET read_at=datetime('now') WHERE id=?`).run(req.params.id);
   res.json({ ok: true });
 });
@@ -1561,7 +1580,7 @@ router.post('/monitor/alerts/:id/read', requirePerm('monitoring', 'ack'), (req, 
 router.get('/monitor/queries', requirePerm('monitoring', 'view'), (req, res) => {
   res.json({ rows: db.prepare('SELECT * FROM scan_queries ORDER BY category, name').all() });
 });
-router.post('/monitor/queries', requirePerm('monitoring', 'create'), (req, res) => {
+router.post('/monitor/queries', moduleAdminOnlyGate('scan_query', 'monitoring', 'create'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'Thiếu tên bộ từ khóa' });
   const r = db.prepare(`INSERT INTO scan_queries (name, category, query_type, include, exclude, enabled, grounding) VALUES (?,?,?,?,?,?,?)`)
@@ -1569,7 +1588,7 @@ router.post('/monitor/queries', requirePerm('monitoring', 'create'), (req, res) 
   logEdit(req, 'CREATE', 'scan_query', r.lastInsertRowid, b.name);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/monitor/queries/:id', requirePerm('monitoring', 'edit'), (req, res) => {
+router.put('/monitor/queries/:id', moduleAdminOnlyGate('scan_query', 'monitoring', 'edit'), (req, res) => {
   const b = req.body || {};
   const data = {};
   ['name', 'category', 'query_type'].forEach((k) => { if (k in b) data[k] = b[k]; });
@@ -1581,7 +1600,7 @@ router.put('/monitor/queries/:id', requirePerm('monitoring', 'edit'), (req, res)
   logEdit(req, 'EDIT', 'scan_query', req.params.id, b.name);
   res.json({ ok: true });
 });
-router.delete('/monitor/queries/:id', requirePerm('monitoring', 'delete'), (req, res) => {
+router.delete('/monitor/queries/:id', moduleAdminOnlyGate('scan_query', 'monitoring', 'delete'), (req, res) => {
   db.prepare('DELETE FROM scan_queries WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'scan_query', req.params.id);
   res.json({ ok: true });
@@ -1591,7 +1610,7 @@ router.delete('/monitor/queries/:id', requirePerm('monitoring', 'delete'), (req,
 router.get('/monitor/sources', requirePerm('monitoring', 'view'), (req, res) => {
   res.json({ rows: db.prepare('SELECT * FROM sources ORDER BY type, name').all() });
 });
-router.post('/monitor/sources', requirePerm('monitoring', 'create'), async (req, res) => {
+router.post('/monitor/sources', moduleAdminOnlyGate('source', 'monitoring', 'create'), async (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.url) return res.status(400).json({ error: 'Thiếu tên/URL' });
   let requestedUrl;
@@ -1611,7 +1630,7 @@ router.post('/monitor/sources', requirePerm('monitoring', 'create'), async (req,
   logEdit(req, 'CREATE', 'source', r.lastInsertRowid, b.name);
   res.json({ id: r.lastInsertRowid, mode });
 });
-router.put('/monitor/sources/:id', requirePerm('monitoring', 'edit'), async (req, res) => {
+router.put('/monitor/sources/:id', moduleAdminOnlyGate('source', 'monitoring', 'edit'), async (req, res) => {
   const b = req.body || {}; const data = {};
   ['name', 'type', 'url'].forEach((k) => { if (k in b) data[k] = b[k]; });
   if ('url' in data) {
@@ -1627,7 +1646,7 @@ router.put('/monitor/sources/:id', requirePerm('monitoring', 'edit'), async (req
   if (Object.keys(data).length) buildUpdate('sources', req.params.id, data);
   logEdit(req, 'EDIT', 'source', req.params.id); res.json({ ok: true });
 });
-router.delete('/monitor/sources/:id', requirePerm('monitoring', 'delete'), (req, res) => {
+router.delete('/monitor/sources/:id', moduleAdminOnlyGate('source', 'monitoring', 'delete'), (req, res) => {
   db.prepare('DELETE FROM sources WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'source', req.params.id); res.json({ ok: true });
 });
@@ -1636,7 +1655,7 @@ router.delete('/monitor/sources/:id', requirePerm('monitoring', 'delete'), (req,
 router.get('/monitor/competitors', requirePerm('monitoring', 'view'), (req, res) => {
   res.json({ rows: db.prepare('SELECT * FROM competitors ORDER BY name').all() });
 });
-router.post('/monitor/competitors', requirePerm('monitoring', 'create'), (req, res) => {
+router.post('/monitor/competitors', moduleAdminOnlyGate('competitor', 'monitoring', 'create'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'Thiếu tên đối thủ' });
   const r = db.prepare('INSERT INTO competitors (name, website, fanpage, channels, note) VALUES (?,?,?,?,?)')
@@ -1644,14 +1663,14 @@ router.post('/monitor/competitors', requirePerm('monitoring', 'create'), (req, r
   logEdit(req, 'CREATE', 'competitor', r.lastInsertRowid, b.name);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/monitor/competitors/:id', requirePerm('monitoring', 'edit'), (req, res) => {
+router.put('/monitor/competitors/:id', moduleAdminOnlyGate('competitor', 'monitoring', 'edit'), (req, res) => {
   const b = req.body || {}; const data = {};
   ['name', 'website', 'fanpage', 'note'].forEach((k) => { if (k in b) data[k] = b[k] || null; });
   if ('channels' in b) data.channels = JSON.stringify(jarr(b.channels));
   if (Object.keys(data).length) buildUpdate('competitors', req.params.id, data);
   logEdit(req, 'EDIT', 'competitor', req.params.id); res.json({ ok: true });
 });
-router.delete('/monitor/competitors/:id', requirePerm('monitoring', 'delete'), (req, res) => {
+router.delete('/monitor/competitors/:id', moduleAdminOnlyGate('competitor', 'monitoring', 'delete'), (req, res) => {
   db.prepare('DELETE FROM competitors WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'competitor', req.params.id); res.json({ ok: true });
 });
@@ -1669,7 +1688,7 @@ router.get('/monitor/campaigns/:id', requirePerm('monitoring', 'view'), (req, re
   if (!r) return res.status(404).json({ error: 'Không tìm thấy' });
   res.json({ record: campOut(r) });
 });
-router.post('/monitor/campaigns', requirePerm('monitoring', 'create'), (req, res) => {
+router.post('/monitor/campaigns', moduleAdminOnlyGate('campaign', 'monitoring', 'create'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'Thiếu tên chiến dịch' });
   const data = pick(b, CAMP_COLS);
@@ -1680,7 +1699,7 @@ router.post('/monitor/campaigns', requirePerm('monitoring', 'create'), (req, res
   logEdit(req, 'CREATE', 'campaign', r.lastInsertRowid, b.name);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/monitor/campaigns/:id', requirePerm('monitoring', 'edit'), (req, res) => {
+router.put('/monitor/campaigns/:id', moduleAdminOnlyGate('campaign', 'monitoring', 'edit'), (req, res) => {
   const b = req.body || {};
   const data = pick(b, CAMP_COLS);
   if ('keywords' in b) data.keywords = JSON.stringify(jarr(b.keywords));
@@ -1689,7 +1708,7 @@ router.put('/monitor/campaigns/:id', requirePerm('monitoring', 'edit'), (req, re
   logEdit(req, 'EDIT', 'campaign', req.params.id, b.name);
   res.json({ ok: true });
 });
-router.delete('/monitor/campaigns/:id', requirePerm('monitoring', 'delete'), (req, res) => {
+router.delete('/monitor/campaigns/:id', moduleAdminOnlyGate('campaign', 'monitoring', 'delete'), (req, res) => {
   db.prepare('DELETE FROM campaigns WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'campaign', req.params.id); res.json({ ok: true });
 });

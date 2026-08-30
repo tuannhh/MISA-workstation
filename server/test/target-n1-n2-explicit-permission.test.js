@@ -30,9 +30,14 @@ function requirePermArgsFor(routeSignature) {
   const idx = routesSrc.indexOf(routeSignature);
   assert.ok(idx >= 0, `không tìm thấy route "${routeSignature}" trong routes.js — route đã đổi vị trí/tên, cập nhật test`);
   const line = routesSrc.slice(idx, routesSrc.indexOf('\n', idx));
-  const m = line.match(/requirePerm\('([^']+)',\s*'([^']+)'\)/);
-  assert.ok(m, `route "${routeSignature}" không gọi requirePerm(...) trên đúng dòng đăng ký — không đo được`);
-  return { module: m[1], action: m[2] };
+  const direct = line.match(/requirePerm\('([^']+)',\s*'([^']+)'\)/);
+  if (direct) return { module: direct[1], action: direct[2] };
+  // D13 batch RBAC-EXP-B1: route module-admin-only đi qua moduleAdminOnlyGate(entity, module,
+  // action) thay vì requirePerm trực tiếp — gate này tự gọi lại requirePerm(module, action) y hệt
+  // cho user legacy (server/routes.js), nên action tường minh vẫn đo được ở đây, chỉ khác vị trí.
+  const wrapped = line.match(/moduleAdminOnlyGate\('[^']+',\s*'([^']+)',\s*'([^']+)'\)/);
+  assert.ok(wrapped, `route "${routeSignature}" không gọi requirePerm(...)/moduleAdminOnlyGate(...) trên đúng dòng đăng ký — không đo được`);
+  return { module: wrapped[1], action: wrapped[2] };
 }
 
 for (const { route, targetAction } of N1_ROUTES) {

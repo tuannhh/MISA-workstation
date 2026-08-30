@@ -258,3 +258,63 @@ Exit criteria: full regression (test:security, test:integration:sqlite, test:int
       xac nhan rieng cho Admin); PolicyForbiddenError/403 ro rang, khong silent-strip.
 Expected commit range/count: 1 commit.
 ```
+
+## Batch RBAC-EXP-B1-module-admin (2026-08-30)
+
+```md
+Batch-ID: RBAC-EXP-B1-module-admin
+Goal: mo rong PolicyEngine tu pilot 1 entity (person) sang 6 entity Module-admin-only trong
+      02-decisions.md SS D13.4a (budget/scan_query/source/competitor/campaign/monitor_alert) --
+      day la batch 1/6 cua ke hoach mo rong 24 entity con lai (owner da duyet mo rong toan bo,
+      tu chon phuong an chia batch). Chon nhom nay lam truoc vi luat don gian nhat: Nhan vien
+      thuc thi (executor) bi chan HOAN TOAN moi hanh dong ghi (ke ca create), chi Admin/Super
+      Admin (target role) hoac super_admin/pr_staff (legacy) moi duoc sua -- khong co khai niem
+      chu so huu can so sanh, giam rui ro logic cho lan mo rong dau tien.
+In scope: 14 route ghi (POST/PUT/DELETE) tren 6 entity trong server/routes.js -- POST /api/budgets;
+      POST/PUT/DELETE /api/monitor/queries(/:id); POST/PUT/DELETE /api/monitor/sources(/:id);
+      POST/PUT/DELETE /api/monitor/competitors(/:id); POST/PUT/DELETE /api/monitor/campaigns(/:id);
+      POST /api/monitor/alerts/:id/read. Them 1 ham dung chung moduleAdminOnlyGate(entity,
+      legacyModule, action) (thay vi copy tay 14 khoi dual-branch giong het nhau -- 6 entity chung
+      1 luat nen dung 1 ham duoc test ky an toan hon 14 ban sao chep tay); giu NGUYEN action string
+      goc cho nhanh legacy (vd budgets dung 'view' khong phai 'edit', monitor_alerts dung 'ack'
+      khong phai 'edit') vi PolicyEngine.canWrite() cho Module-admin-only tra ve gia tri GIONG HET
+      nhau bat ke action la gi (executor luon false, admin/super_admin luon true) nen doi action
+      khong lam sai policy nhung SAI action se lam sai nhanh requirePerm(legacyModule,action) cho
+      user legacy. scripts/verify-g0.mjs them 14 route vao PILOT_INLINE_PERM_ROUTES; server/test/
+      target-n1-n2-explicit-permission.test.js: mo rong requirePermArgsFor() nhan dang them pattern
+      moduleAdminOnlyGate(...) (route POST /monitor/alerts/:id/read khong con literal requirePerm
+      tren dong dang ky).
+Out of scope: GET (view/list/detail) cua ca 6 entity -- giu nguyen requirePerm('monitoring'/
+      'reports','view') cu, KHONG doi. Day la khoang trong da biet tu chinh pilot person (GET
+      /api/people van chi dung requirePerm cu, chi GET /api/people/:id moi duoc gate rieng) --
+      target role hien van bi 403 tren GET vi rbac.js MATRIX chua co entry cho viewer/executor/
+      admin; day la van de he thong rieng (rbac.js MATRIX gap), khong phai loi cua batch nay, va
+      se duoc xu ly khi co quyet dinh rieng ve migrate rbac.js MATRIX cho 3 target role (chua hoi
+      owner). POST /monitor/scan (trigger quet, khong map 1-1 vao entity nao trong 6 entity tren)
+      va POST/PUT/DELETE /monitor/mentions, PUT /monitor/settings (entity 'mention' khong nam trong
+      DIRECT/GLOBAL/MODULE_ADMIN_ONLY/INHERITED cua policy-engine.js) -- khong dung trong batch nay.
+      5 entity Direct/Global con lai va cac batch RBAC-EXP-B2..B6 -- se lam o cac batch sau, khong
+      gop vao batch nay.
+Behavior mode: target-change cho 14 route tren, chi anh huong target role viewer/executor/admin --
+      hanh vi legacy 2-role (super_admin/pr_staff) khong doi 1 dong (moduleAdminOnlyGate() goi lai
+      dung requirePerm(legacyModule, action) nguyen ban cho nhanh else).
+Risk hotspots: (1) action string phai giu dung nghia legacy trong nhanh else (budgets='view',
+      monitor_alert='ack') -- da xac nhan canWrite() cho Module-admin-only khong phu thuoc action
+      nen doi action cho nhanh PolicyEngine khong sai, nhung phai KHONG doi action truyen cho
+      requirePerm() nhanh legacy; (2) POST /monitor/sources goi outbound.validateOutboundUrl (SSRF
+      F3) -- test admin phai phan biet 403 (PolicyEngine chan, truoc handler) voi 400 (SSRF chan,
+      trong handler) de khong nham lan 2 lop chan khac nhau; (3) route dung chung nhieu entity
+      (mentions) phai duoc loai tru ro rang khoi scope, khong tu suy dien policy cho entity chua
+      phan loai.
+Required tests (server/test/integration-rbac-exp-b1-module-admin.test.js, D13-025..D13-030): moi
+      entity co 3 case -- viewer create/edit/delete deu 403; executor create/edit/delete deu 403
+      (dung diem D13.4a: executor khong duoc ke ca create, khac Direct/Global); admin (target role)
+      full CRUD tra 200 (source: tach rieng create voi edit/delete vi create phu thuoc SSRF that).
+      Legacy giu nguyen 100% test R050/R051 (budgets), R116-R134 (monitor) cu, khong sua cac test
+      do -- chi xac nhan van pass.
+Allowed known-red/TODO: khong can -- target-change co code that di kem.
+Exit criteria: full regression (test:security, test:integration:sqlite, test:integration:mysql,
+      test:verify-gate1-mapping, verify-g0.mjs, git diff --check) deu xanh, khong regression tren
+      route legacy; PolicyForbiddenError tra 403 ro rang, khong silent-strip.
+Expected commit range/count: 1 commit.
+```

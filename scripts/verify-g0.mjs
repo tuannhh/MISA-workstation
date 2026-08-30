@@ -95,6 +95,23 @@ const PILOT_INLINE_PERM_ROUTES = {
   'POST /api/people/:id/attachments': { module: 'partners', action: 'edit' }, // D13 People Detail file pilot (RBAC-PILOT3-people-file)
   'PUT /api/people/:id/attachments/:aid/primary': { module: 'partners', action: 'edit' }, // D13 People Detail file pilot (RBAC-PILOT3-people-file)
   'DELETE /api/attachments/:aid': { module: 'partners', action: 'edit' }, // D13 People Detail file pilot (RBAC-PILOT3-people-file)
+  // D13 batch RBAC-EXP-B1 (module-admin-only 6 entity): moduleAdminOnlyGate(entity,module,action)
+  // thay requirePerm(module,action) trực tiếp trên dòng đăng ký route — module/action giữ nguyên
+  // ý nghĩa cũ (gate gọi lại đúng requirePerm(module,action) cho user legacy 2-role).
+  'POST /api/budgets': { module: 'reports', action: 'view' },
+  'POST /api/monitor/alerts/:id/read': { module: 'monitoring', action: 'ack' },
+  'POST /api/monitor/queries': { module: 'monitoring', action: 'create' },
+  'PUT /api/monitor/queries/:id': { module: 'monitoring', action: 'edit' },
+  'DELETE /api/monitor/queries/:id': { module: 'monitoring', action: 'delete' },
+  'POST /api/monitor/sources': { module: 'monitoring', action: 'create' },
+  'PUT /api/monitor/sources/:id': { module: 'monitoring', action: 'edit' },
+  'DELETE /api/monitor/sources/:id': { module: 'monitoring', action: 'delete' },
+  'POST /api/monitor/competitors': { module: 'monitoring', action: 'create' },
+  'PUT /api/monitor/competitors/:id': { module: 'monitoring', action: 'edit' },
+  'DELETE /api/monitor/competitors/:id': { module: 'monitoring', action: 'delete' },
+  'POST /api/monitor/campaigns': { module: 'monitoring', action: 'create' },
+  'PUT /api/monitor/campaigns/:id': { module: 'monitoring', action: 'edit' },
+  'DELETE /api/monitor/campaigns/:id': { module: 'monitoring', action: 'delete' },
 };
 
 function sourceRoutes() {

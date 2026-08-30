@@ -2192,3 +2192,42 @@ kiểm tồn tại thủ công ở từng route (chỉ che 1 route, không đồ
 Verify: security 6/6, SQLite 692 pass/8 skip (+7), MySQL 699 pass/1 skip (+7), mapping 281 rows
 PASS, `verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi UI, không đụng RBAC v2 pilot. **F15
 đóng hẳn.**
+
+## Wave 1: batch RBAC-EXP-B1 — mở rộng PolicyEngine sang 6 entity Module-admin-only (1/6 batch)
+
+Batch Contract: `18-g1b-rbac-batch-contract.md#batch-rbac-exp-b1-module-admin-2026-08-30`. Owner
+duyệt mở rộng route-wiring PolicyEngine từ pilot 1 entity (`person`) ra toàn bộ 24 entity còn lại
+(`02-decisions.md` §D13.4a), tự chọn cách chia batch. Chọn Module-admin-only (budget/scan_query/
+source/competitor/campaign/monitor_alert) làm batch 1/6 vì luật đơn giản nhất: executor bị chặn
+HOÀN TOÀN mọi hành động ghi kể cả create, không có khái niệm chủ sở hữu cần so sánh.
+
+- Khảo sát hiện trạng trước khi code (agent riêng, chỉ báo cáo) phát hiện 2 khoảng trống hệ thống
+  không thuộc phạm vi batch này nhưng cần ghi nhận: (1) `rbac.js` MATRIX chưa có entry cho 3 role
+  D13 (viewer/executor/admin) → user mang role D13 bị 403 trên MỌI route chưa gắn PolicyEngine, kể
+  cả GET/view; (2) hiện không có cách tạo user mang role D13 qua API/UI thật (chỉ qua
+  `fixtures.createUser()` insert thẳng DB). Cả 2 cần quyết định owner riêng ở batch khác.
+- `server/routes.js`: thêm hàm dùng chung `moduleAdminOnlyGate(entity, legacyModule, action)` —
+  route-level middleware thay `requirePerm` trực tiếp trên 14 route ghi (POST/PUT/DELETE) của 6
+  entity trên; dùng 1 hàm chung thay vì chép tay 14 khối dual-branch vì cả 6 entity chung đúng 1
+  luật (an toàn hơn, ít rủi ro copy-paste sai). Nhánh legacy (super_admin/pr_staff) gọi lại đúng
+  `requirePerm(legacyModule, action)` nguyên bản, giữ nguyên action string gốc (budgets dùng
+  `'view'`, monitor_alerts dùng `'ack'` — không đổi so với trước) vì PolicyEngine.canWrite() cho
+  Module-admin-only không phân biệt theo action (executor luôn false, admin/super_admin luôn true
+  bất kể action) nên đổi action cho nhánh PolicyEngine an toàn nhưng KHÔNG được đổi cho nhánh
+  legacy. Không đụng route GET/view của 6 entity này (vẫn `requirePerm` cũ, khoảng trống MATRIX ở
+  trên vẫn còn với GET — ngoài phạm vi batch).
+- Test mới `server/test/integration-rbac-exp-b1-module-admin.test.js` (17 test, `D13-025..030`):
+  mỗi entity — viewer/executor create-edit-delete đều 403 (executor bị chặn cả create, đúng điểm
+  khác D13.4a so với Direct/Global); admin (target role) full CRUD 200. Riêng `source`: tách test
+  create (chỉ xác nhận vượt cổng PolicyEngine — 400 SSRF, không phải 403 — vì
+  `outbound.validateOutboundUrl` chặn URL loopback bất kể role) khỏi edit/delete (dựng bản ghi nền
+  qua DB trực tiếp, tránh phụ thuộc SSRF thật).
+- 2 test có sẵn sửa theo khớp shape mã mới (không đổi hành vi, chỉ đổi cách đo): `scripts/
+  verify-g0.mjs` thêm 14 route vào `PILOT_INLINE_PERM_ROUTES` (route dùng `moduleAdminOnlyGate(...)`
+  thay literal `requirePerm(...)` nên phải khai tường minh, giống cách pilot `person` đã làm);
+  `server/test/target-n1-n2-explicit-permission.test.js` mở rộng `requirePermArgsFor()` nhận dạng
+  thêm pattern `moduleAdminOnlyGate(...)`.
+
+Verify: security 6/6, SQLite 709 pass/8 skip (+17), MySQL 716 pass/1 skip (+17), mapping 145/145
+route + 288 dòng PASS, `verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi UI, không regression
+trên route legacy (R050/R051/R116-R134 vẫn xanh nguyên). **Batch 2/6 (Global còn lại) tiếp theo.**
