@@ -2,6 +2,17 @@
 
 > **⚠ Đây là ma trận HIỆN TRẠNG (hệ 2 vai trò `super_admin`/`pr_staff` đang chạy trong code).** Sau owner-decision D13 (2026-08-24, `02-decisions.md` §D), hệ vai trò sẽ được **viết lại thành 4 cấp** (Viewer/Nhân viên thực thi/Admin/Super Admin) + visibility field-level cấu hình được + ownership (created_by/owner_id). **Ma trận ĐÍCH theo 4 vai trò sẽ được dựng khi W1.RBAC land** (`04-ROADMAP.md` Wave 1) — KHÔNG dựng lại lúc này, vì file này đúng vai trò documenting **current-state** để làm baseline characterization (Gate 1). Đọc file này để hiểu hệ ĐANG chạy; đọc `02-decisions.md` §D để hiểu hệ SẼ có.
 >
+> **Cập nhật 2026-08-30 (owner chốt bỏ hoàn toàn 2-role):** `server/rbac.js` KHÔNG còn `pr_staff`/2-role
+> nữa — đã đổi thành đúng 4 vai trò D13 (`viewer/executor/admin/super_admin`); `pr_staff` được
+> RENAME thành `executor` (owner xác nhận: PR staff hiện tại = Nhân viên thực thi), `admin`/`viewer`
+> là 2 vai trò MỚI thêm vào `MATRIX` với cùng mức quyền thô (module,action) như `super_admin`/
+> `executor` tương ứng (phân biệt Admin/Super Admin chi tiết hơn — nếu có — nằm ở tầng PolicyEngine
+> D13, không phải ở MATRIX thô này). **2 cột "super_admin"/"pr_staff" ở bảng §A dưới đây vẫn đúng
+> NỘI DUNG quyền (module→action) — chỉ tên cột đã đổi ý nghĩa**: đọc "super_admin" = super_admin,
+> đọc "pr_staff" = executor (quyền y hệt, chỉ đổi tên). Bảng §B.2 (UI-flow theo role×device) VẪN
+> giữ nguyên 2 cột role cũ — đây là phạm vi UI/characterization (Codex lane), CHƯA rebuild cho 4
+> vai trò; việc đó là 1 batch UI riêng, không nằm trong phạm vi đổi role hệ backend lần này.
+>
 > **Sửa lần 2 sau Codex re-audit round 2 (F1, vẫn FAIL/P0 MDS ở lần 1).** Lỗi lần 1 đã sửa đúng 1 phần (bỏ `N/A` cho admin, tách 5 trục runtime) nhưng vẫn **chưa machine-checkable**: dùng range liên tục che lấp route thật (`R038-R061` cho reminders "nuốt" luôn interactions/bookings/reports; `R096` gán chồng cả events và reminders), **lọt 9 route** (`R001,R046-R049,R097,R143-R145`) khỏi Section A, và `partners` vẫn ghi `N/A` cho OS-permission dù có 2 route upload file thật (`R016`,`R017`).
 >
 > **Nguyên tắc bản hiện tại:** giữ hai view độc lập nhưng join được: §A là auth partition theo middleware source; §B là UI/business-flow partition; §C là runtime capability. Cả §A và §B đều phủ đúng 145/145 route, không trùng/lọt, được kiểm bằng `node scripts/verify-g0.mjs`.

@@ -704,9 +704,11 @@ function seed() {
   const hash = (p) => bcrypt.hashSync(p, 10);
   const ALL = JSON.stringify(['contact', 'private', 'social', 'finance', 'iddoc', 'org_fee']);
   const insUser = db.prepare('INSERT INTO users (username, password_hash, full_name, role, email, sensitive_perms) VALUES (?,?,?,?,?,?)');
-  // 2 vai trò: Quản lý phòng (toàn quyền) + Chuyên viên PR (CRUD, xem mật theo phân quyền)
+  // Seed demo 2 tài khoản trong 4 vai trò D13 (viewer/executor/admin/super_admin): Quản lý phòng
+  // (super_admin, toàn quyền) + Chuyên viên PR (executor, CRUD nghiệp vụ, xem mật theo phân quyền).
+  // viewer/admin tạo qua POST /api/admin/users khi cần (rbac.ROLES đã khai đủ 4 vai trò).
   insUser.run('admin', hash('admin123'), 'Quản lý phòng PR', 'super_admin', 'tkmedia@misa.com.vn', ALL);
-  insUser.run('chuyenvien', hash('123456'), 'Chuyên viên PR', 'pr_staff', null, JSON.stringify(['contact']));
+  insUser.run('chuyenvien', hash('123456'), 'Chuyên viên PR', 'executor', null, JSON.stringify(['contact']));
 
   // Dữ liệu mẫu demo chỉ tạo khi chạy với --demo (mặc định: sạch để nhập liệu thật)
   const DEMO = process.argv.includes('--demo') || process.env.SEED_DEMO === '1';

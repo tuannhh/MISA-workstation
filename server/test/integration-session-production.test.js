@@ -57,7 +57,7 @@ test('production: cookie session có thuộc tính Secure', async () => {
     const { createApp } = require('../app');
     const fixtures = require('../test-support/fixtures');
     started = await startTestApp(createApp());
-    const user = fixtures.createUser('pr_staff', { username: `f2_secure_${Date.now()}` });
+    const user = fixtures.createUser('executor', { username: `f2_secure_${Date.now()}` });
     // Test harness phục vụ qua HTTP trần (không TLS thật); express-session chỉ set cookie.secure
     // khi req.secure=true. Mô phỏng đúng deployment thật (Cloud Run/reverse proxy chấm dứt TLS rồi
     // forward X-Forwarded-Proto: https) — đây là lý do createApp() phải bật `trust proxy` ở production.

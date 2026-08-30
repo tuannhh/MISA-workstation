@@ -32,7 +32,7 @@ before(async () => {
   const started = await startTestApp(createApp());
   baseUrl = started.baseUrl;
   resources.acquire(started.close);
-  staff = fixtures.createUser('pr_staff', { username: `errctr_staff_${Date.now()}` });
+  staff = fixtures.createUser('executor', { username: `errctr_staff_${Date.now()}` });
 });
 
 after(async () => {
@@ -63,7 +63,7 @@ test('BR-ERR-007: 401 UNAUTHENTICATED requireAuth không cookie đúng envelope'
   assertEnvelope(await res.json(), res.headers.get('x-request-id'), { code: 'UNAUTHENTICATED', message: 'Chưa đăng nhập' });
 });
 
-test('BR-ERR-008: 403 FORBIDDEN_MODULE requirePerm từ chối pr_staff trên admin.view đúng envelope', async () => {
+test('BR-ERR-008: 403 FORBIDDEN_MODULE requirePerm từ chối executor trên admin.view đúng envelope', async () => {
   const { cookie } = await fixtures.login(baseUrl, { username: staff.username, password: staff.password });
   const res = await fetch(`${baseUrl}/api/admin/users`, { headers: { cookie } });
   assert.equal(res.status, 403);

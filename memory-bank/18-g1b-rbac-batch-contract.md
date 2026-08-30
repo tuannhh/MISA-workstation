@@ -318,3 +318,75 @@ Exit criteria: full regression (test:security, test:integration:sqlite, test:int
       route legacy; PolicyForbiddenError tra 403 ro rang, khong silent-strip.
 Expected commit range/count: 1 commit.
 ```
+
+## Batch RBAC-CUTOVER (2026-08-30)
+
+```md
+Batch-ID: RBAC-CUTOVER
+Goal: owner chot bo hoan toan he 2-role legacy (super_admin/pr_staff), chuyen dut khoat sang DUY
+      NHAT 4 vai tro D13 (viewer/executor/admin/super_admin) -- day la quyet dinh MOI, rong hon
+      va GHI DE ngoai le 02-decisions.md SS G (2026-08-28, truoc do cam "cutover role hang loat"/
+      "bat RBAC v2 lam duong mac dinh"). Owner tra loi truc tiep 2 diem chan: (1) anh xa user that
+      pr_staff -> executor CO DINH; super_admin/admin/viewer KHONG co anh xa tu dong 1-1, owner tu
+      gan theo cap bac that tung nguoi qua POST/PUT /api/admin/users sau nay (vi du owner dua ra:
+      Ban Tong Giam doc -> viewer, truong nhom truyen thong doi ngoai -> admin, truong ban truyen
+      thong -> super_admin); (2) du lieu nghiep vu cu (owner_id NULL tren 13 bang Direct) chi la
+      demo, KHONG can backfill, co the xoa/ghi lai. Chi tiet day du: 02-decisions.md SS G.1.
+In scope: (a) server/rbac.js: ROLES/MATRIX doi han tu 2 khoa (super_admin/pr_staff) sang 4 khoa
+      (viewer/executor/admin/super_admin) -- pr_staff RENAME thang thanh executor (cung noi dung
+      quyen, chi doi ten); them moi MATRIX.admin (copy noi dung super_admin -- phan biet Admin/
+      Super Admin chi tiet hon nam o PolicyEngine/guard rieng, khong o MATRIX tho) va MATRIX.viewer
+      (chi 'view' tren moi module, rong 'admin'). (b) Global rename pr_staff -> executor toan bo
+      repo code+test (67 cho, 15 file) -- rename co hoc (1:1, khong doi noi dung), khong phai viet
+      lai tu dau. (c) server/routes.js: bo han TARGET_RBAC_ROLES/nhanh dual-branch -- moi route da
+      gan PolicyEngine (person + 6 entity Module-admin-only) nay chay PolicyEngine KHONG DIEU KIEN
+      cho CA 4 vai tro (ke ca super_admin, truoc day tach rieng vao nhanh "legacy"); route CHUA gan
+      PolicyEngine tiep tuc dung requirePerm/rbac.can nhu cu -- nay dung cho ca 4 vai tro nho MATRIX
+      da mo rong, khong con 403 sai cho viewer/admin. GET /people/:id, PUT/DELETE /people/:id,
+      personEditGate, POST /people/:id/attachments, DELETE /attachments/:aid, GET /files/:id: xoa
+      nhanh else (legacy maskRecord/senGroups/stripDisallowed cho rieng person) -- CHI GET /files/:id
+      giu lai phan biet ro id_doc (luon gate qua canReadAttachment) voi owner_type khac 'person'
+      (khong gate them, dung hanh vi cu -- route nay phuc vu nhieu owner_type, chua co policy slice
+      rieng cho award/supplier/event). (d) D13.1 fix quan trong phat hien giua batch: MATRIX.admin
+      copy nguyen tu super_admin se VO TINH cho Admin full quyen module 'admin' (tao/sua/xoa tai
+      khoan BAT KY role nao + xem audit_log) -- trai voi D13.1 da chot (Admin KHONG duoc tao/sua/xoa
+      tai khoan Admin/Super Admin, KHONG duoc xem audit_log). Vá bang guard rieng trong tung handler
+      (khong phai o MATRIX tho, vi MATRIX khong phan biet duoc "quan ly user thuong" voi "quan ly
+      user dac quyen"): POST/PUT/DELETE /admin/users chan Admin thao tac tai khoan co role hien tai
+      HOAC role dich la admin/super_admin (tru tu sua chinh minh KHONG doi role -- khong phai leo
+      thang); GET /admin/audit chi super_admin (isPrivileged khong du, phai dung == 'super_admin').
+      (e) isValidNewUserPayload/POST /api/admin/users da tu dong nhan 4 role qua rbac.ROLES, dong
+      khoang trong "khong co cach tao user role D13 qua API that" da neu o batch RBAC-EXP-B1.
+Out of scope: seed 2 tai khoan demo trong db.js van giu nguyen 2 tai khoan (super_admin + executor)
+      -- KHONG them demo cho viewer/admin (tao qua API that khi can, gap da dong). Khong dong migrate
+      MATRIX/PolicyEngine cho 18 entity con lai (14 Direct + 3 Global + 1 Inherited) -- batch RBAC-
+      EXP-B2..B6 tiep tuc rieng. Khong sua 08-permission-matrix.md SS B.2 (UI-flow theo role x
+      device) -- do la pham vi UI/characterization (Codex lane), chi them 1 ghi chu dinh huong doc
+      dung cach doc bang cu, khong rebuild bang cho 4 vai tro (viec do la 1 batch UI rieng).
+Behavior mode: TARGET-CHANGE lon nhat tu dau du an -- xoa han khai niem "legacy 2-role" khoi code,
+      khong con nhanh du phong nao. An toan vi: user that hien tai CHUA co ai mang role
+      viewer/admin/pr_staff-cu (chi co seed 2 tai khoan demo, da rename dung), va MATRIX moi duoc
+      thiet ke GIU NGUYEN noi dung quyen cho tung ten vai tro (super_admin khong doi, executor =
+      pr_staff cu ve noi dung).
+Risk hotspots: (1) MATRIX.admin copy tu super_admin roi VO TINH mo rong qua module 'admin' -- da
+      phat hien VA VA NGAY trong batch nay (khong phai backlog rieng) qua doi chieu lai voi D13.1 da
+      chot tu truoc, khong phai suy dien moi; (2) GET /files/:id phuc vu nhieu owner_type -- neu ap
+      dung canReadAttachment vo dieu kien cho MOI owner_type se chan nham file cua award/supplier/
+      event (chua co policy slice), da xu ly bang re nhanh rieng giu nguyen hanh vi cu cho owner_type
+      khac 'person'; (3) sensitiveVisible field trong GET /people/:id truoc day chi check
+      role==='admin' (thieu super_admin) -- da sua thanh policy.isPrivileged(principal).
+Required tests: server/test/integration-rbac-admin-tier.test.js (13 test, D13-031..034) -- D13.1
+      Admin/Super Admin: admin khong tao/sua/xoa duoc tai khoan admin/super_admin khac (ke ca tu
+      nang cap chinh minh), van tao/sua/xoa duoc tai khoan executor/viewer binh thuong, tu sua chinh
+      minh (khong doi role) van OK; admin khong xem duoc audit_log, super_admin xem duoc. Toan bo
+      709 test SQLite + 716 test MySQL cu (truoc batch) van pass 100% khong sua noi dung assertion
+      (chi rename pr_staff->executor co hoc trong fixture/comment) -- xac nhan rename khong lam sai
+      lech hanh vi nao.
+Allowed known-red/TODO: khong can -- target-change co code + test di kem.
+Exit criteria: full regression (test:security, test:integration:sqlite, test:integration:mysql,
+      test:verify-gate1-mapping, verify-g0.mjs, git diff --check) deu xanh; khong con chuoi
+      'pr_staff' nao trong server/*.js (grep xac nhan); D13.1 Admin/Super Admin phan biet dung
+      (test rieng); 02-decisions.md SS G.1 ghi lai quyet dinh owner day du de tranh mau thuan voi
+      SS G cu.
+Expected commit range/count: 1 commit.
+```

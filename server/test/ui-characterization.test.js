@@ -53,7 +53,7 @@ test('UI-CHAR-003: ma trận hiện trạng phủ 34 flow/145 route và ghi Nati
   assert.equal(new Set(routeIds).size, 145, 'không route nào được trùng flow UI');
   for (const row of flowRows) {
     assert.equal((row.match(/N-MISSING/g) || []).length, 2,
-      `${row.match(/F\d{3}/)?.[0]} phải ghi missing cho cả super_admin và pr_staff, không suy diễn PASS`);
+      `${row.match(/F\d{3}/)?.[0]} phải ghi missing cho cả super_admin và executor, không suy diễn PASS`);
   }
 });
 

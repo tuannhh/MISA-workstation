@@ -56,7 +56,7 @@ test("N2-dashboard-permission (ĐÃ SỬA): GET /dashboard có requirePerm(dashb
 
 test("N2-dashboard-permission (ĐÃ SỬA): rbac.js khai module 'dashboard' và cấp view cho mọi role hiện có", () => {
   assert.match(rbacSrc, /MODULES\s*=\s*\[[^\]]*'dashboard'[^\]]*\]/, "MODULES trong rbac.js chưa liệt kê 'dashboard'");
-  for (const role of ['super_admin', 'pr_staff']) {
+  for (const role of ['super_admin', 'executor']) {
     const roleBlockMatch = rbacSrc.match(new RegExp(`${role}:\\s*\\{([\\s\\S]*?)\\n  \\},`));
     assert.ok(roleBlockMatch, `không tìm thấy khối MATRIX.${role} trong rbac.js`);
     assert.match(
@@ -72,5 +72,5 @@ test("N2-dashboard-permission (ĐÃ SỬA): rbac.js khai module 'dashboard' và 
 test('N1-explicit-action runtime: rbac.can() trả false cho action không có trong ma trận quyền của module', () => {
   const rbac = require('../rbac');
   assert.equal(rbac.can('super_admin', 'reminders', 'khong-ton-tai'), false);
-  assert.equal(rbac.can('pr_staff', 'monitoring', 'khong-ton-tai'), false);
+  assert.equal(rbac.can('executor', 'monitoring', 'khong-ton-tai'), false);
 });

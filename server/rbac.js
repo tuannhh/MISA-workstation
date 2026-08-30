@@ -8,10 +8,12 @@
  * đủ quyền.
  */
 
-// Các vai trò trong hệ thống
+// Các vai trò trong hệ thống — D13 (RBAC v2): 4 vai trò duy nhất, không còn mô hình 2-role cũ.
 const ROLES = {
+  viewer: 'Xem (Ban lãnh đạo)',
+  executor: 'Chuyên viên PR',
+  admin: 'Quản trị viên',
   super_admin: 'Quản lý phòng',
-  pr_staff: 'Chuyên viên PR',
 };
 
 // Hành động chuẩn
@@ -26,6 +28,9 @@ const MODULES = ['partners', 'awards', 'events', 'suppliers', 'reminders', 'inte
  * Giá trị là mảng hành động được phép. 'admin' = quản trị người dùng/hệ thống.
  */
 const MATRIX = {
+  // Nhóm quyền THÔ theo module — dùng làm lưới an toàn cho route CHƯA gắn PolicyEngine
+  // (server/policy-engine.js). Route đã gắn PolicyEngine bỏ qua MATRIX hoàn toàn, tự quyết theo
+  // D13 (ownership/visibility) — xem server/routes.js, moduleAdminOnlyGate()/assertWritable().
   super_admin: {
     partners: ['view', 'create', 'edit', 'delete'],
     awards: ['view', 'create', 'edit', 'delete'],
@@ -39,10 +44,26 @@ const MATRIX = {
     dashboard: ['view'],
     canSeeSensitive: true,
   },
-  // Chuyên viên PR: được TẠO/SỬA/XÓA dữ liệu nghiệp vụ (để nhập liệu);
+  // Admin: cùng mức thao tác nghiệp vụ như Super Admin ở lưới thô này — phần phân biệt Admin/Super
+  // Admin (vd trần D13.3b file giấy tờ tùy thân KHÔNG ai vượt được, kể cả Admin) nằm ở tầng
+  // PolicyEngine chi tiết hơn, không phải ở MATRIX.
+  admin: {
+    partners: ['view', 'create', 'edit', 'delete'],
+    awards: ['view', 'create', 'edit', 'delete'],
+    events: ['view', 'create', 'edit', 'delete'],
+    suppliers: ['view', 'create', 'edit', 'delete'],
+    reminders: ['view', 'create', 'edit', 'delete', 'ack', 'run'],
+    interactions: ['view', 'create', 'edit', 'delete'],
+    monitoring: ['view', 'create', 'edit', 'delete', 'ack'],
+    reports: ['view'],
+    admin: ['view', 'create', 'edit', 'delete'],
+    dashboard: ['view'],
+    canSeeSensitive: true,
+  },
+  // Chuyên viên PR (Nhân viên thực thi): được TẠO/SỬA/XÓA dữ liệu nghiệp vụ (để nhập liệu);
   // nhưng phần dữ liệu MẬT/CHI PHÍ chỉ XEM được nếu Quản lý phòng cho phép
   // (sensitive_perms theo từng người). Không vào Báo cáo & Quản trị.
-  pr_staff: {
+  executor: {
     partners: ['view', 'create', 'edit', 'delete'],
     awards: ['view', 'create', 'edit', 'delete'],
     events: ['view', 'create', 'edit', 'delete'],
@@ -51,6 +72,22 @@ const MATRIX = {
     interactions: ['view', 'create', 'edit', 'delete'],
     monitoring: ['view', 'create', 'edit', 'delete', 'ack'],
     reports: [], // báo cáo tổng hợp chỉ Quản lý phòng
+    admin: [],
+    dashboard: ['view'],
+    canSeeSensitive: false,
+  },
+  // Viewer (Ban lãnh đạo — vd Ban Tổng Giám đốc): chỉ xem, không có nhu cầu chỉnh sửa dữ liệu.
+  // Không vào Quản trị người dùng (module admin) — xem là xem dữ liệu nghiệp vụ, không phải quản
+  // trị hệ thống.
+  viewer: {
+    partners: ['view'],
+    awards: ['view'],
+    events: ['view'],
+    suppliers: ['view'],
+    reminders: ['view'],
+    interactions: ['view'],
+    monitoring: ['view'],
+    reports: ['view'],
     admin: [],
     dashboard: ['view'],
     canSeeSensitive: false,

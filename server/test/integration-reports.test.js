@@ -1,7 +1,7 @@
 'use strict';
 // G1A.3 Batch "reports-awards" (2/3) — integration test HTTP cho nhóm "Báo cáo" (R052-R056):
 // tổng hợp chi tiêu/quan hệ, theo nhân sự PR, theo đơn vị, theo giải thưởng, cảnh báo chăm sóc.
-// Tất cả 5 route đều requirePerm('reports','view') — pr_staff (MATRIX.reports=[]) bị 403 toàn bộ.
+// Tất cả 5 route đều requirePerm('reports','view') — executor (MATRIX.reports=[]) bị 403 toàn bộ.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -34,7 +34,7 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `reports_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
-  const staff = fixtures.createUser('pr_staff', { username: `reports_staff_${Date.now()}` });
+  const staff = fixtures.createUser('executor', { username: `reports_staff_${Date.now()}` });
   staffCookie = (await fixtures.login(baseUrl, { username: staff.username, password: staff.password })).cookie;
 });
 
@@ -98,7 +98,7 @@ test('R052 happy CHARACTERIZATION: thiếu from/to tự dùng dải mặc địn
 test('R052 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/reports', { auth: false })).status, 401);
 });
-test('R052 forbidden: pr_staff trả 403', async () => {
+test('R052 forbidden: executor trả 403', async () => {
   assert.equal((await call('GET', '/api/reports', { cookie: staffCookie })).status, 403);
 });
 
@@ -128,7 +128,7 @@ test('R053 happy CHARACTERIZATION (BR-CALC-009): avgScore = null khi nhân sự 
 test('R053 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/reports/by-staff', { auth: false })).status, 401);
 });
-test('R053 forbidden: pr_staff trả 403', async () => {
+test('R053 forbidden: executor trả 403', async () => {
   assert.equal((await call('GET', '/api/reports/by-staff', { cookie: staffCookie })).status, 403);
 });
 
@@ -157,7 +157,7 @@ test('R054 happy: spend là number cộng đúng theo đơn vị (F18, cùng l�
 test('R054 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/reports/by-unit', { auth: false })).status, 401);
 });
-test('R054 forbidden: pr_staff trả 403', async () => {
+test('R054 forbidden: executor trả 403', async () => {
   assert.equal((await call('GET', '/api/reports/by-unit', { cookie: staffCookie })).status, 403);
 });
 
@@ -186,7 +186,7 @@ test('R055 happy: mediaCost/totalCost là number cộng đúng (F18 — trước
 test('R055 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/reports/awards', { auth: false })).status, 401);
 });
-test('R055 forbidden: pr_staff trả 403', async () => {
+test('R055 forbidden: executor trả 403', async () => {
   assert.equal((await call('GET', '/api/reports/awards', { cookie: staffCookie })).status, 403);
 });
 
@@ -203,6 +203,6 @@ test('R056 happy: trả rows + counts theo bucket 1m/3m/6m/12m', async () => {
 test('R056 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/reports/care-alerts', { auth: false })).status, 401);
 });
-test('R056 forbidden: pr_staff trả 403', async () => {
+test('R056 forbidden: executor trả 403', async () => {
   assert.equal((await call('GET', '/api/reports/care-alerts', { cookie: staffCookie })).status, 403);
 });

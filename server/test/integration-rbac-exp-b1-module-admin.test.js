@@ -2,7 +2,7 @@
 // D13 batch RBAC-EXP-B1 (mở rộng PolicyEngine từ pilot `person` sang 6 entity Module-admin-only:
 // budget, scan_query, source, competitor, campaign, monitor_alert). D13.4a: nhóm này KHÔNG có khái
 // niệm chủ sở hữu — Nhân viên thực thi (executor) bị chặn HOÀN TOÀN mọi hành động ghi (kể cả
-// create), chỉ Admin/Super Admin (target role) hoặc super_admin/pr_staff (legacy) mới được sửa.
+// create), chỉ Admin/Super Admin (target role) hoặc super_admin/executor (legacy) mới được sửa.
 // User legacy 2-role giữ nguyên nhánh requirePerm cũ không đổi hành vi (đã có test ở
 // integration-bookings-budgets.test.js/integration-monitor-1.test.js/integration-monitor-2.test.js
 // — file này CHỈ test nhánh D13 target-role mới, không lặp lại coverage legacy).

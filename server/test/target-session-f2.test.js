@@ -116,8 +116,8 @@ test('known-red self-test', async (t) => {
 // F2-fixation — session id phải đổi khi login lại trên cookie đã tồn tại (W1.7: session.regenerate()).
 // ---------------------------------------------------------------------------
 test('F2-fixation: session id PHẢI đổi khi đăng nhập (chống fixation)', async () => {
-  const userA = fixtures.createUser('pr_staff', { username: `f2_fix_a_${Date.now()}` });
-  const userB = fixtures.createUser('pr_staff', { username: `f2_fix_b_${Date.now()}` });
+  const userA = fixtures.createUser('executor', { username: `f2_fix_a_${Date.now()}` });
+  const userB = fixtures.createUser('executor', { username: `f2_fix_b_${Date.now()}` });
 
   const loginA = await fixtures.login(baseUrl, { username: userA.username, password: userA.password });
   const cookieC1 = loginA.cookie;
@@ -145,7 +145,7 @@ test('F2-fixation: session id PHẢI đổi khi đăng nhập (chống fixation)
 // F2-ratelimit — /api/login không được cho phép brute-force không giới hạn (W1.7: login-rate-limiter.js).
 // ---------------------------------------------------------------------------
 test('F2-ratelimit: /api/login PHẢI rate-limit sau nhiều lần sai mật khẩu liên tiếp', async () => {
-  const user = fixtures.createUser('pr_staff', { username: `f2_rl_${Date.now()}` });
+  const user = fixtures.createUser('executor', { username: `f2_rl_${Date.now()}` });
   const ATTEMPTS = 12;
   let sawThrottled = false;
   for (let i = 0; i < ATTEMPTS; i += 1) {
@@ -170,7 +170,7 @@ test('F2-ratelimit: /api/login PHẢI rate-limit sau nhiều lần sai mật kh�
 // W1.7 audit — login thất bại và logout phải ghi audit_log (không chỉ LOGIN thành công như trước).
 // ---------------------------------------------------------------------------
 test('W1.7 audit: login sai mật khẩu ghi audit_log action=LOGIN_FAILED', async () => {
-  const user = fixtures.createUser('pr_staff', { username: `f2_audit_fail_${Date.now()}` });
+  const user = fixtures.createUser('executor', { username: `f2_audit_fail_${Date.now()}` });
   const res = await fetch(`${baseUrl}/api/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -183,7 +183,7 @@ test('W1.7 audit: login sai mật khẩu ghi audit_log action=LOGIN_FAILED', asy
 });
 
 test('W1.7 audit: logout ghi audit_log action=LOGOUT', async () => {
-  const user = fixtures.createUser('pr_staff', { username: `f2_audit_logout_${Date.now()}` });
+  const user = fixtures.createUser('executor', { username: `f2_audit_logout_${Date.now()}` });
   const { cookie } = await fixtures.login(baseUrl, { username: user.username, password: user.password });
   const res = await fetch(`${baseUrl}/api/logout`, { method: 'POST', headers: { Cookie: cookie } });
   assert.equal(res.status, 200);
@@ -193,7 +193,7 @@ test('W1.7 audit: logout ghi audit_log action=LOGOUT', async () => {
 });
 
 test('F2-logout-invalidation CHARACTERIZATION: sau logout, cookie cũ không còn dùng được — /api/me trả 401', async () => {
-  const user = fixtures.createUser('pr_staff', { username: `f2_logout_${Date.now()}` });
+  const user = fixtures.createUser('executor', { username: `f2_logout_${Date.now()}` });
   const { cookie } = await fixtures.login(baseUrl, { username: user.username, password: user.password });
 
   const meBefore = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: cookie } });

@@ -5,7 +5,7 @@
 //
 // Khác nhóm partners: đây là module DUY NHẤT trong G1A.3 (ngoài admin/reports) có case
 // "forbidden" THẬT với đúng 2 role hiện có — vì nhóm dữ liệu mật `iddoc` (giấy tờ tùy thân) gate
-// riêng theo `senGroups(req).has('iddoc')`, và `pr_staff` có `canSeeSensitive=false` (rbac.js) nên
+// riêng theo `senGroups(req).has('iddoc')`, và `executor` có `canSeeSensitive=false` (rbac.js) nên
 // KHÔNG có nhóm `iddoc` khi không có `sensitive_perms` override — dùng đúng đặc điểm này để test
 // forbidden ở R034/R036/R037, không cần vai trò giả lập.
 const { test, before, after } = require('node:test');
@@ -18,7 +18,7 @@ const { createResourceStack } = require('../test-support/resource-stack');
 
 let baseUrl;
 let cookie; // super_admin — canSeeSensitive=true, có nhóm iddoc
-let staffCookie; // pr_staff — canSeeSensitive=false, KHÔNG có nhóm iddoc
+let staffCookie; // executor — canSeeSensitive=false, KHÔNG có nhóm iddoc
 let viewerCookie;
 let executorCookie; // D13 target role — Global edit trên people, KHÔNG có quyền delete
 let targetAdminCookie; // D13 target role 'admin' — khác legacy 'super_admin' fixture (cookie)
@@ -43,7 +43,7 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `people_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
-  const staff = fixtures.createUser('pr_staff', { username: `people_staff_${Date.now()}` });
+  const staff = fixtures.createUser('executor', { username: `people_staff_${Date.now()}` });
   staffCookie = (await fixtures.login(baseUrl, { username: staff.username, password: staff.password })).cookie;
   const viewer = fixtures.createUser('viewer', { username: `people_viewer_${Date.now()}` });
   viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
@@ -247,7 +247,7 @@ test('R034 invalid: vượt quá 5 ảnh chân dung trả 400', async () => {
   assert.equal(res.status, 400);
   assert.match((await res.json()).error, /Tối đa 5 ảnh chân dung/);
 });
-test('R034 forbidden: pr_staff (không có nhóm iddoc) upload giấy tờ tùy thân trả 403', async () => {
+test('R034 forbidden: executor (không có nhóm iddoc) upload giấy tờ tùy thân trả 403', async () => {
   const id = await createPerson();
   const res = await uploadFiles(`/api/people/${id}/attachments?kind=id_doc`, [{ name: 'cccd.png' }], { as: staffCookie });
   assert.equal(res.status, 403);
@@ -300,7 +300,7 @@ test('R036 not-found: aid không tồn tại trả 404 {error}', async () => {
   assert.equal(res.status, 404);
   assert.equal((await res.json()).error, 'Không tìm thấy');
 });
-test('R036 forbidden: pr_staff xoá attachment kind=id_doc trả 403', async () => {
+test('R036 forbidden: executor xoá attachment kind=id_doc trả 403', async () => {
   const id = await createPerson();
   const up = await (await uploadFiles(`/api/people/${id}/attachments?kind=id_doc`, [{ name: 'cccd.png' }])).json();
   const res = await call('DELETE', `/api/attachments/${up.ids[0]}`, { as: staffCookie });
@@ -326,7 +326,7 @@ test('R037 not-found: attachment id không tồn tại trả 404 {error}', async
   assert.equal(res.status, 404);
   assert.equal((await res.json()).error, 'Không tìm thấy file');
 });
-test('R037 forbidden: pr_staff tải file kind=id_doc trả 403 (dù có thẻ requireAuth-only, vẫn gate iddoc riêng trong handler)', async () => {
+test('R037 forbidden: executor tải file kind=id_doc trả 403 (dù có thẻ requireAuth-only, vẫn gate iddoc riêng trong handler)', async () => {
   const id = await createPerson();
   const up = await (await uploadFiles(`/api/people/${id}/attachments?kind=id_doc`, [{ name: 'cccd.png' }])).json();
   const res = await call('GET', `/api/files/${up.ids[0]}`, { as: staffCookie });

@@ -18,7 +18,6 @@ const { sendError } = require('./error-contract');
 const router = express.Router();
 router.use(requireAuth);
 const policyService = createPolicyService({ visibilityStore: createVisibilityStore(db) });
-const TARGET_RBAC_ROLES = new Set(['viewer', 'executor', 'admin']);
 
 // ---------- helpers ----------
 function pageParams(req) {
@@ -406,37 +405,18 @@ router.get('/people/:id', (req, res) => {
   const row = db.prepare(`SELECT p.*, o.name AS org_name, o.org_type FROM people p
     LEFT JOIN organizations o ON o.id=p.org_id WHERE p.id=?`).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Không tìm thấy' });
-  // First strangler endpoint for D13. New roles deliberately do not fall back to legacy masking:
-  // no policy configuration means no fields, and related collections remain private until their
-  // own policy slice is implemented. Attachments are wired (W1.FILE, batch RBAC-PILOT3-people-file).
-  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
-    const record = policyService.projectRecord({ principal: req.principal, entity: 'person', module: 'partners', record: row });
-    const allAtts = db.prepare(`SELECT id, original_name, mime, kind, audience_visibility, is_primary FROM attachments
-      WHERE owner_type='person' AND owner_id=? ORDER BY kind, is_primary DESC, id`).all(row.id);
-    const portraits = allAtts.filter((a) => a.kind === 'portrait'
-      && policy.canReadAttachment({ principal: req.principal, kind: a.kind, audienceVisibility: a.audience_visibility }));
-    const idDocs = allAtts.filter((a) => a.kind === 'id_doc'
-      && policy.canReadAttachment({ principal: req.principal, kind: a.kind, audienceVisibility: a.audience_visibility }));
-    const idDocCount = allAtts.filter((a) => a.kind === 'id_doc').length;
-    return res.json({ record, maskedFields: [], portraits, idDocs, idDocCount, interactions: [], gifts: [], caretakers: [], sensitiveVisible: req.principal.role === 'admin' });
-  }
-  if (!rbac.can(req.principal?.role, 'partners', 'view')) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền view trên partners.');
-  const allowed = senGroups(req);
-  const { record, maskedFields } = rbac.maskRecord('person', row, allowed);
-  const hasSensitive = rbac.SENSITIVE_FIELDS.person.some((f) => row[f]);
-  if (allowed.size > 0 && hasSensitive) {
-    logEdit(req, 'VIEW_SENSITIVE', 'person', row.id, `Xem dữ liệu mật nhân sự: ${row.full_name}`);
-  }
-  // Ảnh chân dung: hiển thị cho mọi vai trò. Giấy tờ tùy thân: chỉ người đủ quyền mật.
-  const portraits = db.prepare(`SELECT id, original_name, mime, is_primary FROM attachments
-    WHERE owner_type='person' AND owner_id=? AND kind='portrait' ORDER BY is_primary DESC, id`).all(row.id);
-  const idDocs = allowed.has('iddoc')
-    ? db.prepare(`SELECT id, original_name, mime FROM attachments WHERE owner_type='person' AND owner_id=? AND kind='id_doc' ORDER BY id`).all(row.id)
-    : [];
-  const idDocCount = db.prepare(`SELECT COUNT(*) c FROM attachments WHERE owner_type='person' AND owner_id=? AND kind='id_doc'`).get(row.id).c;
-  const interactions = db.prepare(`SELECT * FROM interactions WHERE partner_type='person' AND partner_id=? ORDER BY date DESC`).all(row.id);
-  const gifts = rbac.maskList('gift', db.prepare(`SELECT * FROM gifts WHERE owner_type='person' AND owner_id=? ORDER BY event_date DESC`).all(row.id), allowed);
-  res.json({ record, maskedFields, portraits, idDocs, idDocCount, interactions, gifts, caretakers: getCaretakers('person', row.id), sensitiveVisible: senVisible(allowed) });
+  // D13 (RBAC v2, duy nhất — không còn model 2-role cũ). Không fallback sang legacy masking: chưa
+  // có policy configuration nghĩa là không có field nào, và các collection liên quan (interactions/
+  // gifts/caretakers) còn private tới khi có policy slice riêng cho entity đó (interaction/gift).
+  const record = policyService.projectRecord({ principal: req.principal, entity: 'person', module: 'partners', record: row });
+  const allAtts = db.prepare(`SELECT id, original_name, mime, kind, audience_visibility, is_primary FROM attachments
+    WHERE owner_type='person' AND owner_id=? ORDER BY kind, is_primary DESC, id`).all(row.id);
+  const portraits = allAtts.filter((a) => a.kind === 'portrait'
+    && policy.canReadAttachment({ principal: req.principal, kind: a.kind, audienceVisibility: a.audience_visibility }));
+  const idDocs = allAtts.filter((a) => a.kind === 'id_doc'
+    && policy.canReadAttachment({ principal: req.principal, kind: a.kind, audienceVisibility: a.audience_visibility }));
+  const idDocCount = allAtts.filter((a) => a.kind === 'id_doc').length;
+  res.json({ record, maskedFields: [], portraits, idDocs, idDocCount, interactions: [], gifts: [], caretakers: [], sensitiveVisible: policy.isPrivileged(req.principal) });
 });
 
 router.post('/people', requirePerm('partners', 'create'), (req, res) => {
@@ -447,22 +427,15 @@ router.post('/people', requirePerm('partners', 'create'), (req, res) => {
   logEdit(req, 'CREATE', 'person', r.lastInsertRowid, req.body.full_name);
   res.json({ id: r.lastInsertRowid });
 });
-// D13 pilot slice 2 (People Detail write, mở rộng từ D13-011 read): target role viewer/executor/
-// admin đi qua PolicyEngine (fail-closed 403, không silent-strip); user legacy 2-role giữ nguyên
-// nhánh requirePerm+stripDisallowed cũ, không đổi hành vi.
+// D13 (RBAC v2, duy nhất): PolicyEngine quyết định fail-closed 403, không silent-strip.
 router.put('/people/:id', (req, res) => {
   const data = pick(req.body, P_COLS);
   jsonField(data, 'phone_ott');
-  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
-    try {
-      policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
-    } catch (err) {
-      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
-      throw err;
-    }
-  } else {
-    if (!rbac.can(req.principal?.role, 'partners', 'edit')) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
-    stripDisallowed('person', data, senGroups(req)); // không cho ghi đè trường mật ngoài quyền
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
   }
   buildUpdate('people', req.params.id, data);
   syncAssignments('person', Number(req.params.id), req.body.caretaker_ids);
@@ -470,15 +443,11 @@ router.put('/people/:id', (req, res) => {
   res.json({ ok: true });
 });
 router.delete('/people/:id', (req, res) => {
-  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
-    try {
-      policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'delete' });
-    } catch (err) {
-      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
-      throw err;
-    }
-  } else if (!rbac.can(req.principal?.role, 'partners', 'delete')) {
-    return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
   }
   // xóa file vật lý của nhân sự
   const atts = db.prepare(`SELECT filename FROM attachments WHERE owner_type='person' AND owner_id=?`).all(req.params.id);
@@ -491,27 +460,20 @@ router.delete('/people/:id', (req, res) => {
 
 // ---------- Attachments: ảnh chân dung + giấy tờ tùy thân ----------
 const PORTRAIT_MAX = 5;
-// D13 pilot slice 3 (People Detail file, batch RBAC-PILOT3-people-file): target role đi qua
-// PolicyEngine (action 'edit' trên person, đúng ngữ nghĩa như legacy requirePerm('partners','edit'));
-// user legacy 2-role giữ nguyên requirePerm cũ, không đổi hành vi.
+// D13 (RBAC v2, duy nhất): action 'edit' trên person.
 function personEditGate(req, res, next) {
-  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
-    try {
-      policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
-      return next();
-    } catch (err) {
-      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
-      return next(err);
-    }
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
+    return next();
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    return next(err);
   }
-  return requirePerm('partners', 'edit')(req, res, next);
 }
 router.post('/people/:id/attachments', personEditGate, upload.array('files', 5), (req, res) => {
   const kind = req.query.kind === 'id_doc' ? 'id_doc' : 'portrait';
-  const isTarget = TARGET_RBAC_ROLES.has(req.principal?.role);
   // Giấy tờ tùy thân là dữ liệu mật: chỉ người đủ quyền được tải lên
-  const idDocAllowed = isTarget ? policy.isPrivileged(req.principal) : senGroups(req).has('iddoc');
-  if (kind === 'id_doc' && !idDocAllowed) {
+  if (kind === 'id_doc' && !policy.isPrivileged(req.principal)) {
     (req.files || []).forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
     return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Bạn không có quyền tải lên giấy tờ tùy thân (dữ liệu mật).');
   }
@@ -525,17 +487,13 @@ router.post('/people/:id/attachments', personEditGate, upload.array('files', 5),
       return res.status(400).json({ error: `Tối đa ${PORTRAIT_MAX} ảnh chân dung (hiện có ${cur}).` });
     }
   }
-  // D13.3a/b: chỉ role D13 mới được tự chọn visibility lúc upload; legacy giữ nguyên mặc định
-  // schema ('private'). Trần theo kind (D13.3b) áp dụng cho MỌI role, kể cả Admin.
-  let visibility = 'private';
-  if (isTarget) {
-    const requested = req.query.visibility === 'public' ? 'public' : 'private';
-    if (!policy.canSetAttachmentVisibility(kind, requested)) {
-      files.forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
-      return res.status(400).json({ error: `Không thể đặt visibility 'public' cho loại tài liệu này.` });
-    }
-    visibility = requested;
+  // D13.3a/b: trần theo kind (D13.3b) áp dụng cho MỌI role, kể cả Admin — không có ngoại lệ.
+  const requestedVisibility = req.query.visibility === 'public' ? 'public' : 'private';
+  if (!policy.canSetAttachmentVisibility(kind, requestedVisibility)) {
+    files.forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
+    return res.status(400).json({ error: `Không thể đặt visibility 'public' cho loại tài liệu này.` });
   }
+  const visibility = requestedVisibility;
   const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, audience_visibility, is_primary)
     VALUES ('person', ?, ?, ?, ?, ?, ?, ?)`);
   const hasPrimary = db.prepare(`SELECT COUNT(*) c FROM attachments WHERE owner_type='person' AND owner_id=? AND kind='portrait' AND is_primary=1`).get(req.params.id).c;
@@ -559,25 +517,20 @@ router.put('/people/:id/attachments/:aid/primary', personEditGate, (req, res) =>
   res.json({ ok: true });
 });
 
-// D13 pilot slice 3: route này phục vụ NHIỀU owner_type (award/supplier/event/person...), nhưng
-// PolicyEngine mới chỉ instrument 'person' — role D13 mới đụng owner_type khác thì fail-closed
-// 403 (chưa có policy slice riêng), không suy diễn/PASS ngầm.
+// Route này phục vụ NHIỀU owner_type (award/supplier/event/person...), nhưng PolicyEngine mới chỉ
+// instrument 'person' — owner_type khác thì fail-closed 403 (chưa có policy slice riêng), không
+// suy diễn/PASS ngầm.
 router.delete('/attachments/:aid', (req, res) => {
   const att = db.prepare('SELECT * FROM attachments WHERE id=?').get(req.params.aid);
   if (!att) return res.status(404).json({ error: 'Không tìm thấy' });
-  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
-    if (att.owner_type !== 'person') return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete file này.');
-    try {
-      policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
-    } catch (err) {
-      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
-      throw err;
-    }
-    if (att.kind === 'id_doc' && !policy.isPrivileged(req.principal)) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền');
-  } else {
-    if (!rbac.can(req.principal?.role, 'partners', 'edit')) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
-    if (att.kind === 'id_doc' && !senGroups(req).has('iddoc')) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền');
+  if (att.owner_type !== 'person') return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete file này.');
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
   }
+  if (att.kind === 'id_doc' && !policy.isPrivileged(req.principal)) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền');
   try { fs.unlinkSync(path.join(UPLOAD_DIR, att.filename)); } catch {}
   db.prepare('DELETE FROM attachments WHERE id=?').run(req.params.aid);
   // nếu xóa ảnh chính, đặt ảnh khác làm chính
@@ -592,14 +545,18 @@ router.delete('/attachments/:aid', (req, res) => {
 router.get('/files/:id', (req, res) => {
   const att = db.prepare('SELECT * FROM attachments WHERE id=?').get(req.params.id);
   if (!att) return res.status(404).json({ error: 'Không tìm thấy file' });
-  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+  // id_doc (giấy tờ tùy thân) luôn mật, kể cả nếu owner_type lạ (chưa từng xảy ra trong thực tế).
+  // Attachment thuộc owner_type khác 'person' (award/supplier/event...) chưa có policy slice riêng
+  // nên tiếp tục phục vụ không gate thêm (đúng hành vi trước đây — route này chưa từng gate theo
+  // owner_type ngoài id_doc).
+  if (att.kind === 'id_doc') {
     const allowed = att.owner_type === 'person'
       && policy.canReadAttachment({ principal: req.principal, kind: att.kind, audienceVisibility: att.audience_visibility });
-    if (!allowed) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
-    if (att.kind === 'id_doc') logEdit(req, 'VIEW_SENSITIVE', 'person', att.owner_id, `Tải/giấy tờ tùy thân: ${att.original_name || att.filename}`);
-  } else if (att.kind === 'id_doc') {
-    if (!senGroups(req).has('iddoc')) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền xem giấy tờ tùy thân');
+    if (!allowed) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền xem giấy tờ tùy thân');
     logEdit(req, 'VIEW_SENSITIVE', 'person', att.owner_id, `Tải/giấy tờ tùy thân: ${att.original_name || att.filename}`);
+  } else if (att.owner_type === 'person'
+      && !policy.canReadAttachment({ principal: req.principal, kind: att.kind, audienceVisibility: att.audience_visibility })) {
+    return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
   }
   const fp = path.join(UPLOAD_DIR, att.filename);
   if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File không tồn tại' });
@@ -760,21 +717,17 @@ router.delete('/bookings/:id', requirePerm('partners', 'delete'), (req, res) => 
 //  BUDGETS (ngân sách theo tháng)
 // =====================================================================
 // D13 batch RBAC-EXP-B1 (module-admin-only, 6 entity: budget/scan_query/source/competitor/
-// campaign/monitor_alert): luật giống hệt nhau nên dùng chung 1 gate — target role đi qua
-// PolicyEngine (fail-closed 403, executor luôn bị chặn mọi hành động ghi vì đây là nhóm chỉ
-// admin/super_admin được sửa); user legacy 2-role giữ nguyên requirePerm cũ, không đổi hành vi.
+// campaign/monitor_alert): luật giống hệt nhau nên dùng chung 1 gate qua PolicyEngine (fail-closed
+// 403, executor luôn bị chặn mọi hành động ghi vì đây là nhóm chỉ admin/super_admin được sửa).
 function moduleAdminOnlyGate(entity, legacyModule, action) {
   return (req, res, next) => {
-    if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
-      try {
-        policyService.assertWritable({ principal: req.principal, entity, action });
-        return next();
-      } catch (err) {
-        if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', `Bạn không có quyền ${action} trên ${legacyModule}.`);
-        return next(err);
-      }
+    try {
+      policyService.assertWritable({ principal: req.principal, entity, action });
+      return next();
+    } catch (err) {
+      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', `Bạn không có quyền ${action} trên ${legacyModule}.`);
+      return next(err);
     }
-    return requirePerm(legacyModule, action)(req, res, next);
   };
 }
 
@@ -1390,9 +1343,15 @@ router.get('/admin/users', requirePerm('admin', 'view'), (req, res) => {
   const rows = db.prepare('SELECT id, username, full_name, role, email, notify_opt_in, sensitive_perms, active, created_at FROM users ORDER BY id').all();
   res.json({ rows, roles: rbac.ROLES, sensitiveGroups: rbac.SENSITIVE_GROUPS });
 });
+// D13.1: Admin (khác Super Admin) không được tạo/sửa tài khoản Admin/Super Admin — chỉ Super Admin
+// mới quản trị được tài khoản cùng cấp hoặc cao hơn mình, tránh tự leo thang đặc quyền.
+const PRIVILEGED_ADMIN_ROLES = new Set(['admin', 'super_admin']);
 router.post('/admin/users', requirePerm('admin', 'create'), (req, res) => {
   const { username, password, full_name, role, email, sensitive_perms } = req.body || {};
   if (!isValidNewUserPayload({ username, password, full_name, role })) return res.status(400).json({ error: 'Thiếu thông tin hợp lệ' });
+  if (req.principal.role === 'admin' && PRIVILEGED_ADMIN_ROLES.has(role)) {
+    return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Admin không được tạo tài khoản Admin/Super Admin — chỉ Super Admin mới được.');
+  }
   if (db.prepare('SELECT 1 FROM users WHERE username=?').get(username)) return res.status(409).json({ error: 'Tài khoản đã tồn tại' });
   const sp = Array.isArray(sensitive_perms) ? JSON.stringify(sanitizeSensitivePerms(sensitive_perms)) : null;
   const r = db.prepare('INSERT INTO users (username,password_hash,full_name,role,email,sensitive_perms) VALUES (?,?,?,?,?,?)')
@@ -1402,6 +1361,19 @@ router.post('/admin/users', requirePerm('admin', 'create'), (req, res) => {
 });
 router.put('/admin/users/:id', requirePerm('admin', 'edit'), (req, res) => {
   const { full_name, role, active, password, email, notify_opt_in, sensitive_perms } = req.body || {};
+  if (req.principal.role === 'admin') {
+    const isSelf = Number(req.params.id) === req.session.user.id;
+    if (!isSelf) {
+      const target = db.prepare('SELECT role FROM users WHERE id=?').get(req.params.id);
+      if (target && PRIVILEGED_ADMIN_ROLES.has(target.role)) {
+        return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Admin không được sửa tài khoản Admin/Super Admin khác.');
+      }
+    }
+    // Chỉ chặn khi THỰC SỰ nâng cấp (bỏ qua self-edit gửi lại đúng role hiện tại — không leo thang).
+    if (role && PRIVILEGED_ADMIN_ROLES.has(role) && !(isSelf && role === req.principal.role)) {
+      return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Admin không được nâng người khác lên Admin/Super Admin.');
+    }
+  }
   const fields = [], vals = [];
   if (full_name != null) { fields.push('full_name=?'); vals.push(full_name); }
   if (role && rbac.ROLES[role]) { fields.push('role=?'); vals.push(role); }
@@ -1421,11 +1393,19 @@ router.put('/admin/users/:id', requirePerm('admin', 'edit'), (req, res) => {
 });
 router.delete('/admin/users/:id', requirePerm('admin', 'delete'), (req, res) => {
   if (Number(req.params.id) === req.session.user.id) return res.status(400).json({ error: 'Không thể xóa chính mình' });
+  if (req.principal.role === 'admin') {
+    const target = db.prepare('SELECT role FROM users WHERE id=?').get(req.params.id);
+    if (target && PRIVILEGED_ADMIN_ROLES.has(target.role)) {
+      return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Admin không được xoá tài khoản Admin/Super Admin khác.');
+    }
+  }
   db.prepare('DELETE FROM users WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'user', req.params.id);
   res.json({ ok: true });
 });
+// D13.1: audit_log chỉ Super Admin xem được (Admin không có quyền này).
 router.get('/admin/audit', requirePerm('admin', 'view'), (req, res) => {
+  if (req.principal.role !== 'super_admin') return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Chỉ Super Admin được xem audit log.');
   const rows = db.prepare('SELECT * FROM audit_log ORDER BY id DESC LIMIT 200').all();
   res.json({ rows });
 });

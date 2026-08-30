@@ -113,7 +113,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 ### G1B — Target RBAC v2 + security suite (KNOWN-RED, allowlist) — spec-first cho phần VIẾT LẠI (D13/F1/F2/F3/F9)
 | # | Task | Evidence Contract |
 |---|---|---|
-| G1B.1 | **Engine hoàn tất đủ D13.4a — Codex ACCEPT phần engine trong Bundle A 2026-08-28** (CHƯA đóng cả gate, xem ghi chú Codex cuối dòng) (`18-g1b-rbac-batch-contract.md#batch-g1b1-engine-completeness-2026-08-28`): thêm nhóm `INHERITED` (event_cost kế thừa owner_id của event cha — hàng "Chi phí sự kiện" D13.4a đã owner-approved, code trước đó thiếu) vào `policy-engine.js`; mở rộng `unit-policy-engine.test.js` phủ đủ 14 Direct + 4 Global + 6 Module-admin-only + 1 Inherited (D13-012..016, tất cả GREEN — engine đã đúng generic cho phần lớn, chỉ event_cost RED trước khi thêm INHERITED). **Owner đã duyệt mở rộng route-wiring ra toàn bộ 24 entity còn lại (2026-08-30), tự chọn cách chia batch — không còn cần xin thêm cho scope chung, chỉ còn tiến độ từng batch.** Tiến độ route-wiring (ghi/create/edit/delete, GET/view của TẤT CẢ entity kể cả `person` vẫn còn khoảng trống chung — xem ghi chú batch RBAC-EXP-B1): `person` (pilot, GET detail + PUT/DELETE + file) XONG; **Batch 1/6 — 6 entity Module-admin-only (budget/scan_query/source/competitor/campaign/monitor_alert) XONG 2026-08-30** (`18-g1b-rbac-batch-contract.md#batch-rbac-exp-b1-module-admin-2026-08-30`); còn 18 entity (14 Direct + 3 Global + 1 Inherited) chưa làm — batch RBAC-EXP-B2..B6 tiếp theo. Money/file (G1B.2) đã có nền: `classification_tier=Confidential` cho field tiền (D13-016), file visibility ceiling (D13.3b) chưa test HTTP vì chưa có route file nào gắn PolicyEngine ngoài `person`. | test / — / engine GREEN đủ D13.4a; route-wiring: person + 6/24 entity (Module-admin-only) XONG, 18/24 còn lại RED/chưa làm |
+| G1B.1 | **Engine hoàn tất đủ D13.4a — Codex ACCEPT phần engine trong Bundle A 2026-08-28** (CHƯA đóng cả gate, xem ghi chú Codex cuối dòng) (`18-g1b-rbac-batch-contract.md#batch-g1b1-engine-completeness-2026-08-28`): thêm nhóm `INHERITED` (event_cost kế thừa owner_id của event cha — hàng "Chi phí sự kiện" D13.4a đã owner-approved, code trước đó thiếu) vào `policy-engine.js`; mở rộng `unit-policy-engine.test.js` phủ đủ 14 Direct + 4 Global + 6 Module-admin-only + 1 Inherited (D13-012..016, tất cả GREEN — engine đã đúng generic cho phần lớn, chỉ event_cost RED trước khi thêm INHERITED). **Owner đã duyệt mở rộng route-wiring ra toàn bộ 24 entity còn lại (2026-08-30), tự chọn cách chia batch — không còn cần xin thêm cho scope chung, chỉ còn tiến độ từng batch.** Tiến độ route-wiring (ghi/create/edit/delete, GET/view của TẤT CẢ entity kể cả `person` vẫn còn khoảng trống chung — xem ghi chú batch RBAC-EXP-B1): `person` (pilot, GET detail + PUT/DELETE + file) XONG; **Batch 1/6 — 6 entity Module-admin-only (budget/scan_query/source/competitor/campaign/monitor_alert) XONG 2026-08-30** (`18-g1b-rbac-batch-contract.md#batch-rbac-exp-b1-module-admin-2026-08-30`); còn 18 entity (14 Direct + 3 Global + 1 Inherited) chưa làm — batch RBAC-EXP-B2..B6 tiếp theo. Money/file (G1B.2) đã có nền: `classification_tier=Confidential` cho field tiền (D13-016), file visibility ceiling (D13.3b) chưa test HTTP vì chưa có route file nào gắn PolicyEngine ngoài `person`. **Batch RBAC-CUTOVER 2026-08-30 (owner chốt, `02-decisions.md` §G.1) — XONG:** bỏ hoàn toàn hệ 2-role legacy (`super_admin`/`pr_staff`) khỏi `server/rbac.js`, chuyển dứt khoát sang DUY NHẤT 4 vai trò D13 (`viewer/executor/admin/super_admin`); route chưa gắn PolicyEngine (121/145 còn lại) nay tự động đúng cho cả 4 vai trò qua MATRIX mở rộng, không còn 403 sai cho viewer/admin; phát hiện+vá luôn 1 gap D13.1 (Admin vô tình có full quyền module `admin` giống Super Admin — đã guard riêng, test D13-031..034). Xem execution update chi tiết dưới `WAVE 3` header. | test / — / engine GREEN đủ D13.4a; 2-role legacy ĐÃ BỎ HOÀN TOÀN (chỉ còn 4 vai trò D13); route-wiring PolicyEngine chi tiết (ownership/field-visibility): person + 6/24 entity (Module-admin-only) XONG, 18/24 còn lại dùng MATRIX thô (đúng nhưng chưa có ownership/field-level) — batch RBAC-EXP-B2..B6 tiếp theo |
 | G1B.2 | Money/file policy = 1 phần của G1B.1 (không còn suite riêng): field tiền chỉ là field `classification_tier=Confidential` — **engine đã phủ đủ (D13-016)**; direct-ID file access theo trần server-derived + per-file visibility (D13.3b); derived/aggregate (`grandTotal` kiểu) không rò rỉ field bị ẩn (D13.4b) — 2 mục sau vẫn cần route wiring thật, chưa làm | test / — / classification engine GREEN, file/aggregate vẫn RED allowlist `D13` |
 | G1B.3 | **Test target-red XONG — Codex ACCEPT Bundle A 2026-08-28** (`server/test/target-session-f2.test.js`, batch contract `18-g1b-rbac-batch-contract.md#batch-g1b3-session-2026-08-28`). Dựng cơ chế allowlist known-red bắt buộc theo G1B.6 (`server/test-support/known-red.js` + `memory-bank/g1b-allowlist.json`) vì trước đó chưa tồn tại. `F2-logout-invalidation` hoá ra đã GREEN sẵn (`session.destroy()` đã vô hiệu cookie cũ) — ghi nhận characterization, không đưa vào allowlist. **Implement thật (W1.7) ĐÃ XONG 2026-08-30** — `F2-fixation`/`F2-ratelimit` promote sang assertion xanh thật, xoá khỏi allowlist (xem W1.7 execution update). | test / — / GREEN thật, 0 known-red finding (chỉ còn `INFRA-known-red-selftest`, không phải finding) |
 | G1B.4 | **XONG — F3 CLOSED 2026-08-27, Codex ACCEPT Bundle A 2026-08-28.** `safeFetch` chung chặn localhost/RFC1918/link-local/metadata/IPv6 private, DNS trả địa chỉ private, URL credential và redirect; transport pin IP đã verify để tránh DNS rebinding TOCTOU, cap body 2 MiB. Áp dụng monitor, grounding, create/update source và award-extract. Test BR-SSRF-010/011, BR-SSRF-021..028, R122/R139 xanh. `OUTBOUND_ALLOWED_HOSTS` là allowlist runtime tùy chọn, fail-closed khi được cấu hình. | code+test / all / GREEN |
@@ -412,6 +412,57 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > UI, không có regression trên route legacy (super_admin/pr_staff giữ nguyên 100% hành vi cũ, xác
 > nhận qua test R050/R051/R116-R134 cũ vẫn xanh). **Batch 2/6 (Global còn lại: organization/
 > supplier/important_date) là bước tiếp theo.**
+
+> **Execution update — 2026-08-30 (RBAC-CUTOVER: owner chốt bỏ hoàn toàn 2-role legacy, dùng DUY
+> NHẤT 4 vai trò D13):** ngay sau batch RBAC-EXP-B1, owner tuyên bố trực tiếp: *"2 vai trò cũ chỉ
+> là demo trên bản code ban đầu, bạn loại bỏ hoàn toàn đi nhé. Chỉ thực hiện theo 4 vai trò mới."*
+> Đây là quyết định RỘNG HƠN và **ghi đè phần "Phạm vi CẤM" của `02-decisions.md` §G** (2026-08-28,
+> khi đó cấm cutover role hàng loạt) — đã ghi lại đầy đủ thành §G.1 (amendment) trong
+> `02-decisions.md`, kèm 2 quyết định cụ thể owner trả lời khi hỏi lại: (1) `pr_staff`→`executor` là
+> ánh xạ CỐ ĐỊNH cho user thật hiện có; `super_admin`/`admin`/`viewer` KHÔNG có ánh xạ tự động — owner
+> tự gán theo cấp bậc thật từng người sau này (owner ví dụ: Ban Tổng Giám đốc→viewer, trưởng nhóm
+> truyền thông đối ngoại→admin, trưởng ban truyền thông→super_admin); (2) dữ liệu nghiệp vụ cũ chỉ là
+> demo, không cần backfill `owner_id`, có thể xoá/ghi lại.
+>
+> Batch Contract: `18-g1b-rbac-batch-contract.md#batch-rbac-cutover-2026-08-30`. Thực hiện: (a)
+> `server/rbac.js` ROLES/MATRIX đổi hẳn từ 2 khoá (`super_admin`/`pr_staff`) sang 4 khoá
+> (`viewer`/`executor`/`admin`/`super_admin`) — `pr_staff` RENAME thẳng thành `executor` (giữ nguyên
+> nội dung quyền, chỉ đổi tên), thêm mới `MATRIX.admin` (copy `super_admin`) và `MATRIX.viewer` (chỉ
+> `'view'` mọi module, trừ `admin`); (b) global rename cơ học `pr_staff`→`executor` toàn repo (67 chỗ,
+> 15 file code+test — không phải viết lại, thuần đổi tên 1:1); (c) `server/routes.js` bỏ hẳn
+> `TARGET_RBAC_ROLES`/nhánh dual-branch — route đã gắn PolicyEngine (`person` + 6 entity Module-
+> admin-only) nay chạy PolicyEngine KHÔNG ĐIỀU KIỆN cho cả 4 vai trò (kể cả `super_admin`, trước đây
+> tách riêng vào nhánh "legacy"); route chưa gắn PolicyEngine tiếp tục dùng `requirePerm`/`rbac.can`
+> — nay đúng cho cả 4 vai trò nhờ MATRIX mở rộng, đóng khoảng trống 403-sai cho viewer/admin đã ghi
+> nhận ở batch trước.
+>
+> **Phát hiện và vá giữa batch (không phải backlog riêng):** copy nguyên `MATRIX.admin` từ
+> `super_admin` vô tình cấp Admin full quyền module `admin` (tạo/sửa/xoá tài khoản BẤT KỲ role nào +
+> xem `audit_log`) — trái với D13.1 đã chốt trước đó (Admin KHÔNG được quản trị tài khoản Admin/Super
+> Admin, KHÔNG xem được audit log). Vá bằng guard riêng trong từng handler (`POST/PUT/DELETE
+> /admin/users`, `GET /admin/audit`) vì MATRIX thô không phân biệt được "quản lý user thường" với
+> "quản lý user đặc quyền" — Admin bị chặn thao tác tài khoản có role hiện tại HOẶC role đích là
+> `admin`/`super_admin` (trừ tự sửa chính mình không đổi role — không phải leo thang); `audit_log`
+> chỉ đúng `role==='super_admin'` mới xem được. `isValidNewUserPayload`/`POST /api/admin/users` đã tự
+> động nhận đủ 4 role qua `rbac.ROLES` — đóng khoảng trống "không có cách tạo user role D13 qua API
+> thật" đã nêu ở batch RBAC-EXP-B1.
+>
+> Test mới `server/test/integration-rbac-admin-tier.test.js` (13 test, `D13-031..034`): Admin không
+> tạo/sửa/xoá được tài khoản Admin/Super Admin khác (kể cả tự nâng cấp chính mình), vẫn tạo/sửa/xoá
+> được tài khoản executor/viewer bình thường, tự sửa chính mình (không đổi role) vẫn OK; Admin không
+> xem được audit log, Super Admin xem được. Toàn bộ 709 test SQLite + 716 test MySQL từ trước batch
+> vẫn pass 100% sau rename (chỉ đổi tên cơ học trong fixture/comment, không sửa nội dung assertion
+> nào) — xác nhận rename không làm lệch hành vi. Full regression sau batch: security 6/6, SQLite
+> 722/8 skip (+13), MySQL 729/1 skip (+13), mapping 145/145 route PASS, `verify-g0.mjs` PASS,
+> `git diff --check` sạch, grep xác nhận **0 chuỗi `pr_staff` còn lại trong `server/*.js`**.
+>
+> **Chưa làm (out of scope batch này, ghi rõ để không rơi):** 18 entity D13.4a còn lại (14 Direct +
+> 3 Global + 1 Inherited) chưa gắn PolicyEngine — batch RBAC-EXP-B2..B6 tiếp tục độc lập, không liên
+> quan tới việc bỏ 2-role vừa xong (route chưa gắn PolicyEngine đã tự động đúng cho 4 vai trò nhờ
+> MATRIX, không bị chặn bởi việc PolicyEngine wiring chưa xong). `08-permission-matrix.md` §B.2
+> (UI-flow theo role×device) vẫn giữ 2 cột role cũ — phạm vi UI/characterization (Codex lane), chưa
+> rebuild cho 4 vai trò, đã ghi chú rõ trong file đó. Seed demo (`server/db.js`) vẫn giữ 2 tài khoản
+> (super_admin + executor) — viewer/admin tạo qua API thật khi cần, không seed thêm.
 
 ---
 

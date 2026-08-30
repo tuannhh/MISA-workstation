@@ -129,8 +129,8 @@ test('R050 happy: trả danh sách ngân sách theo kỳ, sắp theo period', as
 test('R050 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/budgets', { auth: false })).status, 401);
 });
-test('R050 forbidden: pr_staff (reports rỗng trong MATRIX) trả 403', async () => {
-  const staff = fixtures.createUser('pr_staff', { username: `budgets_staff_${Date.now()}` });
+test('R050 forbidden: executor (reports rỗng trong MATRIX) trả 403', async () => {
+  const staff = fixtures.createUser('executor', { username: `budgets_staff_${Date.now()}` });
   const staffCookie = (await fixtures.login(baseUrl, { username: staff.username, password: staff.password })).cookie;
   const res = await call('GET', '/api/budgets', { cookie: staffCookie });
   assert.equal(res.status, 403);
@@ -160,8 +160,8 @@ test('R051 invalid: period sai định dạng (không phải YYYY-MM) trả 400'
 test('R051 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/budgets', { auth: false, body: { period: '2026-08', amount: 1 } })).status, 401);
 });
-test('R051 forbidden: pr_staff (reports rỗng trong MATRIX) trả 403', async () => {
-  const staff = fixtures.createUser('pr_staff', { username: `budgets_staff2_${Date.now()}` });
+test('R051 forbidden: executor (reports rỗng trong MATRIX) trả 403', async () => {
+  const staff = fixtures.createUser('executor', { username: `budgets_staff2_${Date.now()}` });
   const staffCookie = (await fixtures.login(baseUrl, { username: staff.username, password: staff.password })).cookie;
   const res = await call('POST', '/api/budgets', { body: { period: '2026-08', amount: 1 }, cookie: staffCookie });
   assert.equal(res.status, 403);

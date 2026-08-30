@@ -13,7 +13,7 @@ const { createResourceStack } = require('../test-support/resource-stack');
 
 let baseUrl;
 let admin; // super_admin — có quyền admin.*
-let staff; // pr_staff — KHÔNG có quyền admin.* (dùng để kiểm forbidden 403)
+let staff; // executor — KHÔNG có quyền admin.* (dùng để kiểm forbidden 403)
 let fixtures;
 
 const resources = createResourceStack();
@@ -39,7 +39,7 @@ before(async () => {
   resources.acquire(started.close);
 
   admin = fixtures.createPrivilegedUser({ username: `auth_admin_${Date.now()}` });
-  staff = fixtures.createUser('pr_staff', { username: `auth_staff_${Date.now()}` });
+  staff = fixtures.createUser('executor', { username: `auth_staff_${Date.now()}` });
 });
 
 after(async () => {
@@ -142,7 +142,7 @@ test('R099 unauthenticated: không cookie trả 401', async () => {
   assert.equal(res.status, 401);
 });
 
-test('R099 forbidden: pr_staff không có quyền admin.view trả 403', async () => {
+test('R099 forbidden: executor không có quyền admin.view trả 403', async () => {
   const cookie = await loginAs(staff);
   const res = await fetch(`${baseUrl}/api/admin/users`, { headers: { cookie } });
   assert.equal(res.status, 403);
@@ -157,7 +157,7 @@ test('R100 happy: tạo user mới hợp lệ trả 200 + id, đăng nhập đư
   const res = await fetch(`${baseUrl}/api/admin/users`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({ username: uname, password: 'pass-1234', full_name: 'R100 New', role: 'pr_staff' }),
+    body: JSON.stringify({ username: uname, password: 'pass-1234', full_name: 'R100 New', role: 'executor' }),
   });
   assert.equal(res.status, 200);
   assert.ok((await res.json()).id);
@@ -173,7 +173,7 @@ test('R100 invalid: thiếu full_name trả 400', async () => {
   const res = await fetch(`${baseUrl}/api/admin/users`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({ username: `r100_bad_${Date.now()}`, password: 'pass-1234', role: 'pr_staff' }),
+    body: JSON.stringify({ username: `r100_bad_${Date.now()}`, password: 'pass-1234', role: 'executor' }),
   });
   assert.equal(res.status, 400);
 });
@@ -183,7 +183,7 @@ test('R100 invalid: username trùng trả 409', async () => {
   const res = await fetch(`${baseUrl}/api/admin/users`, {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({ username: admin.username, password: 'pass-1234', full_name: 'Trùng', role: 'pr_staff' }),
+    body: JSON.stringify({ username: admin.username, password: 'pass-1234', full_name: 'Trùng', role: 'executor' }),
   });
   assert.equal(res.status, 409);
 });
@@ -191,16 +191,16 @@ test('R100 invalid: username trùng trả 409', async () => {
 test('R100 unauthenticated: không cookie trả 401', async () => {
   const res = await fetch(`${baseUrl}/api/admin/users`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'x', password: 'x', full_name: 'x', role: 'pr_staff' }),
+    body: JSON.stringify({ username: 'x', password: 'x', full_name: 'x', role: 'executor' }),
   });
   assert.equal(res.status, 401);
 });
 
-test('R100 forbidden: pr_staff không có quyền admin.create trả 403', async () => {
+test('R100 forbidden: executor không có quyền admin.create trả 403', async () => {
   const cookie = await loginAs(staff);
   const res = await fetch(`${baseUrl}/api/admin/users`, {
     method: 'POST', headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({ username: `r100_forbid_${Date.now()}`, password: 'x', full_name: 'x', role: 'pr_staff' }),
+    body: JSON.stringify({ username: `r100_forbid_${Date.now()}`, password: 'x', full_name: 'x', role: 'executor' }),
   });
   assert.equal(res.status, 403);
 });
@@ -210,7 +210,7 @@ test('R100 forbidden: pr_staff không có quyền admin.create trả 403', async
 // ---------------------------------------------------------------------------
 test('R101 happy: sửa full_name của user khác, GET lại đúng giá trị mới', async () => {
   const cookie = await loginAs(admin);
-  const target = fixtures.createUser('pr_staff', { username: `r101_target_${Date.now()}` });
+  const target = fixtures.createUser('executor', { username: `r101_target_${Date.now()}` });
   const listBefore = await (await fetch(`${baseUrl}/api/admin/users`, { headers: { cookie } })).json();
   const row = listBefore.rows.find((r) => r.username === target.username);
 
@@ -227,7 +227,7 @@ test('R101 happy: sửa full_name của user khác, GET lại đúng giá trị 
 
 test('R101 invalid: role không hợp lệ bị BỎ QUA lặng lẽ (đặc tả hiện trạng, không có lỗi 400)', async () => {
   const cookie = await loginAs(admin);
-  const target = fixtures.createUser('pr_staff', { username: `r101_badrole_${Date.now()}` });
+  const target = fixtures.createUser('executor', { username: `r101_badrole_${Date.now()}` });
   const list = await (await fetch(`${baseUrl}/api/admin/users`, { headers: { cookie } })).json();
   const row = list.rows.find((r) => r.username === target.username);
 
@@ -237,7 +237,7 @@ test('R101 invalid: role không hợp lệ bị BỎ QUA lặng lẽ (đặc t�
   });
   assert.equal(res.status, 200, 'CHARACTERIZATION: routes.js không validate role -> vẫn 200 nhưng role KHÔNG đổi');
   const after2 = await (await fetch(`${baseUrl}/api/admin/users`, { headers: { cookie } })).json();
-  assert.equal(after2.rows.find((r) => r.id === row.id).role, 'pr_staff');
+  assert.equal(after2.rows.find((r) => r.id === row.id).role, 'executor');
 });
 
 test('R101 not-found CHARACTERIZATION: sửa id không tồn tại vẫn trả 200 {ok:true} (không có 404)', async () => {
@@ -257,7 +257,7 @@ test('R101 unauthenticated: không cookie trả 401', async () => {
   assert.equal(res.status, 401);
 });
 
-test('R101 forbidden: pr_staff không có quyền admin.edit trả 403', async () => {
+test('R101 forbidden: executor không có quyền admin.edit trả 403', async () => {
   const cookie = await loginAs(staff);
   const res = await fetch(`${baseUrl}/api/admin/users/1`, {
     method: 'PUT', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ full_name: 'x' }),
@@ -270,7 +270,7 @@ test('R101 forbidden: pr_staff không có quyền admin.edit trả 403', async (
 // ---------------------------------------------------------------------------
 test('R102 happy: xoá user khác thành công, không còn trong danh sách', async () => {
   const cookie = await loginAs(admin);
-  const target = fixtures.createUser('pr_staff', { username: `r102_del_${Date.now()}` });
+  const target = fixtures.createUser('executor', { username: `r102_del_${Date.now()}` });
   const list = await (await fetch(`${baseUrl}/api/admin/users`, { headers: { cookie } })).json();
   const row = list.rows.find((r) => r.username === target.username);
 
@@ -301,7 +301,7 @@ test('R102 unauthenticated: không cookie trả 401', async () => {
   assert.equal(res.status, 401);
 });
 
-test('R102 forbidden: pr_staff không có quyền admin.delete trả 403', async () => {
+test('R102 forbidden: executor không có quyền admin.delete trả 403', async () => {
   const cookie = await loginAs(staff);
   const res = await fetch(`${baseUrl}/api/admin/users/1`, { method: 'DELETE', headers: { cookie } });
   assert.equal(res.status, 403);
@@ -325,7 +325,7 @@ test('R103 unauthenticated: không cookie trả 401', async () => {
   assert.equal(res.status, 401);
 });
 
-test('R103 forbidden: pr_staff không có quyền admin.view trả 403', async () => {
+test('R103 forbidden: executor không có quyền admin.view trả 403', async () => {
   const cookie = await loginAs(staff);
   const res = await fetch(`${baseUrl}/api/admin/audit`, { headers: { cookie } });
   assert.equal(res.status, 403);

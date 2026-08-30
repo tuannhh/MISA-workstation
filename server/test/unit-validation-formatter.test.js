@@ -39,34 +39,34 @@ test.after(() => { fs.rmSync(process.env.DATA_DIR, { recursive: true, force: tru
 
 test('BR-VAL-001/002/003: can() tra đúng ma trận quyền, false khi action/role không có', () => {
   assert.equal(rbac.can('super_admin', 'reports', 'view'), true);
-  assert.equal(rbac.can('pr_staff', 'reports', 'view'), false); // reports: [] cho pr_staff
+  assert.equal(rbac.can('executor', 'reports', 'view'), false); // reports: [] cho executor
   assert.equal(rbac.can('super_admin', 'partners', 'archive'), false); // action lạ
   assert.equal(rbac.can('ghost_role', 'partners', 'view'), false); // role không tồn tại
 });
 
 test('BR-VAL-004: canSeeSensitive() đọc đúng cờ MATRIX theo role, false khi role lạ', () => {
   assert.equal(rbac.canSeeSensitive('super_admin'), true);
-  assert.equal(rbac.canSeeSensitive('pr_staff'), false);
+  assert.equal(rbac.canSeeSensitive('executor'), false);
   assert.equal(rbac.canSeeSensitive('ghost_role'), false);
 });
 
 test('BR-VAL-005: allowedGroups() dùng sensitive_perms override khi là JSON array hợp lệ, lọc nhóm lạ', () => {
-  const user = { role: 'pr_staff', sensitive_perms: JSON.stringify(['contact', 'khong-ton-tai']) };
+  const user = { role: 'executor', sensitive_perms: JSON.stringify(['contact', 'khong-ton-tai']) };
   assert.deepEqual([...rbac.allowedGroups(user)], ['contact']);
 });
 
 test('BR-VAL-006: allowedGroups() fallback theo role khi sensitive_perms null hoặc JSON hỏng', () => {
   assert.deepEqual([...rbac.allowedGroups({ role: 'super_admin', sensitive_perms: null })], rbac.ALL_GROUPS);
-  assert.deepEqual([...rbac.allowedGroups({ role: 'pr_staff', sensitive_perms: 'khong-phai-json' })], []);
+  assert.deepEqual([...rbac.allowedGroups({ role: 'executor', sensitive_perms: 'khong-phai-json' })], []);
 });
 
 test('BR-VAL-007: allowedGroups() trả rỗng khi user null hoặc role không canSeeSensitive', () => {
   assert.equal(rbac.allowedGroups(null).size, 0);
-  assert.equal(rbac.allowedGroups({ role: 'pr_staff' }).size, 0);
+  assert.equal(rbac.allowedGroups({ role: 'executor' }).size, 0);
 });
 
 test('BR-VAL-008: canSeeGroup() bọc đúng allowedGroups()', () => {
-  const user = { role: 'pr_staff', sensitive_perms: JSON.stringify(['finance']) };
+  const user = { role: 'executor', sensitive_perms: JSON.stringify(['finance']) };
   assert.equal(rbac.canSeeGroup(user, 'finance'), true);
   assert.equal(rbac.canSeeGroup(user, 'contact'), false);
 });
@@ -113,7 +113,7 @@ test('BR-VAL-013: maskList() áp maskRecord cho từng bản ghi trong danh sác
 });
 
 test('BR-VAL-014: permissionSummary() nhận string role hoặc user object, canSeeSensitive suy từ số nhóm xem được', () => {
-  const staff = rbac.permissionSummary('pr_staff');
+  const staff = rbac.permissionSummary('executor');
   assert.equal(staff.canSeeSensitive, false);
   assert.deepEqual(staff.modules.reports, []);
   assert.deepEqual(staff.modules.partners, ['view', 'create', 'edit', 'delete']);
@@ -129,7 +129,7 @@ test('BR-VAL-014: permissionSummary() nhận string role hoặc user object, can
 });
 
 test('BR-RBAC-003: resolvePrincipal() ưu tiên principal đã resolve, fallback duy nhất là web session', () => {
-  const fromSession = { id: 1, role: 'pr_staff' };
+  const fromSession = { id: 1, role: 'executor' };
   const fromAdapter = { id: 2, role: 'viewer', provider: 'web-session' };
   assert.equal(auth.resolvePrincipal({ session: { user: fromSession } }), fromSession);
   assert.equal(auth.resolvePrincipal({ principal: fromAdapter, session: { user: fromSession } }), fromAdapter);
@@ -137,7 +137,7 @@ test('BR-RBAC-003: resolvePrincipal() ưu tiên principal đã resolve, fallback
 });
 
 test('BR-RBAC-004: requireAuth()/requirePerm() gắn req.principal nhưng không đổi matrix legacy', () => {
-  const user = { id: 1, role: 'pr_staff' };
+  const user = { id: 1, role: 'executor' };
   const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
   const req = { session: { user } };
   let nextCalls = 0;
@@ -179,8 +179,8 @@ test('BR-VAL-018: senGroups()/senVisible() bọc đúng rbac.allowedGroups + so 
 });
 
 test('BR-VAL-019: canMoney()/maskMoney() che field tiền khi thiếu nhóm org_fee, giữ nguyên khi đủ quyền', () => {
-  const noMoney = { session: { user: { role: 'pr_staff', sensitive_perms: null } } };
-  const hasMoney = { session: { user: { role: 'pr_staff', sensitive_perms: JSON.stringify(['org_fee']) } } };
+  const noMoney = { session: { user: { role: 'executor', sensitive_perms: null } } };
+  const hasMoney = { session: { user: { role: 'executor', sensitive_perms: JSON.stringify(['org_fee']) } } };
   assert.equal(t.canMoney(noMoney), false);
   assert.equal(t.canMoney(hasMoney), true);
 
@@ -212,8 +212,8 @@ test('BR-VAL-021: isValidBudgetPeriod() chỉ nhận đúng dạng YYYY-MM', () 
 });
 
 test('BR-VAL-022: isValidNewUserPayload() bắt buộc đủ username/password/full_name + role hợp lệ', () => {
-  assert.equal(t.isValidNewUserPayload({ username: 'a', password: 'b', full_name: 'c', role: 'pr_staff' }), true);
-  assert.equal(t.isValidNewUserPayload({ username: 'a', password: '', full_name: 'c', role: 'pr_staff' }), false);
+  assert.equal(t.isValidNewUserPayload({ username: 'a', password: 'b', full_name: 'c', role: 'executor' }), true);
+  assert.equal(t.isValidNewUserPayload({ username: 'a', password: '', full_name: 'c', role: 'executor' }), false);
   assert.equal(t.isValidNewUserPayload({ username: 'a', password: 'b', full_name: 'c', role: 'ghost_role' }), false);
 });
 

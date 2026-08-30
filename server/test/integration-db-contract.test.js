@@ -113,12 +113,12 @@ test('DB-CONTRACT-003: unique username được thực thi và dữ liệu round
   const insert = db.prepare(
     'INSERT INTO users (username,password_hash,full_name,role,email) VALUES (?,?,?,?,?)'
   );
-  const id = insert.run(username, 'hash', 'DB Contract', 'pr_staff', `${username}@example.test`).lastInsertRowid;
+  const id = insert.run(username, 'hash', 'DB Contract', 'executor', `${username}@example.test`).lastInsertRowid;
   const row = db.prepare('SELECT id,username,full_name,role FROM users WHERE id=?').get(id);
   assert.equal(row.username, username);
   assert.equal(row.full_name, 'DB Contract');
-  assert.equal(row.role, 'pr_staff');
-  assert.throws(() => insert.run(username, 'hash2', 'Duplicate', 'pr_staff', null), /duplicate|unique|UNIQUE|constraint/i);
+  assert.equal(row.role, 'executor');
+  assert.throws(() => insert.run(username, 'hash2', 'Duplicate', 'executor', null), /duplicate|unique|UNIQUE|constraint/i);
 });
 
 test('DB-CONTRACT-004: app_meta upsert giữ đúng một key và giá trị mới trên cả driver', () => {

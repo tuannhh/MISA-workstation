@@ -3,7 +3,7 @@
 // organizations CRUD, sponsorships, agreements(+files), work-logs(+files), gifts, benefit-usages,
 // association_fees(+remind). Harness/pattern giống server/test/integration-auth-admin.test.js.
 //
-// Ghi chú quan trọng áp dụng cho CẢ FILE: module `partners` trong rbac.js MATRIX cho pr_staff
+// Ghi chú quan trọng áp dụng cho CẢ FILE: module `partners` trong rbac.js MATRIX cho executor
 // đủ quyền view/create/edit/delete GIỐNG super_admin (chỉ khác ở canSeeSensitive/org_fee) — với
 // đúng 2 role hiện có, KHÔNG có role nào "đăng nhập được nhưng bị 403" trên module này. Vì vậy
 // case "forbidden" của mọi route dưới đây = N/A (ghi rõ ở mapping), chỉ còn case

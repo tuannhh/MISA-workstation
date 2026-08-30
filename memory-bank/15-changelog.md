@@ -2231,3 +2231,38 @@ HOÀN TOÀN mọi hành động ghi kể cả create, không có khái niệm ch
 Verify: security 6/6, SQLite 709 pass/8 skip (+17), MySQL 716 pass/1 skip (+17), mapping 145/145
 route + 288 dòng PASS, `verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi UI, không regression
 trên route legacy (R050/R051/R116-R134 vẫn xanh nguyên). **Batch 2/6 (Global còn lại) tiếp theo.**
+
+## Wave 1: batch RBAC-CUTOVER — bỏ hoàn toàn 2-role legacy, chỉ dùng 4 vai trò D13
+
+Batch Contract: `18-g1b-rbac-batch-contract.md#batch-rbac-cutover-2026-08-30`. Owner chốt trực tiếp
+(2026-08-30, ghi đè `02-decisions.md` §G 2026-08-28, xem §G.1 amendment): bỏ hẳn `super_admin`/
+`pr_staff` (2-role legacy chỉ là demo ban đầu), dùng DUY NHẤT 4 vai trò D13 (`viewer/executor/admin/
+super_admin`). 2 quyết định owner kèm theo: `pr_staff`→`executor` là ánh xạ cố định cho user thật;
+`super_admin`/`admin`/`viewer` owner tự gán theo cấp bậc thật từng người (không migrate tự động);
+dữ liệu nghiệp vụ cũ chỉ là demo, không cần backfill `owner_id`.
+
+- `server/rbac.js`: `ROLES`/`MATRIX` đổi từ 2 khoá sang 4 khoá — `pr_staff` RENAME thẳng thành
+  `executor` (giữ nguyên nội dung quyền); thêm mới `MATRIX.admin` (copy `super_admin`) và
+  `MATRIX.viewer` (chỉ `'view'` mọi module, trừ `admin`).
+- Global rename cơ học `pr_staff`→`executor` toàn repo (67 chỗ, 15 file code+test, 1:1 không đổi
+  nội dung).
+- `server/routes.js`: bỏ hẳn `TARGET_RBAC_ROLES`/nhánh dual-branch. Route đã gắn PolicyEngine
+  (`person` + 6 entity Module-admin-only) nay chạy PolicyEngine KHÔNG ĐIỀU KIỆN cho cả 4 vai trò
+  (kể cả `super_admin`); route chưa gắn PolicyEngine dùng `requirePerm`/`rbac.can` — nay đúng cho cả
+  4 vai trò nhờ MATRIX mở rộng, đóng khoảng trống 403-sai cho viewer/admin.
+- **Phát hiện + vá giữa batch:** copy `MATRIX.admin` từ `super_admin` vô tình cấp Admin full quyền
+  module `admin` (tạo/sửa/xoá tài khoản bất kỳ role + xem `audit_log`) — trái D13.1 đã chốt (Admin
+  không quản trị được tài khoản Admin/Super Admin, không xem audit log). Vá bằng guard riêng trong
+  handler `POST/PUT/DELETE /admin/users`/`GET /admin/audit` (MATRIX thô không phân biệt được "quản
+  lý user thường" với "quản lý user đặc quyền"): Admin bị chặn thao tác tài khoản có role hiện tại
+  HOẶC role đích là admin/super_admin (trừ tự sửa chính mình không đổi role); audit log chỉ đúng
+  `role==='super_admin'`.
+- `isValidNewUserPayload`/`POST /api/admin/users` tự động nhận đủ 4 role qua `rbac.ROLES` — đóng
+  khoảng trống "không có cách tạo user role D13 qua API thật".
+- Test mới `server/test/integration-rbac-admin-tier.test.js` (13 test, `D13-031..034`).
+
+Verify: security 6/6, SQLite 722 pass/8 skip (+13), MySQL 729 pass/1 skip (+13), mapping 145/145
+route PASS, `verify-g0.mjs` PASS, `git diff --check` sạch, grep xác nhận 0 chuỗi `pr_staff` còn lại
+trong `server/*.js`. Toàn bộ 709/716 test cũ vẫn pass 100% sau rename (không sửa nội dung assertion).
+**Chưa làm:** 18 entity D13.4a còn lại (batch RBAC-EXP-B2..B6, độc lập với việc bỏ 2-role); UI-flow
+matrix §B.2 (Codex lane); seed demo vẫn 2 tài khoản.

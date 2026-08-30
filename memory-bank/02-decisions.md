@@ -234,5 +234,39 @@ D14.2 chốt human-in-the-loop đúng hướng, nhưng "AI chuẩn bị, ngườ
 Mọi slice pilot mới (Partner Detail, Supplier/Booking/File, ...) ngoài People Detail phải hỏi lại
 owner xác nhận nằm trong ngoại lệ này trước khi implement, không tự suy rộng phạm vi.
 
+### G.1 — Amendment: owner CHỐT bỏ hoàn toàn 2-role, cutover thẳng sang 4 vai trò D13 (2026-08-30)
+
+> **Ghi đè §G ở trên (2026-08-28) cho đúng phần "Phạm vi CẤM".** Owner xác nhận trực tiếp trong
+> hội thoại chat 2026-08-30: *"2 vai trò cũ chỉ là demo trên bản code ban đầu, bạn loại bỏ hoàn
+> toàn đi nhé. Chỉ thực hiện theo 4 vai trò mới."* — đây là quyết định MỚI, rộng hơn ngoại lệ §G
+> (khi đó chỉ cho phép 1 pilot slice chạy song song 2-role, cấm cutover hàng loạt); §G áp dụng cho
+> giai đoạn TRƯỚC quyết định này, không còn hiệu lực hạn chế "không cutover role"/"không bật RBAC v2
+> làm đường mặc định" kể từ đây.
+
+> **2 quyết định cụ thể kèm theo (hỏi trực tiếp, owner trả lời rõ trong cùng phiên):**
+> 1. **Ánh xạ user thật:** `pr_staff` → `executor` là ánh xạ CỐ ĐỊNH, áp dụng cho MỌI user hiện có
+>    role này (đã đổi tên thẳng trong `server/rbac.js` MATRIX, không phải 2 vai trò song song).
+>    `super_admin`/`admin`/`viewer` KHÔNG có ánh xạ tự động 1-1 từ role cũ — owner tự quyết theo
+>    cấp bậc thật của từng người khi gán role qua `POST/PUT /api/admin/users` (ví dụ owner đưa ra:
+>    Ban Tổng Giám đốc → `viewer` — chỉ xem, không có nhu cầu sửa; trưởng nhóm truyền thông đối
+>    ngoại → `admin`; trưởng ban truyền thông → `super_admin`). Không viết migration tự động gán
+>    admin/viewer cho user hiện có — để nguyên role cũ (`super_admin` vẫn hợp lệ, là 1 trong 4 vai
+>    trò mới) cho tới khi owner tự tay đổi.
+> 2. **Dữ liệu nghiệp vụ cũ (owner_id đang NULL trên 13 bảng Direct):** owner xác nhận *"Dữ liệu cũ
+>    chỉ là demo, bạn hoàn toàn có thể xoá được và ghi dữ liệu mới"* — KHÔNG cần backfill owner_id,
+>    không cần giữ tương thích ngược cho dữ liệu demo hiện có.
+
+> **Đã triển khai theo quyết định này (batch RBAC-CUTOVER, 2026-08-30):** `server/rbac.js` ROLES/
+> MATRIX chuyển hẳn sang 4 khoá `viewer/executor/admin/super_admin` (không còn `pr_staff`); toàn bộ
+> repo (code + test, ~67 chỗ) đổi `pr_staff`→`executor`; `server/routes.js` bỏ hẳn nhánh
+> `TARGET_RBAC_ROLES`/dual-branch — mọi route đã gắn PolicyEngine (person + 6 entity Module-admin-
+> only) nay chạy PolicyEngine KHÔNG ĐIỀU KIỆN cho cả 4 vai trò (kể cả `super_admin`, trước đây bị
+> tách riêng vào nhánh "legacy"); route CHƯA gắn PolicyEngine tiếp tục dùng `requirePerm`/`rbac.can`
+> — nay đã đúng cho cả 4 vai trò nhờ MATRIX mở rộng, không còn 403 sai cho `viewer`/`admin` (khoảng
+> trống đã ghi nhận ở batch RBAC-EXP-B1). `isValidNewUserPayload`/`POST /api/admin/users` tự động
+> chấp nhận đủ 4 role (đọc `rbac.ROLES`, không sửa thêm) — đóng khoảng trống "không có cách tạo user
+> role D13 qua API thật" đã nêu ở batch trước. Chi tiết đầy đủ: `04-ROADMAP.md`/`15-changelog.md`
+> execution update cùng ngày.
+
 ## C. Nguyên tắc completion (chống báo cáo ảo)
 Không tuyên bố "đạt 100% MDS/native" khi còn thiếu: owner decision, contract native host, hoặc runtime evidence trên thiết bị/host thật. Unknown ghi `UNVERIFIED`.
