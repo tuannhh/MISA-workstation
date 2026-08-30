@@ -9,6 +9,9 @@
 // BR-AI-008 tự xoá cache require để test riêng nhánh THIẾU key mà không ảnh hưởng các test khác.
 process.env.DB_CLIENT = 'sqlite';
 process.env.GEMINI_API_KEY = 'test-gemini-key-unit';
+// W1.9: BR-AI-007 nay chạm nhánh retry 429/5xx thật (server/gemini.js) — giữ backoff ngắn để test
+// không tốn ~1.5s chờ retry thật mỗi lần chạy suite.
+process.env.GEMINI_RETRY_BASE_DELAY_MS = '5';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -96,6 +99,9 @@ test('BR-AI-006: genImage() throw "AI không tạo được ảnh. Thử lại."
   await assert.rejects(() => gemini.genImage('tạo thiệp'), /AI không tạo được ảnh/);
 });
 
+// Mock trả 429/500 cho MỌI lần gọi (không phải 1 lần) — nhân tiện đặc tả luôn nhánh retry-hết-lượt
+// của W1.9 (server/gemini.js): message cuối cùng ném ra vẫn đúng message Gemini trả (không đổi vì
+// mock trả y hệt mỗi lần retry), fallback "Gemini HTTP <status>" vẫn đúng khi response không JSON.
 test('BR-AI-007: call() throw đúng message Gemini trả về, fallback "Gemini HTTP <status>" khi không có', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => fakeJsonResponse({ error: { message: 'Quota exceeded' } }, { ok: false, status: 429 }));
   await assert.rejects(() => gemini.genText('x'), /Quota exceeded/);

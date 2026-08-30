@@ -269,7 +269,13 @@
 | BR-AI-004 | BR-AI-004 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js groundedSearch() — trích text/chunks(lọc uri)/queries từ groundingMetadata |
 | BR-AI-005 | BR-AI-005 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js genImage() — trích ảnh base64 đầu tiên, gửi kèm refImages |
 | BR-AI-006 | BR-AI-006 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js genImage() — throw "AI không tạo được ảnh. Thử lại." khi không có ảnh |
-| BR-AI-007 | BR-AI-007 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js call() — message lỗi thật hoặc fallback "Gemini HTTP <status>" |
+| BR-AI-007 | BR-AI-007 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js call() — message lỗi thật hoặc fallback "Gemini HTTP <status>"; nhân tiện đặc tả nhánh retry-hết-lượt W1.9 (mock trả 429/500 mọi lần gọi) |
+| F8-capability-map | supportsSamplingParams/buildGenerationConfig | green | server/test/unit-gemini-gateway.test.js | **W1.9:** model ngoài allowlist (`gemini-3.5-flash`) không được gửi kèm temperature/topP/topK — fail-safe mặc định false, không đoán model mới hỗ trợ |
+| F8-retry-429 | retry 429 (phục hồi + hết lượt) | green | server/test/unit-gemini-gateway.test.js | **W1.9:** 429 retry tối đa 3 lần (1 đầu + 2 retry); phục hồi giữa chừng trả kết quả thành công, hết lượt ném message lần cuối |
+| F8-retry-5xx | retry 5xx | green | server/test/unit-gemini-gateway.test.js | **W1.9:** 503 cũng được retry giống 429 (cùng `isRetryableStatus()`) |
+| F8-no-retry-4xx | 4xx không retry | green | server/test/unit-gemini-gateway.test.js | **W1.9:** 400 không phải lỗi transient — ném ngay lần đầu, không lặp lại vô ích |
+| F8-timeout | AbortController timeout | green | server/test/unit-gemini-gateway.test.js | **W1.9:** request treo vượt `GEMINI_TIMEOUT_MS` bị abort trong thời gian ngắn, không tự retry (chỉ retry theo response status) |
+| F8-retry-golden | AI golden (quota/HTTP error, W1.9) | green | server/test/integration-ai-golden.test.js | **W1.9:** đặc tả lại characterization 429 cũ qua HTTP thật — route 502 forward message lần cuối khi hết lượt, hoặc 200 khi phục hồi giữa chừng |
 | BR-AI-008 | BR-AI-008 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js ensureKey() — throw khi thiếu GEMINI_API_KEY + không có file gemini.key |
 | BR-AI-009 | BR-AI-009 | green | server/test/unit-ai-redaction-schema.test.js | gemini.js textOf() — nối part.text, trim 2 đầu, an toàn khi thiếu candidates/parts |
 | BR-AI-010 | BR-AI-010 | green | server/test/unit-ai-redaction-schema.test.js | ai.js VOICE_SCHEMA — required=[transcript,summary] |

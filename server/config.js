@@ -19,5 +19,9 @@ module.exports = {
   GEMINI_TEXT_MODEL: process.env.GEMINI_TEXT_MODEL || 'gemini-3.5-flash',
   GEMINI_IMAGE_MODEL: process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image',
   GEMINI_BASE: 'https://generativelanguage.googleapis.com/v1beta',
+  // F8 (W1.9): timeout mỗi lời gọi Gemini + backoff giữa các lần retry — env-configurable, cùng
+  // quy ước với MYSQL_QUERY_TIMEOUT_MS (mysql-sync.js).
+  GEMINI_TIMEOUT_MS: Number(process.env.GEMINI_TIMEOUT_MS) || 30000,
+  GEMINI_RETRY_BASE_DELAY_MS: Number(process.env.GEMINI_RETRY_BASE_DELAY_MS) || 250,
   hasKey() { return !!readKey(); },
 };

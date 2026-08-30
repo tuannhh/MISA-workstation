@@ -280,11 +280,28 @@ test('AI golden CHARACTERIZATION (malformed): Gemini trả text KHÔNG PHẢI JS
   assert.equal(res.status, 502);
   assert.match((await res.json()).error, /không hợp lệ/);
 });
-test('AI golden CHARACTERIZATION (quota/HTTP error): Gemini trả HTTP 429 kèm error.message -> gemini.call() ném đúng message đó -> route 502 forward nguyên message (không che giấu lý do)', async () => {
-  useQueue(httpError(429, 'Resource has been exhausted (e.g. check quota).'));
+test('AI golden (quota/HTTP error, W1.9): Gemini trả HTTP 429 liên tục -> gemini.call() tự retry (F8) rồi ném message của LẦN THỬ CUỐI -> route 502 forward nguyên message', async () => {
+  // W1.9 thêm retry cho 429/5xx (server/gemini.js) — trước đây gemini.call() ném ngay ở lần gọi
+  // đầu, nay retry tối đa 3 lần nên hàng đợi cần đủ 3 response để không rơi vào nhánh "hàng đợi
+  // rỗng" của useQueue().
+  useQueue(
+    httpError(429, 'Resource has been exhausted (lần 1).'),
+    httpError(429, 'Resource has been exhausted (lần 2).'),
+    httpError(429, 'Resource has been exhausted (lần 3).')
+  );
   const res = await post('/api/ai/event-extract', { text: 'Kế hoạch sự kiện...' });
   assert.equal(res.status, 502);
-  assert.match((await res.json()).error, /exhausted/);
+  assert.match((await res.json()).error, /lần 3/);
+});
+
+test('AI golden (quota/HTTP error, W1.9): Gemini trả 429 rồi 200 ở lần retry -> gemini.call() tự phục hồi, route trả 200 thay vì 502', async () => {
+  useQueue(
+    httpError(429, 'Resource has been exhausted (tạm thời).'),
+    jsonResult({ name: 'Hội nghị phục hồi sau retry', organizer: 'MISA', mode: 'host' })
+  );
+  const res = await post('/api/ai/event-extract', { text: 'Kế hoạch sự kiện...' });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).extracted.name, 'Hội nghị phục hồi sau retry');
 });
 test('AI golden CHARACTERIZATION (timeout/network): fetch() reject (mô phỏng AbortError khi hết thời gian) -> route bắt lỗi -> 502, không crash process', async () => {
   global.fetch = async () => { const e = new Error('The operation was aborted'); e.name = 'AbortError'; throw e; };

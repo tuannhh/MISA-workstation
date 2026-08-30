@@ -69,6 +69,8 @@ Khác kiến trúc Railway cũ (1 volume bền `/data` cho cả SQLite file + up
 | `GEMINI_API_KEY` | chỉ nếu muốn bật AI | fallback file `data/gemini.key` | Bật toàn bộ 13 lời gọi Gemini (voice/thiệp/award/event/monitor) — không đặt = mọi route AI trả lỗi `Chưa cấu hình GEMINI_API_KEY`, không crash app | `server/config.js:5-15` |
 | `GEMINI_TEXT_MODEL` | không | `gemini-3.5-flash` | Pin theo D10 — chỉ đổi sau golden eval | `server/config.js:19` |
 | `GEMINI_IMAGE_MODEL` | không | `gemini-3.1-flash-image` | | `server/config.js:20` |
+| `GEMINI_TIMEOUT_MS` | không | `30000` | **W1.9:** timeout mỗi lời gọi Gemini qua `AbortController`, cùng quy ước `MYSQL_QUERY_TIMEOUT_MS` | `server/config.js` |
+| `GEMINI_RETRY_BASE_DELAY_MS` | không | `250` | **W1.9:** backoff giữa các lần retry 429/5xx (`delay = giá_trị * lần_thử`), tối đa 3 lần thử | `server/config.js` |
 | `SMTP_HOST` | chỉ nếu muốn bật email nhắc | — | Có `SMTP_HOST`+`SMTP_USER` mới bật `mailer` | `server/mailer.js:10-11` |
 | `SMTP_PORT` | không | `587` | | `mailer.js:11` |
 | `SMTP_USER` / `SMTP_PASS` | cùng `SMTP_HOST` | — | Đăng nhập SMTP (khuyến nghị Brevo, xem `DEPLOY.md`) | `mailer.js:11` |

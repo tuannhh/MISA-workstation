@@ -51,10 +51,11 @@ Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật c
 - **Bẫy:** đường SQLite (`node:sqlite`) **không** qua Atomics → dev thấy nhanh, prod MySQL serialize. Benchmark BẮT BUỘC pin `DB_CLIENT=mysql`.
 - Fix: async repository seam cho code mới; migrate theo slice; hạ Cloud Run `--concurrency` chỉ là mitigation tạm có số đo.
 
-### F8 — Gemini reliability + sampling params deprecated · **Medium / B**
+### F8 — Gemini reliability + sampling params deprecated · **Medium / B — CLOSED phần reliability+capability-map (W1.9, 2026-08-30)**
 - `server/gemini.js:8-21` `call()` dùng fetch trần: không timeout/AbortController, không retry, không circuit breaker (trớ trêu: `monitor.js` có AbortController, `gemini.js` không).
 - `:29,38,49` gửi `temperature`; config pin `gemini-3.5-flash` (`server/config.js:19`). Gemini release note 2026-07-21 (Codex xác minh URL changelog): `temperature/top_p/top_k` **deprecated** — nhưng **chưa có live proof 3.6 luôn trả HTTP 400** (có thể bị bỏ qua âm thầm).
 - Fix: aiGateway mỏng (timeout/retry/kill-switch/usage) + capability-map `supportsSamplingParams` để strip params theo model; giữ pin 3.5 tới khi golden eval thắng.
+- **W1.9 (2026-08-30) đã sửa:** `call()` có `AbortController` timeout (`GEMINI_TIMEOUT_MS`, mặc định 30s); retry tối đa 3 lần cho 429/5xx (backoff `GEMINI_RETRY_BASE_DELAY_MS * attempt`, KHÔNG retry lỗi 4xx khác/timeout); `supportsSamplingParams(model)`/`buildGenerationConfig()` strip temperature/top_p/top_k cho model ngoài allowlist (`gemini-3.5-flash` hiện tại) — fail-safe mặc định false khi đổi model (W2.6) mà quên cập nhật allowlist. **Chưa làm (không thuộc batch này):** circuit breaker, usage/cost tracking, kill-switch `AI_DISABLED` + data-egress enforcement (thuộc `W1.AI-POLICY`, F4).
 
 ### F9 — Attachment thiếu cột phân loại · **Medium / A / browser-production**
 - `server/db.js:85-96` schema attachment chỉ có `owner_type/owner_id/kind/filename/mime`, không có `sensitive_group`. Event lấy `kind` từ query string (`:1129-1133`) — không được dùng làm quyết định security.

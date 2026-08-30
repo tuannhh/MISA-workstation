@@ -1872,3 +1872,47 @@ Verify: `test:security` 6/6, `test:integration:sqlite` 649 pass/8 skip, `test:in
 gate1-mapping` PASS (257 mapped rows, known-red còn lại N1/N2 — không liên quan F2), `verify-g0.mjs`
 PASS, `verify-g0-selftest` 6/6, `git diff --check` sạch. Không đổi UI (Codex lane), không đổi RBAC
 pilot slice nào — batch này độc lập hoàn toàn với D13/PolicyEngine.
+
+## Wave 1 nhánh security: batch W1.9 aiGateway reliability (F8 — timeout/retry/capability-map)
+
+Tiếp tục nhánh W1 security (độc lập RBAC, không cần owner quyết định gì thêm — roadmap ghi rõ
+"không cần O8"): implement F8 (Gemini reliability), phần còn lại của aiGateway sau W1.7.
+
+- `server/gemini.js` `call()`: thêm `AbortController` timeout mỗi lời gọi (`GEMINI_TIMEOUT_MS`,
+  mặc định 30s) — trước đây `fetch` trần không timeout, có thể treo vô thời hạn nếu Gemini không
+  phản hồi. Thêm retry tối đa 3 lần (1 lần đầu + 2 retry) CHỈ cho HTTP 429 (rate-limit) và 5xx (lỗi
+  phía Gemini) — backoff `GEMINI_RETRY_BASE_DELAY_MS * lần_thử` (mặc định 250ms). KHÔNG retry lỗi
+  4xx khác (400/403...) vì sẽ chỉ lặp lại đúng lỗi đó vô ích; KHÔNG tự retry lỗi mạng/timeout
+  (fetch reject, kể cả AbortError) vì batch này chỉ retry dựa trên response status đã nhận được,
+  không đoán một lỗi network là transient.
+- Capability-map (F8 phần "sampling params deprecated"): `supportsSamplingParams(model)` — allowlist
+  hiện chỉ có `gemini-3.5-flash` (model pin hiện tại); `buildGenerationConfig(model, config)` strip
+  `temperature`/`topP`/`topK` (và alias snake_case) khỏi `generationConfig` cho model ngoài
+  allowlist, giữ nguyên field khác (`responseMimeType`/`responseSchema` không phải sampling param).
+  `genText`/`genJSON`/`groundedSearch` đi qua hàm này; `genImage` không đổi (chưa từng gửi sampling
+  params). Vì model pin hiện tại NẰM TRONG allowlist, hành vi hiện có không đổi — capability-map chỉ
+  có tác dụng khi W2.6 đổi model mà quên cập nhật allowlist (fail-safe mặc định false, không đoán
+  model mới hỗ trợ).
+- `server/config.js` thêm `GEMINI_TIMEOUT_MS`/`GEMINI_RETRY_BASE_DELAY_MS` (env-configurable, cùng
+  quy ước `MYSQL_QUERY_TIMEOUT_MS`).
+- File test mới `server/test/unit-gemini-gateway.test.js` (8 test, thuần module không HTTP/DB):
+  capability-map (2 test), retry 429 phục hồi giữa chừng + hết lượt (2 test), retry 5xx (1 test),
+  4xx không retry (1 test), timeout/AbortController (1 test — set `GEMINI_TIMEOUT_MS=50` qua env
+  trước require để không chờ default 30s thật).
+- Test cũ cập nhật để khớp hành vi mới (không phải bug, là thay đổi hành vi có chủ đích của batch
+  này): `integration-ai-golden.test.js` nhánh 429 cũ (1 response, ném ngay) tách thành 2 test — hết
+  lượt retry (3 response 429 liên tục, route vẫn 502 với message của lần thử cuối) và phục hồi giữa
+  chừng (429 rồi 200, route trả 200 thay vì 502). `unit-ai-redaction-schema.test.js` BR-AI-007 (mock
+  trả 429/500 cho MỌI lần gọi, không phải 1 lần) nhân tiện đặc tả đúng nhánh retry-hết-lượt — thêm
+  comment giải thích + `GEMINI_RETRY_BASE_DELAY_MS=5` ở đầu file để backoff thật không tốn ~1.5s mỗi
+  lần chạy suite (production vẫn dùng default 250ms qua env, chỉ test set nhanh hơn).
+- `memory-bank/01-audit-findings.md` §F8 đánh dấu "CLOSED phần reliability+capability-map" (circuit
+  breaker/usage-tracking/data-egress vẫn chưa làm, không thuộc batch này — data-egress + kill-switch
+  `AI_DISABLED` thuộc `W1.AI-POLICY`/F4). `13-deployment-runbook.md` thêm 2 hàng env mới.
+  `gate1-test-mapping.md` thêm 6 dòng mới (F8-capability-map/F8-retry-429/F8-retry-5xx/
+  F8-no-retry-4xx/F8-timeout/F8-retry-golden) + cập nhật ghi chú BR-AI-007.
+
+Verify: `test:security` 6/6, `test:integration:sqlite` 658 pass/8 skip, `test:integration:mysql`
+665 pass/1 skip (+9 so với trước batch), `test:verify-gate1-mapping` PASS (263 mapped rows),
+`verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi UI (Codex lane), không đổi RBAC pilot slice
+nào — batch này độc lập hoàn toàn với D13/PolicyEngine, chỉ chạm tầng Gemini gateway.
