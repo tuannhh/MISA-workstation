@@ -178,15 +178,16 @@ async function main() {
   const { createResourceStack } = require(path.join(root, 'server/test-support/resource-stack.js'));
   const resources = createResourceStack();
 
-  // Đúng pattern acquire-trước-khi-tạo (server/test/integration-ai.test.js): setupTestDataDir()
-  // PHẢI acquire trước createMysqlTestDb(), để UPLOAD_DIR (server/db.js: DATA_DIR/uploads) trỏ vào
-  // thư mục tạm thay vì data/uploads/ thật của repo — Codex phát hiện bản trước rò 4 file dummy
-  // thật vào đây vì thiếu bước này (quarantine tại data/uploads/.quarantine-perf-baseline-leak/).
-  resources.acquire(dbHarness.setupTestDataDir().teardown);
-  const dbName = await dbHarness.createMysqlTestDb();
-  resources.acquire(() => dbHarness.dropMysqlTestDb(dbName));
-
   try {
+    // Đúng pattern acquire-trước-khi-tạo (server/test/integration-ai.test.js): setupTestDataDir()
+    // PHẢI acquire trước createMysqlTestDb(), để UPLOAD_DIR (server/db.js: DATA_DIR/uploads) trỏ
+    // vào thư mục tạm thay vì data/uploads/ thật của repo. CẢ HAI dòng này PHẢI nằm trong try —
+    // Codex re-audit round 2 phát hiện đặt ngoài try/finally khiến DATA_DIR tạm rò khi
+    // createMysqlTestDb() throw giữa chừng (vd bootstrap MySQL lỗi), vì finally không chạy.
+    resources.acquire(dbHarness.setupTestDataDir().teardown);
+    const dbName = await dbHarness.createMysqlTestDb();
+    resources.acquire(() => dbHarness.dropMysqlTestDb(dbName));
+
     const dbModule = require(path.join(root, 'server/db.js'));
     const { db } = dbModule;
     resources.acquire(dbModule.closeDb);
