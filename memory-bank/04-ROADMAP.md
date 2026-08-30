@@ -104,6 +104,16 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 
 > **Execution update — 2026-08-27:** Bundle A jobs (`99ddbec`), AI golden (`6a3ca0e` + Codex remediation hiện tại), DB contract (`integration-db-contract.test.js`) và SSRF target G1B.4 đã có evidence xanh cả hai driver. Latest full regression: SQLite 586 pass/7 skip, MySQL 592 pass/1 skip, security 6/6, G0 + mapping verifier PASS. G1A.4/G1A.5/G1A.7/G1A.8 là **implemented/green, chờ Bundle A audit closure**; G1B.1/.2/.3/.5/.6 vẫn mở. Không chuyển sang Wave 1 implementation chỉ vì test characterization đã xanh.
 
+> **Execution update — 2026-08-30 (soát lại toàn bộ Exit gate G1 sau G1.8):** (a) G1A.9 mapping
+> 145/145 — PASS. (b) G1A GREEN đầy đủ — **G1A.1/.2/.3/.4/.5/.7/.8/.9/.10 đều XONG/CLOSED**; phần
+> còn lại DUY NHẤT là **G1A.6 (UI characterization smoke) — thuộc lane Codex** theo phân công owner
+> (`CLAUDE.md` #6), Claude không tự làm. (c) G1B mọi RED có allowlist hợp lệ — G1B.1/.2/.3/.4/.5/.6
+> đều đã Codex ACCEPT Bundle A 2026-08-28, allowlist hợp lệ, không unexpected failure. (d) G1C khung
+> đã định nghĩa — XONG (G1C.1, 2026-08-30). (e) G1.8 có artifact — XONG (2026-08-30, xem trên).
+> **Kết luận: toàn bộ phần việc thuộc trách nhiệm Claude trong Exit gate G1 đã xong; chỉ còn G1A.6
+> (Codex) là chưa có evidence.** Chưa tự ý tuyên bố "Gate 1 CLOSED" — để owner/Codex xác nhận có
+> coi G1A.6 là điều kiện cứng trước khi mở Wave 1 hay không.
+
 ### G1B — Target RBAC v2 + security suite (KNOWN-RED, allowlist) — spec-first cho phần VIẾT LẠI (D13/F1/F2/F3/F9)
 | # | Task | Evidence Contract |
 |---|---|---|
