@@ -196,9 +196,9 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 | W2.3 | **ACCEPTANCE gate F7:** PASS khi đạt SLO tại peak trên topology production-like. **Ngưỡng SLO + peak + topology + ngân sách instance do DevOps MISA chốt (O5→DevOps)** — Claude dựng harness đo + báo cáo, không tự đặt ngưỡng release. Nếu chưa async hóa: mitigation chỉ chấp nhận khi **đo lại vẫn PASS** + owner/DevOps + expiry + rollback. "Có async-plan" ≠ exit | test / — / **PASS bắt buộc, plan-only không đủ** |
 | W2.4 | Nếu W2.3 fail: async repository pilot theo slice; benchmark lại sau mỗi slice; xóa mitigation khi đạt SLO | code+test / — / — |
 | W2.5 | Host-adapter interface + fake browser + fake-native provider, chung contract test. **Exit = contract-ready only**; production provider `UNVERIFIED` tới O3 | code+test / native / fail-closed nếu chỉ 1 adapter |
-| W2.6 | **Gemini eval/model migration (O6 duyệt $200):** corpus 60-100 ca tổng hợp, ≥3 repeat/candidate, **hard cap tổng chi phí $200**, threshold quality/schema-validity/latency/cost; canary+rollback; giữ pin `gemini-3.5-flash` nếu candidate không thắng rõ | test / — / cần theo dõi ngân sách $200 |
+| W2.6 | **Gemini eval/model migration (O6 duyệt $200):** corpus 60-100 ca tổng hợp, ≥3 repeat/candidate, **hard cap tổng chi phí $200**, threshold quality/schema-validity/latency/cost; canary+rollback; giữ pin `gemini-3.5-flash` nếu candidate không thắng rõ | test / **XONG — Claude 2026-08-30, kết luận GIỮ PIN** / corpus 60 ca thật x2 model x3 repeat = 360 call thật, chi phí $4.456/$200; candidate `gemini-3.7-flash` KHÔNG thắng rõ (regression event-extract + latency tail), xem execution update |
 
-**Exit gate W2:** shared layer swap được qua contract test; **W2.3 PASS thật** (đo lại, ngưỡng DevOps chốt); W2.5 contract-ready (2 fake provider); W2.6 có kết luận giữ/đổi model trong ngân sách $200.
+**Exit gate W2:** shared layer swap được qua contract test; **W2.3 PASS thật** (đo lại, ngưỡng DevOps chốt); W2.5 contract-ready (2 fake provider); **W2.6 XONG — kết luận GIỮ PIN `gemini-3.5-flash`** (candidate `gemini-3.7-flash` không thắng rõ, trong ngân sách $4.456/$200).
 
 > **Execution update — 2026-08-30 (W2.1 chuẩn hóa error envelope — phần nền tảng, XONG):** module mới
 > `server/error-contract.js` — `requestIdMiddleware` gắn `req.requestId` (dạng `req_<24-hex>`) +
@@ -267,6 +267,41 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > cho `isDbConstraintError`/`isUploadParseError` ở batch này (đã phủ gián tiếp qua ~40+ route
 > characterization test hiện có dựa vào cơ chế NOT NULL→400 + R136/R141); có thể bổ sung unit test
 > trực tiếp cho 2 hàm này như việc nhỏ sau, không phải exit criterion.
+
+> **Execution update — 2026-08-30 (W2.6 Gemini eval/model migration, XONG — kết luận GIỮ PIN):**
+> owner xác nhận candidate so sánh là `gemini-3.7-flash` (mới nhất tại thời điểm làm app, thay cho
+> pin `gemini-3.5-flash`) — xác nhận model id hợp lệ bằng 1 lệnh gọi thật trước khi chạy corpus.
+> Harness mới `scripts/w26-eval-run.mjs` (+ corpus `scripts/w26-eval-corpus.mjs`, phân tích
+> `scripts/w26-eval-analyze.mjs`) — gọi Gemini API THẬT (không mock), KHÔNG dùng dữ liệu thật (đúng
+> O6): corpus 60 ca tổng hợp x 4 nhóm (award-extract/event-extract/award-advice/card-text, che 4/6
+> route Gemini text — 2 route còn lại là voice-extract cần audio thật và card-image dùng model ảnh
+> riêng, ngoài phạm vi so sánh model text) x 2 model x 3 repeat = **360 lệnh gọi thật**. Chạy pilot 8
+> call trước để đo chi phí thật ($0.0094/call) trước khi chạy full batch — an toàn trong ngân sách.
+> Gặp 1 lỗi mạng thật (`ECONNRESET`) giữa chừng làm crash lần chạy đầu — sửa harness để network
+> error retry được (trước đó chỉ retry theo HTTP status) + thêm cơ chế resume (bỏ qua tổ hợp
+> case/model/rep đã có kết quả `ok=true` trong file cũ, không gọi lại/không tốn thêm tiền) — chạy
+> lại hoàn tất đủ 360/360, không mất tiến độ.
+>
+> **Kết quả:** `gemini-3.5-flash` (pin): schema-validity 100% (180/180), field-accuracy TB 99.9%,
+> latency p50=6.6s/p90=13.3s/max=26s, chi phí $2.865. `gemini-3.7-flash` (candidate): schema-validity
+> 99.4% (179/180), field-accuracy TB 99.0%, latency p50=7.96s/p90=16.9s/**max=70.7s**, chi phí $1.591
+> (rẻ hơn ~45%). Theo nhóm: candidate THUA rõ ở `event-extract` (schema 98% vs 100%, acc 96% vs
+> 100%, latency p50 8.5s vs 3.6s) — đào sâu phát hiện **1 ca (`EVT-01` rep2) mất 70.7s VÀ JSON hỏng
+> luôn (schema invalid)**, cho thấy đuôi latency dài tương quan với rủi ro output hỏng, không chỉ là
+> chậm đơn thuần. 3 nhóm còn lại (`award-extract`/`award-advice`/`card-text`) tương đương hoặc
+> candidate nhỉnh hơn chút. **Chi phí thật toàn bộ eval: $4.456/$200** (ngân sách O6 còn dư
+> $195.544, không dùng hết vì flash-tier rẻ hơn nhiều so với mức ước lượng thận trọng dùng để chặn
+> ngân sách khi chạy — `$2/$8` mỗi 1M token input/output — đặt cao hơn hẳn giá thật để không đánh
+> giá thấp rủi ro vượt ngân sách).
+>
+> **Quyết định (theo đúng D10 "chỉ đổi model sau golden eval... candidate không thắng rõ thì giữ
+> pin"):** candidate rẻ hơn nhưng KHÔNG thắng rõ — có regression chất lượng thật ở 1/4 nhóm nghiệp
+> vụ kèm rủi ro đuôi latency/output hỏng chưa từng thấy ở pin hiện tại. **GIỮ NGUYÊN pin
+> `gemini-3.5-flash`**, không đổi `cfg.GEMINI_TEXT_MODEL`. Không cần canary/rollback (không có gì để
+> rollback vì không đổi production). Dữ liệu thô 360 dòng lưu `scripts/.w26-eval-out/
+> results-full.jsonl` làm evidence, đã commit cùng harness để có thể chạy lại đối chiếu khi có
+> candidate mới hoặc khi `gemini-3.7-flash` cải thiện đuôi latency. Không đổi UI, không đụng RBAC v2
+> pilot, không tốn ngân sách ngoài batch này.
 
 ---
 

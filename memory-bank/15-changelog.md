@@ -2103,3 +2103,41 @@ thật), `test:verify-gate1-mapping` PASS (274 mapped rows), `verify-g0.mjs` PAS
 characterization test dựa vào NOT NULL→400 + R136/R141 tự sửa) — có thể bổ sung như việc nhỏ sau,
 không phải exit criterion. Không đổi UI (Codex lane), không đụng RBAC v2 pilot. **W2.1 nay đã đóng
 hẳn (không còn nợ kỹ thuật).**
+
+## Wave 2: batch W2.6 Gemini eval/model migration (O6 $200 — XONG, kết luận GIỮ PIN)
+
+Batch Contract: golden eval THẬT (gọi Gemini API thật, không mock) so sánh pin `gemini-3.5-flash`
+với candidate do owner chỉ định `gemini-3.7-flash` — corpus 60-100 ca tổng hợp (không dữ liệu
+thật), ≥3 repeat/candidate, hard cap ngân sách $200 (O6 đã duyệt), quyết định giữ/đổi model dựa
+trên threshold quality/schema-validity/latency/cost.
+
+- Xác nhận `gemini-3.7-flash` là model id hợp lệ bằng 1 lệnh gọi thật trước khi cam kết chạy corpus.
+- Corpus 60 ca tổng hợp (`scripts/w26-eval-corpus.mjs`) x 4 nhóm nghiệp vụ (award-extract/
+  event-extract/award-advice/card-text — 15 ca/nhóm, mỗi ca ràng buộc sẵn ground-truth để chấm điểm
+  tự động, không cần người chấm tay) — che 4/6 route Gemini text hiện có (2 route còn lại:
+  voice-extract cần input audio thật, card-image dùng model ảnh riêng — ngoài phạm vi so sánh model
+  text của batch này).
+- Harness `scripts/w26-eval-run.mjs`: gọi trực tiếp Gemini API (không qua `gemini.js` vì cần đổi
+  model linh hoạt trong 1 lần chạy), retry transient (429/5xx + lỗi mạng), tự dừng cứng nếu chi phí
+  ước tính chạm ngân sách, ghi từng dòng JSONL ngay khi có (an toàn khi bị ngắt giữa chừng) + cơ chế
+  resume (bỏ qua tổ hợp case/model/rep đã xong, không gọi/tính tiền lại).
+- Chạy pilot 8 call đo chi phí thật ($0.0094/call trung bình) trước khi cam kết full batch (an toàn
+  rõ ràng trong $200). Full batch: 60 ca x 2 model x 3 repeat = 360 call thật. Gặp 1 lần
+  `ECONNRESET` (lỗi mạng thật) làm crash giữa chừng — sửa harness retry network error + resume, chạy
+  lại hoàn tất đủ 360/360 không mất tiến độ, không tốn thêm tiền cho phần đã xong.
+- **Kết quả:** pin `gemini-3.5-flash` — schema-validity 100%, field-accuracy TB 99.9%, latency
+  p50=6.6s/p90=13.3s/max=26s, chi phí $2.865. Candidate `gemini-3.7-flash` — schema-validity 99.4%,
+  field-accuracy TB 99.0%, latency p50=7.96s/p90=16.9s/**max=70.7s**, chi phí $1.591 (rẻ hơn ~45%).
+  Candidate THUA rõ ở nhóm `event-extract` (schema 98% vs 100%, acc 96% vs 100%, latency p50 8.5s
+  vs 3.6s) — 1 ca cụ thể (`EVT-01` rep2) mất 70.7s VÀ JSON hỏng luôn, cho thấy đuôi latency dài
+  tương quan với rủi ro output hỏng, không chỉ chậm đơn thuần.
+- **Quyết định (đúng D10 "candidate không thắng rõ thì giữ pin"):** candidate rẻ hơn nhưng KHÔNG
+  thắng rõ (regression thật + rủi ro tail latency/output hỏng chưa từng thấy ở pin). **GIỮ NGUYÊN
+  pin `gemini-3.5-flash`**, không đổi `cfg.GEMINI_TEXT_MODEL`, không cần canary/rollback (không đổi
+  production). Chi phí thật toàn batch: **$4.456/$200** (ngân sách O6 còn dư $195.544).
+- Evidence: `scripts/w26-eval-corpus.mjs`, `scripts/w26-eval-run.mjs`, `scripts/w26-eval-analyze.mjs`
+  + dữ liệu thô 360 dòng `scripts/.w26-eval-out/results-full.jsonl` — đã commit để chạy lại đối
+  chiếu khi có candidate mới hoặc `gemini-3.7-flash` cải thiện đuôi latency.
+
+Không đổi UI (Codex lane), không đụng RBAC v2 pilot, không tốn ngân sách ngoài batch này. **W2.6 nay
+đã đóng — Exit gate W2 hoàn tất phần model migration.**
