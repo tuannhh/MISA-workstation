@@ -76,3 +76,16 @@ Chỉ **G0.7 (F10 secret) PASS** ở round 1.
 - Verify lại: `git diff --check` sạch, `npm run test:security` 6/6 PASS.
 
 **Điều kiện đóng Gate 0 còn lại:** (1) Codex hoàn thành C0.3 (rebuild Section B/C của `08-permission-matrix.md`); (2) Codex round-4 verify tập trung xác nhận C0.1-C0.8 đạt (không phải audit lại toàn dự án). **CHƯA mở Gate 1** cho tới khi cả 2 điều kiện trên xong.
+
+## Cập nhật 2026-08-30 (đọc phần này trước nếu bạn là session mới — phần trên đã cũ)
+
+Từ đoạn "CHƯA mở Gate 1" ở trên tới nay, đã xảy ra (chi tiết đầy đủ + `file:line` xem `04-ROADMAP.md`, `15-changelog.md`, `18-g1b-rbac-batch-contract.md`, `gate1-test-mapping.md`):
+
+- **Gate 0 CLOSED**, **Gate 1 CLOSED** (đủ 5 exit condition, xem `15-changelog.md`). Wave 1 đã bắt đầu.
+- **Wave 1 — RBAC pilot "People Detail end-to-end" (read/write/file) CLOSED, Codex đã ACCEPT** (2026-08-30). 3 batch commit `ace15fc` (write) → `b291b41` (file, `RBAC-PILOT3-people-file`). Model D13 RBAC v2 áp dụng qua `server/policy-engine.js` + `server/policy-service.js`, chỉ trên entity `person`; legacy 2-role (`super_admin`/`pr_staff`) giữ nguyên song song, phân biệt bằng `TARGET_RBAC_ROLES` (`routes.js`). Codex risk note: `R034` (upload với person ID không tồn tại) là hành vi legacy pre-existing, không sửa trong pilot để tránh scope creep.
+  - **Việc CHƯA làm và ĐANG BỊ CHẶN:** mở rộng pilot RBAC sang money/supplier/booking/event **cần owner xác nhận lại trước** theo `02-decisions.md` §G (owner-approved exception chỉ cho phép đúng 1 slice pilot). Đừng tự ý mở rộng — hỏi owner trước.
+- **Wave 1 — nhánh security độc lập** (không bị §G chặn, chạy song song với pilot RBAC):
+  - **W1.7 session hardening (F2) XONG** — commit `70e9f93`: session regenerate chống fixation, rate-limit login, fail-fast nếu thiếu `SESSION_SECRET` khi `NODE_ENV=production`, secure cookie (cần `app.set('trust proxy',1)` + header `X-Forwarded-Proto` từ reverse proxy thật, xem `server/app.js`), audit `LOGIN_FAILED`/`LOGOUT`.
+  - **W1.9 aiGateway reliability (F8) XONG** — commit `e966412`: timeout qua `AbortController` (`GEMINI_TIMEOUT_MS`, mặc định 30000ms), retry chỉ khi 429/5xx (không retry 4xx) với backoff tuyến tính (`GEMINI_RETRY_BASE_DELAY_MS`, mặc định 250ms, tối đa 3 lần), capability-map sampling-params (`supportsSamplingParams`/`buildGenerationConfig` trong `server/gemini.js`) — hiện chưa đổi hành vi vì chỉ có `gemini-3.5-flash` trong allowlist, chuẩn bị cho W2.6 khi đổi model.
+  - **Tiếp theo, chưa làm: W1.AI-POLICY (F4 — data-egress gateway)** — tier/purpose allowlist, redact/minimize, retention/delete, egress audit không log payload, kill-switch `AI_DISABLED`, phủ đủ 12 luồng egress + SMTP theo `06-threat-model.md` §D. Đây là hạng mục tiếp theo không cần chờ owner xác nhận gì thêm.
+- Kỷ luật đã giữ xuyên suốt mọi batch trên, PHẢI tiếp tục giữ: test cả 2 driver (SQLite + MySQL) trước mỗi commit, full regression xanh trước commit (`npm run test:security`, `test:integration:sqlite`, `test:integration:mysql`, `test:verify-gate1-mapping`, `scripts/verify-g0.mjs`), `git diff --check` sạch, loại `.DS_Store` khỏi mọi `git add`, không đụng UI/MDS (lane Codex), Batch Contract khoá trước khi code (xem `18-g1b-rbac-batch-contract.md` để theo đúng format).
