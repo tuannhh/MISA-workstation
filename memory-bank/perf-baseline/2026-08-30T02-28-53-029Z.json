@@ -1,0 +1,264 @@
+{
+  "generatedAt": "2026-08-30T02:28:53.029Z",
+  "gitSha": "2b7076b1e2a52487effbf893a86e26b555fdfde6",
+  "engine": {
+    "dbClient": "mysql",
+    "note": "server/mysql-sync.js: mọi query MySQL đi qua Atomics.wait trên main thread (F7) — không phải async driver thường."
+  },
+  "pool": {
+    "note": "server/mysql-worker.js:25 dùng mysql.createConnection() — ĐÚNG 1 connection duy nhất trong worker thread, KHÔNG phải connection pool. Mọi query serialize qua đúng 1 connection này, cộng thêm Atomics.wait chặn main thread khi chờ kết quả."
+  },
+  "topology": {
+    "note": "Đo trên 1 instance local Docker Compose (docker-compose.yml, MySQL 8.4) — KHÔNG đại diện Cloud Run multi-replica/production. Ngưỡng SLO + topology production do DevOps chốt ở W2.3, không tự suy ra từ số đo này.",
+    "mysqlImage": "mysql:8.4 (docker-compose.yml)"
+  },
+  "hardware": {
+    "cpuCount": 8,
+    "cpuModel": "Apple M1 Pro",
+    "totalMemGB": 16,
+    "platform": "darwin 24.6.0"
+  },
+  "cardinality": {
+    "organizations": 50,
+    "people": 200,
+    "interactions": 500,
+    "attachments": 1
+  },
+  "workloadMix": [
+    {
+      "name": "read",
+      "weightPercent": 55
+    },
+    {
+      "name": "write",
+      "weightPercent": 15
+    },
+    {
+      "name": "report",
+      "weightPercent": 20
+    },
+    {
+      "name": "file",
+      "weightPercent": 10
+    }
+  ],
+  "warmupMs": 3000,
+  "sustainMs": 8000,
+  "results": [
+    {
+      "concurrency": 1,
+      "durationMs": 8021,
+      "totalRequests": 349,
+      "throughputRps": 43.51,
+      "errorRate": 0,
+      "latency": {
+        "p50Ms": 6.31,
+        "p95Ms": 96.71,
+        "p99Ms": 186.01
+      },
+      "byCategory": {
+        "read": {
+          "count": 198,
+          "p50Ms": 5.27,
+          "p95Ms": 13.65,
+          "p99Ms": 26.03
+        },
+        "write": {
+          "count": 40,
+          "p50Ms": 7.29,
+          "p95Ms": 14.48,
+          "p99Ms": 25.18
+        },
+        "report": {
+          "count": 67,
+          "p50Ms": 72.26,
+          "p95Ms": 186.01,
+          "p99Ms": 497.86
+        },
+        "file": {
+          "count": 44,
+          "p50Ms": 2.9,
+          "p95Ms": 8.76,
+          "p99Ms": 11.8
+        }
+      },
+      "eventLoopLag": {
+        "p50Ms": 14.12,
+        "p99Ms": 236.98,
+        "maxMs": 497.81
+      }
+    },
+    {
+      "concurrency": 5,
+      "durationMs": 8034,
+      "totalRequests": 280,
+      "throughputRps": 34.85,
+      "errorRate": 0,
+      "latency": {
+        "p50Ms": 118.26,
+        "p95Ms": 369.9,
+        "p99Ms": 465.32
+      },
+      "byCategory": {
+        "read": {
+          "count": 159,
+          "p50Ms": 96.41,
+          "p95Ms": 327.05,
+          "p99Ms": 430.53
+        },
+        "write": {
+          "count": 49,
+          "p50Ms": 61.92,
+          "p95Ms": 369.23,
+          "p99Ms": 438.38
+        },
+        "report": {
+          "count": 46,
+          "p50Ms": 170.06,
+          "p95Ms": 438.25,
+          "p99Ms": 675.24
+        },
+        "file": {
+          "count": 26,
+          "p50Ms": 261.12,
+          "p95Ms": 465.32,
+          "p99Ms": 619.29
+        }
+      },
+      "eventLoopLag": {
+        "p50Ms": 37.75,
+        "p99Ms": 352.85,
+        "maxMs": 440.4
+      }
+    },
+    {
+      "concurrency": 10,
+      "durationMs": 8181,
+      "totalRequests": 368,
+      "throughputRps": 44.98,
+      "errorRate": 0,
+      "latency": {
+        "p50Ms": 193.46,
+        "p95Ms": 508.83,
+        "p99Ms": 719.71
+      },
+      "byCategory": {
+        "read": {
+          "count": 207,
+          "p50Ms": 160.08,
+          "p95Ms": 402.01,
+          "p99Ms": 637.89
+        },
+        "write": {
+          "count": 59,
+          "p50Ms": 159.99,
+          "p95Ms": 618.42,
+          "p99Ms": 637.65
+        },
+        "report": {
+          "count": 66,
+          "p50Ms": 240.58,
+          "p95Ms": 503.01,
+          "p99Ms": 639.03
+        },
+        "file": {
+          "count": 36,
+          "p50Ms": 386.63,
+          "p95Ms": 789.58,
+          "p99Ms": 819.65
+        }
+      },
+      "eventLoopLag": {
+        "p50Ms": 89.78,
+        "p99Ms": 481.3,
+        "maxMs": 637.01
+      }
+    },
+    {
+      "concurrency": 20,
+      "durationMs": 8712,
+      "totalRequests": 468,
+      "throughputRps": 53.72,
+      "errorRate": 0,
+      "latency": {
+        "p50Ms": 316.98,
+        "p95Ms": 720,
+        "p99Ms": 1027.41
+      },
+      "byCategory": {
+        "read": {
+          "count": 270,
+          "p50Ms": 305.29,
+          "p95Ms": 613.73,
+          "p99Ms": 720.53
+        },
+        "write": {
+          "count": 78,
+          "p50Ms": 304.64,
+          "p95Ms": 614.16,
+          "p99Ms": 720.71
+        },
+        "report": {
+          "count": 79,
+          "p50Ms": 341.79,
+          "p95Ms": 697.68,
+          "p99Ms": 720.56
+        },
+        "file": {
+          "count": 41,
+          "p50Ms": 711.64,
+          "p95Ms": 1094.71,
+          "p99Ms": 1292.25
+        }
+      },
+      "eventLoopLag": {
+        "p50Ms": 173.54,
+        "p99Ms": 430.96,
+        "maxMs": 430.96
+      }
+    },
+    {
+      "concurrency": 50,
+      "durationMs": 8604,
+      "totalRequests": 379,
+      "throughputRps": 44.05,
+      "errorRate": 0,
+      "latency": {
+        "p50Ms": 912.36,
+        "p95Ms": 2345.89,
+        "p99Ms": 3583.88
+      },
+      "byCategory": {
+        "read": {
+          "count": 211,
+          "p50Ms": 883.46,
+          "p95Ms": 1492.29,
+          "p99Ms": 3583.88
+        },
+        "write": {
+          "count": 45,
+          "p50Ms": 874.9,
+          "p95Ms": 1341.52,
+          "p99Ms": 1492.31
+        },
+        "report": {
+          "count": 82,
+          "p50Ms": 955.29,
+          "p95Ms": 1492.18,
+          "p99Ms": 3145.08
+        },
+        "file": {
+          "count": 41,
+          "p50Ms": 2160.51,
+          "p95Ms": 2869.05,
+          "p99Ms": 6429.15
+        }
+      },
+      "eventLoopLag": {
+        "p50Ms": 434.11,
+        "p99Ms": 1013.97,
+        "maxMs": 1013.97
+      }
+    }
+  ]
+}

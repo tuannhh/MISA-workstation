@@ -1594,3 +1594,32 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   (`docs.length` đọc động bằng `readdirSync`, không hardcode số lượng); `git diff --check` sạch.
 - Cập nhật `04-ROADMAP.md` dòng G1C.1: "khung ĐÃ ĐỊNH NGHĨA", không đổi Exit Contract (vẫn "GREEN
   sau W1, không phải điều kiện mở W1" — chưa tuyên bố G1C xong).
+
+## 2026-08-30 — G1.8: harness đo baseline hiệu năng F7 (artifact thật, không kết luận pass/fail)
+
+- `scripts/perf-baseline.mjs` (mới, `npm run perf:baseline`): fail-closed `DB_CLIENT=mysql` +
+  `ALLOW_TEST_DB_CREATE=1` (đúng lý do F7 — SQLite không đi qua `Atomics.wait`, đo trên SQLite sẽ
+  cho số liệu không đại diện); tạo database MySQL test tạm qua `db-harness.js`, seed 50 tổ chức/200
+  người/500 tương tác/1 file, chạy workload trọng số read 55/write 15/report 20/file 10 ở 5 mức
+  concurrency (1/5/10/20/50), mỗi mức warm-up 3s (bỏ số liệu) rồi sustained 8s (đo thật); dùng
+  `monitorEventLoopDelay()` (`node:perf_hooks`) đo lag event-loop song song với latency HTTP.
+- **Bug tự phát hiện khi chạy thật (không phải lúc smoke-test tham số nhỏ):** process không bao giờ
+  tự thoát sau khi ghi artifact + drop xong database test — do `main()` không gọi `closeDb()`
+  (`server/db.js`), nên worker thread MySQL (`mysql-sync.js`) vẫn giữ 1 connection sống, giữ event
+  loop chạy vô thời hạn. Phát hiện qua `SHOW FULL PROCESSLIST` thấy connection `Sleep` không đóng dù
+  script đã in dòng `Artifact: ...` cuối cùng. Sửa: gọi `closeDb()` trong khối `finally`, TRƯỚC
+  `dropMysqlTestDb()`. Đã kill 2 process treo từ trước khi sửa (1 từ smoke-test tham số nhỏ chạy
+  đầu phiên, 1 từ lần chạy thật đầu tiên) — xác nhận cả hai đều đã cleanup xong dữ liệu (database
+  test đã bị drop, không rò tài nguyên) trước khi bị treo, chỉ là process không thoát; không có mất
+  dữ liệu hay rò rỉ.
+- Artifact thật (`memory-bank/perf-baseline/2026-08-30T02-28-53-029Z.json`, Apple M1 Pro 8 core/16GB,
+  `gitSha=2b7076b`): throughput plateau quanh 44-55rps bất kể concurrency tăng 1→50 (không tăng
+  tuyến tính theo tải), latency p50 tăng gần tuyến tính 6.31ms (c=1) → 912.36ms (c=50), errorRate=0
+  ở mọi mức. Khớp đúng dự đoán F7 trong `01-audit-findings.md`: nghẽn cổ chai không phải do lỗi
+  ứng dụng mà do kiến trúc — `server/mysql-worker.js:25` dùng **đúng 1 `mysql.createConnection()`**
+  (không phải pool) cộng `Atomics.wait` chặn main thread mỗi query, nên mọi request serialize qua
+  1 connection dù concurrency HTTP tăng bao nhiêu.
+- Đây là công cụ ĐO, không kết luận pass/fail (đúng Evidence Contract G1.8) — ngưỡng SLO/topology
+  production thật do DevOps chốt ở W2.3; artifact này chỉ cung cấp số đo trung thực để tham chiếu.
+- Verify: `node scripts/verify-g0.mjs` PASS, `git diff --check` sạch.
+- Cập nhật `04-ROADMAP.md` dòng G1.8: "XONG 2026-08-30" kèm số liệu tóm tắt.
