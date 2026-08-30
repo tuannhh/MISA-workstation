@@ -1623,3 +1623,32 @@ Worktree status: sạch, chỉ `.DS_Store` không liên quan (không track).
   production thật do DevOps chốt ở W2.3; artifact này chỉ cung cấp số đo trung thực để tham chiếu.
 - Verify: `node scripts/verify-g0.mjs` PASS, `git diff --check` sạch.
 - Cập nhật `04-ROADMAP.md` dòng G1.8: "XONG 2026-08-30" kèm số liệu tóm tắt.
+
+## 2026-08-30 — G1.8 remediation: Codex round 1 PARTIAL → 3 vấn đề đã sửa (commit `436bbe4`)
+
+Codex audit artifact/harness G1.8 ở trên, kết luận **PARTIAL** với 3 việc cần sửa:
+
+1. **Rò file test vào dữ liệu thật.** Script không gọi `setupTestDataDir()` trước khi require
+   `server/db.js`, nên `UPLOAD_DIR` trỏ thẳng vào `data/uploads/` thật của repo thay vì thư mục
+   tạm — mỗi lần chạy (kể cả 2 lần smoke-test tham số nhỏ trước đó) ghi 1 file dummy thật vào đây.
+   Đã quarantine cả 4 file (không xoá, theo yêu cầu Codex) tại
+   `data/uploads/.quarantine-perf-baseline-leak/` kèm `MANIFEST.md` giải thích nguyên nhân + xác
+   nhận không có row `attachments` nào trong database `pr_media` thật tham chiếu tới (bảng đó
+   chưa tồn tại trên MySQL local — rò rỉ chỉ là file vật lý mồ côi, không kèm dữ liệu DB).
+2. **`closeDb()` bị nuốt lỗi.** Bản trước dùng `.catch(() => {})` — nếu worker đóng lỗi, script
+   vẫn báo thành công. Sửa: dùng `server/test-support/resource-stack.js` đúng pattern chuẩn của
+   dự án (`server/test/integration-ai.test.js`) — `acquire()` theo đúng thứ tự
+   `setupTestDataDir()` → `createMysqlTestDb()` → `closeDb` → `startTestApp().close`, sau đó
+   `cleanupAll()` dọn LIFO (đóng HTTP → đóng worker MySQL → drop DB tạm → dọn `DATA_DIR`) và
+   **không nuốt lỗi** — ném `AggregateError` nếu bất kỳ bước dọn nào thất bại.
+3. **Số liệu roadmap ghi hơi sai.** Artifact cũ có throughput 43.51/34.85/44.98/53.72/44.05rps
+   (dải thật ~35–54), nhưng roadmap ghi "~44-55rps" — đã xoá artifact đó (SHA không khớp commit
+   remediation), chạy lại theo harness đã sửa, ghi đúng số đo mới của artifact cuối cùng.
+
+Verify sau fix (đúng 4 tiêu chí Codex yêu cầu): smoke-test tham số nhỏ + full run thật đều
+`exit code 0` (process tự thoát, không cần kill); `SHOW DATABASES LIKE 'pr_media_test_%'` không
+còn database của lần chạy; `data/uploads/*.txt` (ngoài quarantine) rỗng sau khi chạy; artifact mới
+`memory-bank/perf-baseline/2026-08-30T03-21-15-737Z.json` có `gitSha=436bbe4` khớp đúng commit
+remediation. Kết quả đo cuối: throughput ~47–69 rps không tăng theo concurrency (1→50), latency p50
+tăng tuyến tính 3.4ms→832ms, errorRate=0 — kết luận F7 (nghẽn cổ chai 1 connection + Atomics.wait)
+không đổi.
