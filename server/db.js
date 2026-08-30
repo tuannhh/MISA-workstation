@@ -623,6 +623,10 @@ function migrate() {
   for (const table of ['supplier_quotes', 'supplier_transactions', 'supplier_contacts']) {
     add(`ALTER TABLE ${table} ADD COLUMN created_by INTEGER`);
   }
+  // D13 batch RBAC-EXP-B6 (batch cuoi cung): cung ly do nhu tren, cho 6 entity Direct con lai.
+  for (const table of ['sponsorships', 'agreements', 'work_logs', 'association_fees', 'gifts', 'benefit_usages']) {
+    add(`ALTER TABLE ${table} ADD COLUMN created_by INTEGER`);
+  }
   add("ALTER TABLE people ADD COLUMN phone_other TEXT");
   add("ALTER TABLE bookings ADD COLUMN award_id INTEGER");
   add("ALTER TABLE bookings ADD COLUMN event_id INTEGER");

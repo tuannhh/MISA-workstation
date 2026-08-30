@@ -175,20 +175,25 @@ router.get('/partners/:id', requirePerm('partners', 'view'), (req, res) => {
     FROM people p WHERE p.org_id=? ORDER BY p.relationship_score DESC, p.full_name`).all(row.id);
   people = rbac.maskList('person', people, allowed);
 
-  let sponsorships = db.prepare('SELECT * FROM sponsorships WHERE org_id=? ORDER BY event_date DESC').all(row.id);
-  sponsorships = rbac.maskList('sponsorship', sponsorships, allowed);
+  // D13 (RBAC v2, batch RBAC-EXP-B6 6/6 — batch cuối cùng): sponsorship/association_fee/gift che
+  // amount/value qua projectRecord() (Direct entity, owner-bypass) thay rbac.maskList/org_fee cũ;
+  // agreement/work_log/benefit_usage không có field Confidential nên giữ nguyên query, chỉ cần
+  // gate ghi/xoá riêng.
+  const sponsorships = db.prepare('SELECT * FROM sponsorships WHERE org_id=? ORDER BY event_date DESC').all(row.id)
+    .map((s) => policyService.projectRecord({ principal: req.principal, entity: 'sponsorship', module: 'sponsorships', record: s }));
 
   const interactions = db.prepare(`SELECT * FROM interactions WHERE partner_type='org' AND partner_id=? ORDER BY date DESC`).all(row.id);
   const dates = db.prepare(`SELECT * FROM important_dates WHERE subject_type='organization' AND subject_id=? ORDER BY event_date`).all(row.id);
-  // Hội phí theo năm (số tiền là dữ liệu mật nhóm org_fee)
-  let fees = db.prepare('SELECT * FROM association_fees WHERE org_id=? ORDER BY year DESC').all(row.id);
-  if (!allowed.has('org_fee')) fees = fees.map((f) => ({ ...f, amount: f.amount != null ? rbac.MASK : f.amount }));
+  // Hội phí theo năm
+  const fees = db.prepare('SELECT * FROM association_fees WHERE org_id=? ORDER BY year DESC').all(row.id)
+    .map((f) => policyService.projectRecord({ principal: req.principal, entity: 'association_fee', module: 'association_fees', record: f }));
   // Đối tác bộ ngành: MOU + lịch sử làm việc, kèm tệp đính kèm (attachments kind='file')
   const fileFor = (ot, oid) => db.prepare(`SELECT id, original_name, mime FROM attachments WHERE owner_type=? AND owner_id=? AND kind='file' ORDER BY id`).all(ot, oid);
   const agreements = db.prepare('SELECT * FROM agreements WHERE org_id=? ORDER BY signed_date DESC').all(row.id).map((a) => ({ ...a, files: fileFor('agreement', a.id) }));
   const workLogs = db.prepare('SELECT * FROM work_logs WHERE org_id=? ORDER BY work_date DESC').all(row.id).map((w) => ({ ...w, files: fileFor('work_log', w.id) }));
-  // Quà tặng (giá trị mật nhóm org_fee) + lịch sử quyền lợi hợp đồng đổi hàng
-  let gifts = rbac.maskList('gift', db.prepare(`SELECT * FROM gifts WHERE owner_type='org' AND owner_id=? ORDER BY event_date DESC`).all(row.id), allowed);
+  // Quà tặng (giá trị mật) + lịch sử quyền lợi hợp đồng đổi hàng
+  const gifts = db.prepare(`SELECT * FROM gifts WHERE owner_type='org' AND owner_id=? ORDER BY event_date DESC`).all(row.id)
+    .map((g) => policyService.projectRecord({ principal: req.principal, entity: 'gift', module: 'gifts', record: g }));
   const benefitUsages = db.prepare('SELECT * FROM benefit_usages WHERE org_id=? ORDER BY used_date DESC').all(row.id);
   res.json({ record, people, sponsorships, interactions, dates, fees, agreements, workLogs, gifts, benefitUsages, caretakers: getCaretakers('org', row.id), sensitiveVisible: senVisible(allowed) });
 });
@@ -234,18 +239,38 @@ router.delete('/partners/:id', (req, res) => {
 // Tài trợ / giải thưởng (gắn cơ quan, thường là hiệp hội)
 const S_COLS = ['org_id', 'title', 'type', 'amount', 'event_date', 'sponsor_benefits', 'note',
   'product', 'category', 'submit_deadline', 'present_deadline', 'scale', 'sponsor_package', 'result', 'contact_point', 'staff', 'status'];
-router.post('/partners/:id/sponsorships', requirePerm('partners', 'edit'), (req, res) => {
-  const data = pick({ ...req.body, org_id: req.params.id }, S_COLS);
+router.post('/partners/:id/sponsorships', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'sponsorship', input: pick({ ...req.body, org_id: req.params.id }, S_COLS) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên partners.');
+    throw err;
+  }
   const r = buildInsert('sponsorships', data);
   logEdit(req, 'CREATE', 'sponsorship', r.lastInsertRowid, req.body.title);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/sponsorships/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.put('/sponsorships/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM sponsorships WHERE id=?').get(req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'sponsorship', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
+  }
   buildUpdate('sponsorships', req.params.id, pick(req.body, S_COLS.filter((c) => c !== 'org_id')));
   logEdit(req, 'EDIT', 'sponsorship', req.params.id, req.body.title);
   res.json({ ok: true });
 });
-router.delete('/sponsorships/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.delete('/sponsorships/:id', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'sponsorship', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
+  }
   db.prepare('DELETE FROM sponsorships WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'sponsorship', req.params.id);
   res.json({ ok: true });
@@ -258,37 +283,78 @@ function delOwnerFiles(ot, oid) {
   db.prepare('DELETE FROM attachments WHERE owner_type=? AND owner_id=?').run(ot, oid);
 }
 const AG_COLS = ['title', 'signed_date', 'valid_until', 'terms', 'note'];
-router.post('/partners/:id/agreements', requirePerm('partners', 'edit'), (req, res) => {
-  const data = pick({ ...req.body, org_id: req.params.id }, ['org_id', ...AG_COLS]);
-  if (!data.title) return res.status(400).json({ error: 'Thiếu tên thỏa thuận' });
+router.post('/partners/:id/agreements', (req, res) => {
+  const input = pick({ ...req.body, org_id: req.params.id }, ['org_id', ...AG_COLS]);
+  if (!input.title) return res.status(400).json({ error: 'Thiếu tên thỏa thuận' });
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'agreement', input });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên partners.');
+    throw err;
+  }
   const r = buildInsert('agreements', data);
   logEdit(req, 'CREATE', 'agreement', r.lastInsertRowid, req.body.title);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/agreements/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.put('/agreements/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM agreements WHERE id=?').get(req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'agreement', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
+  }
   buildUpdate('agreements', req.params.id, pick(req.body, AG_COLS));
   logEdit(req, 'EDIT', 'agreement', req.params.id, req.body.title);
   res.json({ ok: true });
 });
-router.delete('/agreements/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.delete('/agreements/:id', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'agreement', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
+  }
   delOwnerFiles('agreement', req.params.id);
   db.prepare('DELETE FROM agreements WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'agreement', req.params.id);
   res.json({ ok: true });
 });
 const WL_COLS = ['category', 'work_date', 'topic', 'result', 'status', 'staff', 'note'];
-router.post('/partners/:id/work-logs', requirePerm('partners', 'edit'), (req, res) => {
-  const data = pick({ ...req.body, org_id: req.params.id }, ['org_id', ...WL_COLS]);
+router.post('/partners/:id/work-logs', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'work_log', input: pick({ ...req.body, org_id: req.params.id }, ['org_id', ...WL_COLS]) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên partners.');
+    throw err;
+  }
   const r = buildInsert('work_logs', data);
   logEdit(req, 'CREATE', 'work_log', r.lastInsertRowid, req.body.topic);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/work-logs/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.put('/work-logs/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM work_logs WHERE id=?').get(req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'work_log', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
+  }
   buildUpdate('work_logs', req.params.id, pick(req.body, WL_COLS));
   logEdit(req, 'EDIT', 'work_log', req.params.id, req.body.topic);
   res.json({ ok: true });
 });
-router.delete('/work-logs/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.delete('/work-logs/:id', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'work_log', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
+  }
   delOwnerFiles('work_log', req.params.id);
   db.prepare('DELETE FROM work_logs WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'work_log', req.params.id);
@@ -307,25 +373,47 @@ function govFileUpload(ownerType) {
 router.post('/agreements/:id/files', requirePerm('partners', 'edit'), upload.array('files', 8), govFileUpload('agreement'));
 router.post('/work-logs/:id/files', requirePerm('partners', 'edit'), upload.array('files', 8), govFileUpload('work_log'));
 
-// === Quà tặng đối ngoại (gắn cơ quan hoặc nhân sự) — giá trị mật nhóm org_fee ===
+// === Quà tặng đối ngoại (gắn cơ quan hoặc nhân sự) — giá trị mật. LƯU Ý: `owner_id`/`owner_type`
+// trên bảng `gifts` là NGƯỜI/CƠ QUAN NHẬN quà (nghiệp vụ), KHÁC với chủ sở hữu RBAC — PolicyEngine
+// dùng cột riêng `responsible_user_id` cho nhân viên phụ trách (D13.4a, `ownerColumn('gift')`).
 const GIFT_COLS = ['gift_type', 'value', 'giver', 'event_date', 'occasion', 'note'];
 function addGift(ownerType) {
   return (req, res) => {
-    const data = pick(req.body, GIFT_COLS);
+    let data;
+    try {
+      data = policyService.prepareCreate({ principal: req.principal, entity: 'gift', input: pick(req.body, GIFT_COLS) });
+    } catch (err) {
+      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên partners.');
+      throw err;
+    }
     data.owner_type = ownerType; data.owner_id = req.params.id;
     const r = buildInsert('gifts', data);
     logEdit(req, 'CREATE', 'gift', r.lastInsertRowid, `Quà tặng ${ownerType} #${req.params.id}`);
     res.json({ id: r.lastInsertRowid });
   };
 }
-router.post('/partners/:id/gifts', requirePerm('partners', 'edit'), addGift('org'));
-router.post('/people/:id/gifts', requirePerm('partners', 'edit'), addGift('person'));
-router.put('/gifts/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.post('/partners/:id/gifts', addGift('org'));
+router.post('/people/:id/gifts', addGift('person'));
+router.put('/gifts/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM gifts WHERE id=?').get(req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'gift', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
+  }
   buildUpdate('gifts', req.params.id, pick(req.body, GIFT_COLS));
   logEdit(req, 'EDIT', 'gift', req.params.id);
   res.json({ ok: true });
 });
-router.delete('/gifts/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.delete('/gifts/:id', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'gift', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
+  }
   db.prepare('DELETE FROM gifts WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'gift', req.params.id);
   res.json({ ok: true });
@@ -333,19 +421,40 @@ router.delete('/gifts/:id', requirePerm('partners', 'edit'), (req, res) => {
 
 // === Lịch sử sử dụng quyền lợi hợp đồng đổi hàng (báo chí) ===
 const BU_COLS = ['title', 'used_date', 'note'];
-router.post('/partners/:id/benefit-usages', requirePerm('partners', 'edit'), (req, res) => {
-  const data = pick({ ...req.body, org_id: req.params.id }, ['org_id', ...BU_COLS]);
-  if (!data.title) return res.status(400).json({ error: 'Thiếu tiêu đề' });
+router.post('/partners/:id/benefit-usages', (req, res) => {
+  const input = pick({ ...req.body, org_id: req.params.id }, ['org_id', ...BU_COLS]);
+  if (!input.title) return res.status(400).json({ error: 'Thiếu tiêu đề' });
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'benefit_usage', input });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên partners.');
+    throw err;
+  }
   const r = buildInsert('benefit_usages', data);
   logEdit(req, 'CREATE', 'benefit_usage', r.lastInsertRowid, req.body.title);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/benefit-usages/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.put('/benefit-usages/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM benefit_usages WHERE id=?').get(req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'benefit_usage', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
+  }
   buildUpdate('benefit_usages', req.params.id, pick(req.body, BU_COLS));
   logEdit(req, 'EDIT', 'benefit_usage', req.params.id, req.body.title);
   res.json({ ok: true });
 });
-router.delete('/benefit-usages/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.delete('/benefit-usages/:id', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'benefit_usage', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
+  }
   db.prepare('DELETE FROM benefit_usages WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'benefit_usage', req.params.id);
   res.json({ ok: true });
@@ -353,17 +462,38 @@ router.delete('/benefit-usages/:id', requirePerm('partners', 'edit'), (req, res)
 
 // Hội phí theo năm
 const FEE_COLS = ['year', 'amount', 'due_date', 'paid_date', 'status', 'staff', 'note'];
-router.post('/partners/:id/fees', requirePerm('partners', 'edit'), (req, res) => {
-  const data = pick(req.body, FEE_COLS); data.org_id = req.params.id;
+router.post('/partners/:id/fees', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'association_fee', input: pick(req.body, FEE_COLS) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên partners.');
+    throw err;
+  }
+  data.org_id = req.params.id;
   const r = buildInsert('association_fees', data);
   logEdit(req, 'CREATE', 'association_fee', r.lastInsertRowid, `Hội phí ${req.body.year}`);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/partners/:id/fees/:fid', requirePerm('partners', 'edit'), (req, res) => {
+router.put('/partners/:id/fees/:fid', (req, res) => {
+  const existing = db.prepare('SELECT * FROM association_fees WHERE id=? AND org_id=?').get(req.params.fid, req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'association_fee', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
+  }
   buildUpdate('association_fees', req.params.fid, pick(req.body, FEE_COLS));
   res.json({ ok: true });
 });
-router.delete('/partners/:id/fees/:fid', requirePerm('partners', 'edit'), (req, res) => {
+router.delete('/partners/:id/fees/:fid', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin -- trước batch này map nhầm vào quyền 'edit'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'association_fee', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
+  }
   db.prepare('DELETE FROM association_fees WHERE id=? AND org_id=?').run(req.params.fid, req.params.id);
   res.json({ ok: true });
 });

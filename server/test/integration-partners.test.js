@@ -560,3 +560,111 @@ test('R028 not-found: fid không tồn tại -> f=null -> cùng nhánh 400 "chư
 test('R028 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/partners/1/fees/1/remind', { auth: false, body: {} })).status, 401);
 });
+
+// ---------------------------------------------------------------------------
+// D13-071..077 — batch RBAC-EXP-B6 (batch CUỐI CÙNG, 6/6 entity Direct còn lại): sponsorship/
+// agreement/work_log/gift/association_fee/benefit_usage — mỗi loại có owner_id riêng (gift dùng
+// responsible_user_id, KHÁC owner_id là người/cơ quan NHẬN quà), executor chỉ sửa được bản ghi
+// CHÍNH mình tạo, không bao giờ xoá được (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b6)
+// ---------------------------------------------------------------------------
+test('D13-071: viewer tạo sponsorship/agreement/work-log/gift/fee/benefit-usage đều 403', async () => {
+  const orgId = await createOrg();
+  assert.equal((await call('POST', `/api/partners/${orgId}/sponsorships`, { body: { title: 'x' }, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/partners/${orgId}/agreements`, { body: { title: 'x' }, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/partners/${orgId}/work-logs`, { body: {}, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/partners/${orgId}/gifts`, { body: {}, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/partners/${orgId}/fees`, { body: { year: 2026 }, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/partners/${orgId}/benefit-usages`, { body: { title: 'x' }, as: viewerCookie })).status, 403);
+});
+test('D13-072: sponsorship — executor tạo 200 owner_id đúng + che amount theo owner; PUT người khác 403/của mình 200; DELETE (kể cả của mình) luôn 403', async () => {
+  const { db } = require('../db');
+  const orgId = await createOrg();
+  const myId = (await (await call('POST', `/api/partners/${orgId}/sponsorships`, { body: { title: 'Của executor', amount: 111 }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM sponsorships WHERE id=?').get(myId);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'partners_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+  const othersId = (await (await call('POST', `/api/partners/${orgId}/sponsorships`, { body: { title: 'Của người khác', amount: 222 } })).json()).id;
+  const detail = await (await call('GET', `/api/partners/${orgId}`, { as: executorCookie })).json();
+  assert.equal('amount' in detail.sponsorships.find((s) => s.id === myId), true);
+  assert.equal('amount' in detail.sponsorships.find((s) => s.id === othersId), false);
+  assert.equal((await call('PUT', `/api/sponsorships/${myId}`, { body: { title: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  assert.equal((await call('PUT', `/api/sponsorships/${othersId}`, { body: { title: 'x' }, as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/sponsorships/${myId}`, { as: executorCookie })).status, 403);
+});
+test('D13-073: agreement — executor tạo 200 owner_id đúng; PUT người khác 403/của mình 200; DELETE (kể cả của mình) luôn 403; admin xoá 200', async () => {
+  const { db } = require('../db');
+  const orgId = await createOrg();
+  const myId = (await (await call('POST', `/api/partners/${orgId}/agreements`, { body: { title: 'Của executor' }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM agreements WHERE id=?').get(myId);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'partners_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+  assert.equal((await call('PUT', `/api/agreements/${myId}`, { body: { title: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  const othersId = (await (await call('POST', `/api/partners/${orgId}/agreements`, { body: { title: 'Của người khác' } })).json()).id;
+  assert.equal((await call('PUT', `/api/agreements/${othersId}`, { body: { title: 'x' }, as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/agreements/${myId}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/agreements/${myId}`)).status, 200);
+});
+test('D13-074: work_log — executor tạo 200 owner_id đúng; PUT người khác 403/của mình 200; DELETE (kể cả của mình) luôn 403; admin xoá 200', async () => {
+  const { db } = require('../db');
+  const orgId = await createOrg();
+  const myId = (await (await call('POST', `/api/partners/${orgId}/work-logs`, { body: { topic: 'Của executor' }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM work_logs WHERE id=?').get(myId);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'partners_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+  assert.equal((await call('PUT', `/api/work-logs/${myId}`, { body: { topic: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  const othersId = (await (await call('POST', `/api/partners/${orgId}/work-logs`, { body: { topic: 'Của người khác' } })).json()).id;
+  assert.equal((await call('PUT', `/api/work-logs/${othersId}`, { body: { topic: 'x' }, as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/work-logs/${myId}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/work-logs/${myId}`)).status, 200);
+});
+test('D13-075: gift — executor tạo 200, chủ sở hữu RBAC là responsible_user_id (KHÁC owner_id là người/cơ quan nhận quà) + che value theo owner; PUT người khác 403/của mình 200; DELETE (kể cả của mình) luôn 403', async () => {
+  const { db } = require('../db');
+  const orgId = await createOrg();
+  const myId = (await (await call('POST', `/api/partners/${orgId}/gifts`, { body: { gift_type: 'Của executor', value: 111 }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, responsible_user_id, created_by FROM gifts WHERE id=?').get(myId);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'partners_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.responsible_user_id, me.id);
+  assert.equal(row.created_by, me.id);
+  assert.equal(row.owner_id, Number(orgId));
+  const othersId = (await (await call('POST', `/api/partners/${orgId}/gifts`, { body: { gift_type: 'Của người khác', value: 222 } })).json()).id;
+  const detail = await (await call('GET', `/api/partners/${orgId}`, { as: executorCookie })).json();
+  assert.equal('value' in detail.gifts.find((g) => g.id === myId), true);
+  assert.equal('value' in detail.gifts.find((g) => g.id === othersId), false);
+  assert.equal((await call('PUT', `/api/gifts/${myId}`, { body: { gift_type: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  assert.equal((await call('PUT', `/api/gifts/${othersId}`, { body: { gift_type: 'x' }, as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/gifts/${myId}`, { as: executorCookie })).status, 403);
+});
+test('D13-076: association_fee — executor tạo 200 owner_id đúng + che amount theo owner; PUT người khác 403/của mình 200; DELETE (kể cả của mình) luôn 403; admin xoá 200', async () => {
+  const { db } = require('../db');
+  const orgId = await createOrg();
+  const myId = (await (await call('POST', `/api/partners/${orgId}/fees`, { body: { year: 2026, amount: 111 }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM association_fees WHERE id=?').get(myId);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'partners_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+  const othersId = (await (await call('POST', `/api/partners/${orgId}/fees`, { body: { year: 2027, amount: 222 } })).json()).id;
+  const detail = await (await call('GET', `/api/partners/${orgId}`, { as: executorCookie })).json();
+  assert.equal('amount' in detail.fees.find((f) => f.id === myId), true);
+  assert.equal('amount' in detail.fees.find((f) => f.id === othersId), false);
+  assert.equal((await call('PUT', `/api/partners/${orgId}/fees/${myId}`, { body: { status: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  assert.equal((await call('PUT', `/api/partners/${orgId}/fees/${othersId}`, { body: { status: 'x' }, as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/partners/${orgId}/fees/${myId}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/partners/${orgId}/fees/${myId}`)).status, 200);
+});
+test('D13-077: benefit_usage — executor tạo 200 owner_id đúng; PUT người khác 403/của mình 200; DELETE (kể cả của mình) luôn 403; admin xoá 200', async () => {
+  const { db } = require('../db');
+  const orgId = await createOrg();
+  const myId = (await (await call('POST', `/api/partners/${orgId}/benefit-usages`, { body: { title: 'Của executor' }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM benefit_usages WHERE id=?').get(myId);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'partners_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+  assert.equal((await call('PUT', `/api/benefit-usages/${myId}`, { body: { title: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  const othersId = (await (await call('POST', `/api/partners/${orgId}/benefit-usages`, { body: { title: 'Của người khác' } })).json()).id;
+  assert.equal((await call('PUT', `/api/benefit-usages/${othersId}`, { body: { title: 'x' }, as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/benefit-usages/${myId}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/benefit-usages/${myId}`)).status, 200);
+});

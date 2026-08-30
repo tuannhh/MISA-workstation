@@ -153,6 +153,28 @@ const PILOT_INLINE_PERM_ROUTES = {
   'DELETE /api/suppliers/:id/transactions/:tid': { module: 'suppliers', action: 'delete' },
   'POST /api/suppliers/:id/quotes': { module: 'suppliers', action: 'create' },
   'DELETE /api/suppliers/:id/quotes/:qid': { module: 'suppliers', action: 'delete' },
+  // D13 batch RBAC-EXP-B6 (batch CUOI CUNG, 6/6 entity Direct con lai) — PolicyEngine khong dieu
+  // kien. Tat ca DELETE truoc batch nay map nham vao 'edit' (executor xoa duoc) -- sua dung
+  // 'delete' (Admin/Super Admin).
+  'POST /api/partners/:id/sponsorships': { module: 'partners', action: 'create' },
+  'PUT /api/sponsorships/:id': { module: 'partners', action: 'edit' },
+  'DELETE /api/sponsorships/:id': { module: 'partners', action: 'delete' },
+  'POST /api/partners/:id/agreements': { module: 'partners', action: 'create' },
+  'PUT /api/agreements/:id': { module: 'partners', action: 'edit' },
+  'DELETE /api/agreements/:id': { module: 'partners', action: 'delete' },
+  'POST /api/partners/:id/work-logs': { module: 'partners', action: 'create' },
+  'PUT /api/work-logs/:id': { module: 'partners', action: 'edit' },
+  'DELETE /api/work-logs/:id': { module: 'partners', action: 'delete' },
+  'POST /api/partners/:id/gifts': { module: 'partners', action: 'create' },
+  'POST /api/people/:id/gifts': { module: 'partners', action: 'create' },
+  'PUT /api/gifts/:id': { module: 'partners', action: 'edit' },
+  'DELETE /api/gifts/:id': { module: 'partners', action: 'delete' },
+  'POST /api/partners/:id/benefit-usages': { module: 'partners', action: 'create' },
+  'PUT /api/benefit-usages/:id': { module: 'partners', action: 'edit' },
+  'DELETE /api/benefit-usages/:id': { module: 'partners', action: 'delete' },
+  'POST /api/partners/:id/fees': { module: 'partners', action: 'create' },
+  'PUT /api/partners/:id/fees/:fid': { module: 'partners', action: 'edit' },
+  'DELETE /api/partners/:id/fees/:fid': { module: 'partners', action: 'delete' },
 };
 
 function sourceRoutes() {

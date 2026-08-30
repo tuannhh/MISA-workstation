@@ -2421,3 +2421,39 @@ DELETE 200).
 Verify: security 6/6, SQLite 759 pass/8 skip, MySQL 766 pass/1 skip, mapping 145/145 PASS,
 `verify-g0.mjs` PASS, `git diff --check` sạch. **Còn lại: 6 Direct entity (sponsorship/agreement/
 work_log/gift/association_fee/benefit_usage) — batch RBAC-EXP-B6 (batch cuối cùng) tiếp theo.**
+
+## Wave 1: batch RBAC-EXP-B6 — BATCH CUỐI CÙNG, đóng 24/24 entity D13.4a (sponsorship/agreement/work_log/gift/association_fee/benefit_usage)
+
+Batch 6/6 — batch cuối cùng của kế hoạch owner đã duyệt 2026-08-30 (mở rộng route-wiring PolicyEngine
+từ pilot `person` ra toàn bộ 24 entity). Sau batch này, **không còn entity D13.4a nào chưa wiring**.
+
+- 6 bảng này cũng thiếu `created_by` thật (giống 9 entity trước ở B4/B5) — thêm `ALTER TABLE`
+  trước khi wiring.
+- `GET /api/partners/:id`: sponsorships/fees/gifts đổi từ `rbac.maskList`/org_fee legacy sang
+  `projectRecord()` (che `amount`/`amount`/`value` theo owner-bypass); agreements/workLogs/
+  benefitUsages không có field Confidential nên giữ nguyên, chỉ cần gate ghi/xoá.
+- **`gift` cẩn thận**: `owner_id`/`owner_type` trên bảng `gifts` là NGƯỜI/CƠ QUAN NHẬN quà (nghiệp
+  vụ), KHÁC với chủ sở hữu RBAC — PolicyEngine dùng cột riêng `responsible_user_id` (đã có sẵn từ
+  `ownerColumn('gift')` trong `policy-service.js`, không cần sửa engine).
+- Cả 6 entity: CRUD owner_id-gate đúng mẫu B3/B4/B5; **TẤT CẢ DELETE đều sửa đúng** từ map nhầm
+  'edit' (executor xoá được) sang 'delete' thật (chỉ Admin/Super Admin) — cùng pattern đã lặp lại
+  3 lần trước, không còn phát hiện mới.
+- `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` + `07-route-catalog.md` (R007-R015, R018-R027 +
+  sửa mô tả masking R003) cập nhật theo mẫu đã dùng.
+
+Test mới: D13-071 (viewer tạo cả 6 loại đều 403), D13-072..077 (mỗi entity: executor tạo 200 +
+owner_id/responsible_user_id đúng, PUT người khác 403/của mình 200, DELETE luôn 403 kể cả của
+mình, admin DELETE 200; D13-075 xác nhận riêng 2 cột `owner_id` (người nhận) vs
+`responsible_user_id` (chủ sở hữu RBAC) của gift KHÁC nhau).
+
+Verify: security 6/6, SQLite 766 pass/8 skip, MySQL 773 pass/1 skip, mapping 145/145 PASS,
+`verify-g0.mjs` PASS, `git diff --check` sạch.
+
+**TỔNG KẾT: 24/24 entity D13.4a đã có PolicyEngine wiring** (Global 4: person/organization/
+supplier/important_date; Module-admin-only 6: budget/scan_query/source/competitor/campaign/
+monitor_alert; Inherited 1: event_cost; Direct 13: booking/interaction/award/award_participation/
+event/supplier_quote/supplier_transaction/supplier_contact/sponsorship/agreement/work_log/gift/
+association_fee/benefit_usage). Kế hoạch 6 batch RBAC-EXP-B1..B6 owner duyệt 2026-08-30 đã HOÀN
+TẤT. Còn lại ngoài scope entity-wiring: UI-flow matrix SS B.2 (Codex lane); `policyService.
+prepareUpdate()` chưa route nào gọi thật (routes vẫn `buildUpdate()` sau `assertWritable()`) —
+không phải exit criterion của RBAC-EXP-B1..B6, ghi nhận riêng nếu cần dọn sau.

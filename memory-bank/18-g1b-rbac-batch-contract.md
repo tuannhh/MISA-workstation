@@ -609,6 +609,61 @@ Exit criteria: full regression (test:security 6/6, sqlite 759/8 skip, mysql 766/
 Expected commit range/count: 1 commit.
 ```
 
+## Batch RBAC-EXP-B6 (2026-08-30) — BATCH CUOI CUNG, DONG 24/24 ENTITY
+
+```md
+Batch-ID: RBAC-EXP-B6
+Goal: batch 6/6 (CUOI CUNG) -- gan PolicyEngine cho 6 entity Direct con lai (sponsorship,
+      agreement, work_log, gift, association_fee, benefit_usage). Sau batch nay, TOAN BO 24 entity
+      D13.4a da co PolicyEngine wiring that (10 truoc batch nay + 6 batch nay + person pilot +
+      6 Module-admin-only + 3 Global + 1 Inherited = du 24, xem bang tong ket cuoi file nay).
+In scope: (a) Schema: 6 bang nay cung thieu `created_by` that (giong 9 entity truoc o B4/B5) --
+      them ALTER TABLE truoc khi wiring. (b) `GET /api/partners/:id`: sponsorships/fees/gifts doi
+      tu rbac.maskList/org_fee legacy sang `projectRecord()` (che amount/amount/value theo owner-
+      bypass); agreements/workLogs/benefitUsages KHONG co field Confidential nen giu nguyen query,
+      chi can gate ghi/xoa rieng. (c) `gift` CAN THAN: `owner_id`/`owner_type` tren bang `gifts` la
+      NGUOI/CO QUAN NHAN qua (nghiep vu), KHAC voi chu so huu RBAC -- PolicyEngine dung cot rieng
+      `responsible_user_id` (da co san tu `ownerColumn('gift')` trong policy-service.js, khong can
+      sua engine). (d) Ca 6 entity: CRUD owner_id-gate dung mau da lap lai o B3/B4/B5; TAT CA
+      DELETE deu SUA DUNG tu map nham 'edit' (executor xoa duoc) sang 'delete' that (chi Admin/
+      Super Admin) -- dung pattern da lap lai 3 lan truoc, khong con phat hien moi. `scripts/
+      verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` them 18 route (R007-R012, R010-R015 nham tren --
+      thuc te R007-R015, R018-R027 = 18 route) + `07-route-catalog.md` cap nhat.
+Out of scope: khong con entity D13.4a nao chua wiring -- day la batch cuoi cung cua ke hoach 6
+      batch owner da duyet 2026-08-30. Con lai ngoai scope PolicyEngine entity-wiring: UI-flow
+      matrix SS B.2 (Codex lane), `policyService.prepareUpdate()` van chua duoc route nao goi that
+      (routes van tu buildUpdate() sau assertWritable(), khong qua prepareUpdate) -- khong phai
+      exit criterion cua RBAC-EXP-B1..B6, ghi nhan rieng neu can don sau.
+Behavior mode: TARGET-CHANGE tiep tuc dung mau owner_id-gate cua Direct, khong co bien the thiet ke
+      moi -- batch nay thuan tuy hoan tat dien bao phu, khong con quyet dinh kien truc nao moi.
+Risk hotspots: (1) gift dung 2 cot khac nghia (`owner_id`=nguoi nhan, `responsible_user_id`=nhan
+      vien phu trach) -- de nham lan neu doc luot qua code, xac nhan lai qua D13-075 (assert rieng
+      ca 2 cot: `responsible_user_id`=executor tao, `owner_id`=id cua org nhan qua, KHAC nhau); (2)
+      6/6 DELETE deu tung map nham 'edit' -- cung loai bug da sua 3 lan truoc (award_participation/
+      event_cost B4, 3 entity supplier B5), xac nhan qua test rieng tung entity.
+Required tests: `integration-partners.test.js` D13-071 (viewer tao ca 6 loai deu 403), D13-072
+      (sponsorship: che amount theo owner, PUT/DELETE dung owner-gate), D13-073 (agreement),
+      D13-074 (work_log), D13-075 (gift: xac nhan rieng 2 cot owner_id vs responsible_user_id +
+      che value theo owner), D13-076 (association_fee: che amount theo owner), D13-077
+      (benefit_usage) -- moi entity: executor tao 200 + owner_id/responsible_user_id dung, PUT
+      nguoi khac 403/cua minh 200, DELETE (ke ca cua minh) luon 403, admin DELETE 200.
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 766/8 skip, mysql 773/1 skip, mapping
+      145/145, verify-g0.mjs PASS, git diff --check sach) deu xanh. TOAN BO 24/24 entity D13.4a co
+      PolicyEngine wiring -- khong con batch RBAC-EXP-B* nao trong ke hoach 6 batch owner da duyet
+      2026-08-30 (xem tong ket dien bao phu duoi day).
+Expected commit range/count: 1 commit.
+
+### Tong ket dien bao phu 24/24 entity D13.4a (hoan tat 2026-08-30 qua 6 batch RBAC-EXP-B1..B6)
+- Global (4): person (pilot), organization, supplier, important_date.
+- Module-admin-only (6): budget, scan_query, source, competitor, campaign, monitor_alert.
+- Inherited (1): event_cost (ke thua owner_id cua event cha qua parentOwnerId).
+- Direct (13): booking, interaction (B3); award, award_participation, event (B4); supplier_quote,
+  supplier_transaction, supplier_contact (B5); sponsorship, agreement, work_log, gift,
+  association_fee, benefit_usage (B6).
+- Tong: 4+6+1+13 = 24. Khong con entity nao trong D13.4a chua co PolicyEngine wiring.
+```
+
 ## Batch RBAC-EXP-B2 (2026-08-30)
 
 ```md
