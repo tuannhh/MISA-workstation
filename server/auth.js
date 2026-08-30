@@ -2,24 +2,41 @@
 const bcrypt = require('bcryptjs');
 const { db, audit } = require('./db');
 const rbac = require('./rbac');
+const { createLoginRateLimiter } = require('./login-rate-limiter');
+
+const loginRateLimiter = createLoginRateLimiter();
 
 function findUser(username) {
   return db.prepare('SELECT * FROM users WHERE username = ? AND active = 1').get(username);
 }
 
 function login(req, res) {
-  const { username, password } = req.body || {};
-  const user = findUser(String(username || '').trim());
-  if (!user || !bcrypt.compareSync(String(password || ''), user.password_hash)) {
+  const username = String((req.body || {}).username || '').trim();
+  const password = String((req.body || {}).password || '');
+  if (loginRateLimiter.isBlocked(req, username)) {
+    return res.status(429).json({ error: 'Quá nhiều lần đăng nhập sai, vui lòng thử lại sau.' });
+  }
+  const user = findUser(username);
+  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    loginRateLimiter.recordFailure(req, username);
+    audit({ user_id: user?.id, username, action: 'LOGIN_FAILED', detail: 'Sai tài khoản hoặc mật khẩu' });
     return res.status(401).json({ error: 'Sai tài khoản hoặc mật khẩu.' });
   }
-  req.session.user = { id: user.id, username: user.username, full_name: user.full_name, role: user.role, sensitive_perms: user.sensitive_perms };
-  req.principal = req.session.user;
-  audit({ user_id: user.id, username: user.username, action: 'LOGIN', detail: 'Đăng nhập thành công' });
-  res.json({ user: req.session.user, permissions: rbac.permissionSummary(req.session.user) });
+  loginRateLimiter.recordSuccess(req, username);
+  // F2-fixation: đổi hẳn session id sau khi xác thực thành công, không tái dùng cookie đã tồn tại
+  // trước đó (attacker có thể đã cắm sẵn cookie cho nạn nhân trước khi nạn nhân đăng nhập).
+  req.session.regenerate((err) => {
+    if (err) return res.status(500).json({ error: 'Lỗi máy chủ' });
+    req.session.user = { id: user.id, username: user.username, full_name: user.full_name, role: user.role, sensitive_perms: user.sensitive_perms };
+    req.principal = req.session.user;
+    audit({ user_id: user.id, username: user.username, action: 'LOGIN', detail: 'Đăng nhập thành công' });
+    res.json({ user: req.session.user, permissions: rbac.permissionSummary(req.session.user) });
+  });
 }
 
 function logout(req, res) {
+  const u = req.session.user;
+  if (u) audit({ user_id: u.id, username: u.username, action: 'LOGOUT', detail: 'Đăng xuất' });
   req.session.destroy(() => res.json({ ok: true }));
 }
 

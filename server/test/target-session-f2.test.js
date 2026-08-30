@@ -1,8 +1,8 @@
 'use strict';
 // G1B.3 — target spec test cho F2 (session hardening: fixation/logout/rate-limit). Batch contract:
-// memory-bank/18-g1b-rbac-batch-contract.md#batch-g1b3-session-2026-08-28. Test target-red đi qua
-// known-red harness (G1B.6, server/test-support/known-red.js) — KHÔNG được thêm RED trực tiếp mà
-// không đăng ký {id, owner, expiry} trong memory-bank/g1b-allowlist.json.
+// memory-bank/18-g1b-rbac-batch-contract.md#batch-g1b3-session-2026-08-28. F2-fixation/F2-ratelimit
+// ĐÃ implement thật ở W1.7 (2026-08-30, batch RBAC-W1.7-session-hardening) — promote từ known-red
+// (G1B.6) sang assertion xanh thật, entry đã xoá khỏi memory-bank/g1b-allowlist.json.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -60,8 +60,11 @@ test('known-red self-test', async (t) => {
     assert.ok(new Date(expiredIso).getTime() <= Date.now(), 'mốc mẫu phải thật sự đã hết hạn để phép so sánh có ý nghĩa');
   });
 
-  await t.test('validateEntry() trả entry hợp lệ cho F2-fixation và F2-ratelimit', () => {
-    for (const id of ['F2-fixation', 'F2-ratelimit']) {
+  await t.test('validateEntry() trả entry hợp lệ cho N1-explicit-action và N2-dashboard-permission', () => {
+    // F2-fixation/F2-ratelimit đã implement thật ở W1.7 và bị xoá khỏi allowlist (promote sang
+    // assertion xanh, xem test bên dưới) — dùng 2 entry N1/N2 còn lại (chưa implement) để tự-test
+    // khung known-red vẫn hoạt động đúng với allowlist hiện tại.
+    for (const id of ['N1-explicit-action', 'N2-dashboard-permission']) {
       const entry = validateEntry(id);
       assert.ok(entry.owner, `${id} thiếu owner`);
       assert.ok(new Date(entry.expiry).getTime() > Date.now(), `${id} đã hết hạn`);
@@ -110,9 +113,9 @@ test('known-red self-test', async (t) => {
 });
 
 // ---------------------------------------------------------------------------
-// F2-fixation — session id không đổi khi login lại trên cookie đã tồn tại.
+// F2-fixation — session id phải đổi khi login lại trên cookie đã tồn tại (W1.7: session.regenerate()).
 // ---------------------------------------------------------------------------
-knownRed('F2-fixation', 'F2 session id PHẢI đổi khi đăng nhập (chống fixation)', async () => {
+test('F2-fixation: session id PHẢI đổi khi đăng nhập (chống fixation)', async () => {
   const userA = fixtures.createUser('pr_staff', { username: `f2_fix_a_${Date.now()}` });
   const userB = fixtures.createUser('pr_staff', { username: `f2_fix_b_${Date.now()}` });
 
@@ -129,19 +132,19 @@ knownRed('F2-fixation', 'F2 session id PHẢI đổi khi đăng nhập (chống 
   });
   assert.equal(resB.status, 200);
   const setCookie = resB.headers.getSetCookie();
-  const cookieC2 = setCookie.length ? setCookie[0].split(';')[0] : cookieC1; // không set cookie mới = vẫn dùng C1
+  const cookieC2 = setCookie.length ? setCookie[0].split(';')[0] : cookieC1;
 
   assert.notEqual(
     cookieC2,
     cookieC1,
     'session id (cookie) phải đổi sau khi login lại trên cookie có sẵn — nếu giống nhau, attacker biết trước C1 vẫn có thể chiếm session sau khi nạn nhân đăng nhập (fixation)'
   );
-}, /session id \(cookie\) phải đổi sau khi login lại/);
+});
 
 // ---------------------------------------------------------------------------
-// F2-ratelimit — /api/login không được cho phép brute-force không giới hạn.
+// F2-ratelimit — /api/login không được cho phép brute-force không giới hạn (W1.7: login-rate-limiter.js).
 // ---------------------------------------------------------------------------
-knownRed('F2-ratelimit', 'F2 /api/login PHẢI rate-limit sau nhiều lần sai mật khẩu liên tiếp', async () => {
+test('F2-ratelimit: /api/login PHẢI rate-limit sau nhiều lần sai mật khẩu liên tiếp', async () => {
   const user = fixtures.createUser('pr_staff', { username: `f2_rl_${Date.now()}` });
   const ATTEMPTS = 12;
   let sawThrottled = false;
@@ -158,11 +161,37 @@ knownRed('F2-ratelimit', 'F2 /api/login PHẢI rate-limit sau nhiều lần sai 
     assert.equal(res.status, 401, `lần thử ${i + 1} phải là 401 (sai mật khẩu) hoặc 429 (bị chặn), không phải ${res.status}`);
   }
   assert.ok(sawThrottled, `sau ${ATTEMPTS} lần sai mật khẩu liên tiếp phải có ít nhất 1 lần trả 429 (rate-limited)`);
-}, /phải có ít nhất 1 lần trả 429/);
+});
 
 // ---------------------------------------------------------------------------
 // F2-logout-invalidation — characterization (KHÔNG phải known-red): xác nhận trạng thái thật.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// W1.7 audit — login thất bại và logout phải ghi audit_log (không chỉ LOGIN thành công như trước).
+// ---------------------------------------------------------------------------
+test('W1.7 audit: login sai mật khẩu ghi audit_log action=LOGIN_FAILED', async () => {
+  const user = fixtures.createUser('pr_staff', { username: `f2_audit_fail_${Date.now()}` });
+  const res = await fetch(`${baseUrl}/api/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: user.username, password: 'sai-mat-khau' }),
+  });
+  assert.equal(res.status, 401);
+  const { db } = require('../db');
+  const row = db.prepare(`SELECT * FROM audit_log WHERE action='LOGIN_FAILED' AND username=?`).get(user.username);
+  assert.ok(row, 'phải có 1 dòng audit_log LOGIN_FAILED cho lần đăng nhập sai mật khẩu');
+});
+
+test('W1.7 audit: logout ghi audit_log action=LOGOUT', async () => {
+  const user = fixtures.createUser('pr_staff', { username: `f2_audit_logout_${Date.now()}` });
+  const { cookie } = await fixtures.login(baseUrl, { username: user.username, password: user.password });
+  const res = await fetch(`${baseUrl}/api/logout`, { method: 'POST', headers: { Cookie: cookie } });
+  assert.equal(res.status, 200);
+  const { db } = require('../db');
+  const row = db.prepare(`SELECT * FROM audit_log WHERE action='LOGOUT' AND username=?`).get(user.username);
+  assert.ok(row, 'phải có 1 dòng audit_log LOGOUT sau khi đăng xuất');
+});
+
 test('F2-logout-invalidation CHARACTERIZATION: sau logout, cookie cũ không còn dùng được — /api/me trả 401', async () => {
   const user = fixtures.createUser('pr_staff', { username: `f2_logout_${Date.now()}` });
   const { cookie } = await fixtures.login(baseUrl, { username: user.username, password: user.password });

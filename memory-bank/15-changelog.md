@@ -1811,3 +1811,64 @@ kỳ pilot slice nào ngoài People Detail, không cutover role hàng loạt.
 **"People Detail end-to-end" (read, write, file) nay đã đủ cả 3 phần.** Bước tiếp theo theo đúng
 thứ tự `18-g1b-rbac-batch-contract.md`: acceptance money/supplier/booking/event — cần hỏi lại owner
 trước khi mở rộng pilot slice mới (`02-decisions.md` §G).
+
+## Codex ACCEPT: People Detail end-to-end (read/write/file) CLOSED cho phạm vi pilot D13
+
+Codex xác nhận batch `ace15fc..b291b41` đúng scope, legacy 2-role giữ nguyên, role mới đi qua
+PolicyEngine và fail-closed. Evidence tự kiểm: write gate `routes.js:452`; file upload/primary/
+delete `routes.js:496`; file download chặn owner_type ngoài `person` `routes.js:591`; trần
+`id_doc=private`/`portrait=public` server-derived `policy-engine.js:52`. Experiment: 47/47 pass
+`integration-people.test.js` cả SQLite lẫn MySQL, unit PolicyEngine 10/10, security 6/6, mapping +
+G0 xanh. Risk ghi nhận (không phải do batch này tạo ra): `R034` cho phép upload với person ID
+không tồn tại là hành vi legacy đã characterization từ trước — không mở rộng sửa trong pilot để
+tránh đổi contract ngoài scope. Quyết định: dừng trước slice money/supplier/booking/event là đúng
+§G, cần owner xác nhận trước khi mở slice mới.
+
+## Wave 1 nhánh security: batch W1.7 session hardening (F2 — implement thật seam đã có target-red)
+
+Vì slice pilot mới cần owner xác nhận trước, tiếp tục nhánh W1 độc lập với quyết định đó: implement
+thật F2 (session hardening) mà G1B.3 đã viết target-red từ trước (`server/test/target-session-f2.
+test.js`, known-red `F2-fixation`/`F2-ratelimit`).
+
+- `server/app.js`: fail-fast (`throw`) nếu `NODE_ENV=production` mà thiếu `SESSION_SECRET` — không
+  còn âm thầm rơi về default `'misa-pr-dev-secret-change-me'` trên production. `app.set('trust
+  proxy', 1)` + `cookie.secure=true` khi production (Cloud Run/reverse proxy chấm dứt TLS trước
+  app, cần trust proxy để express-session nhận đúng request là HTTPS qua `X-Forwarded-Proto`).
+- `server/auth.js`: `login()` gọi `req.session.regenerate()` SAU khi xác thực thành công, trước khi
+  gán `req.session.user` — đổi hẳn session id, chặn session fixation (attacker cắm sẵn cookie cho
+  nạn nhân trước khi nạn nhân đăng nhập). Audit mở rộng: thêm `LOGIN_FAILED` (trước chỉ audit
+  `LOGIN` thành công) và `LOGOUT` (ghi trước khi `session.destroy()` vì sau đó không còn đọc được
+  `req.session.user`).
+- `server/login-rate-limiter.js` (mới, pure): chặn brute-force `/api/login` — 429 sau 5 lần sai
+  liên tiếp trong 15 phút theo khoá `IP:username` (không chỉ IP, để không khoá nhầm cả văn phòng
+  dùng chung 1 IP khi chỉ 1 tài khoản bị tấn công). In-memory, đủ cho single-instance hiện tại;
+  seam tách riêng để thay bằng store dùng chung (Redis) sau này nếu cần multi-replica — quyết định
+  đó thuộc DevOps (O4), không phải batch này.
+- `F2-fixation`/`F2-ratelimit` promote từ known-red (G1B.6) sang assertion xanh thật trong
+  `target-session-f2.test.js`; xoá 2 entry khỏi `memory-bank/g1b-allowlist.json`. Đồng thời sửa
+  self-test khung known-red (dùng `N1-explicit-action`/`N2-dashboard-permission` làm ví dụ hợp lệ
+  thay vì 2 entry F2 vừa xoá) và `known-red-fixture.js` (đổi id fixture nội bộ sang
+  `N1-explicit-action`) — cả hai vẫn valid vì chỉ dùng id để test khung, không phụ thuộc nội dung
+  F2 thật.
+- 2 test mới trong `target-session-f2.test.js`: login sai mật khẩu ghi `audit_log` action=
+  `LOGIN_FAILED`; logout ghi `audit_log` action=`LOGOUT`.
+- File mới `server/test/integration-session-production.test.js` (2 test, cô lập tiến trình vì phải
+  toggle `NODE_ENV`/`SESSION_SECRET` + xoá `require.cache`): `createApp()` throw khi production
+  thiếu secret; cookie session có thuộc tính `Secure` khi production (gửi kèm header
+  `x-forwarded-proto: https` để mô phỏng đúng hành vi Cloud Run thật — express-session chỉ set
+  `cookie.secure` khi `req.secure===true`, không set được nếu test chỉ gọi qua HTTP trần).
+- Route catalog / mapping: cập nhật `memory-bank/gate1-test-mapping.md` (F2-fixation/F2-ratelimit
+  chuyển `known-red`→`green`, thêm 4 dòng mới F2-audit-login/F2-audit-logout/F2-failfast-secret/
+  F2-secure-cookie); `memory-bank/01-audit-findings.md` §F2 đánh dấu "MỘT PHẦN CLOSED" (durable
+  session store vẫn chờ DevOps O4); `memory-bank/13-deployment-runbook.md` thêm hàng `NODE_ENV` và
+  sửa hàng `SESSION_SECRET` (không còn "KHÔNG fail-fast").
+
+**Còn lại của F2 (không thuộc batch này, đã ghi rõ trong roadmap):** durable session store (SQL/
+Redis) thay MemoryStore — chờ DevOps chọn implementation (O4→DevOps), chỉ thật sự cần khi
+multi-replica hoặc muốn tránh mất session lúc Cloud Run redeploy/cold-start.
+
+Verify: `test:security` 6/6, `test:integration:sqlite` 649 pass/8 skip, `test:integration:mysql`
+656 pass/1 skip (+7 so với trước batch: 2 promote known-red→green + 5 test mới), `test:verify-
+gate1-mapping` PASS (257 mapped rows, known-red còn lại N1/N2 — không liên quan F2), `verify-g0.mjs`
+PASS, `verify-g0-selftest` 6/6, `git diff --check` sạch. Không đổi UI (Codex lane), không đổi RBAC
+pilot slice nào — batch này độc lập hoàn toàn với D13/PolicyEngine.

@@ -10,7 +10,17 @@ const apiRouter = require('./routes');
 const aiRouter = require('./ai');
 
 function createApp() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  // F2: production KHÔNG được rơi về secret mặc định (mất tính bí mật của chữ ký cookie); dev/test
+  // vẫn giữ fallback để không phá luồng local/CI hiện có.
+  if (isProduction && !process.env.SESSION_SECRET) {
+    throw new Error('SESSION_SECRET bắt buộc phải đặt khi NODE_ENV=production (F2 fail-fast).');
+  }
+
   const app = express();
+  // Cloud Run/reverse proxy chấm dứt TLS trước app; cần trust proxy để express-session nhận đúng
+  // request là HTTPS (qua X-Forwarded-Proto) và áp cookie.secure chính xác.
+  if (isProduction) app.set('trust proxy', 1);
 
   app.use(express.json({ limit: '2mb' }));
   app.use(cookieParser());
@@ -18,7 +28,7 @@ function createApp() {
     secret: process.env.SESSION_SECRET || 'misa-pr-dev-secret-change-me',
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 8 },
+    cookie: { secure: isProduction, httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 8 },
   }));
 
   // Auth endpoints

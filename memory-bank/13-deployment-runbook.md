@@ -53,10 +53,11 @@ Khác kiến trúc Railway cũ (1 volume bền `/data` cho cả SQLite file + up
 
 | Biến | Bắt buộc? | Mặc định nếu bỏ trống | Ý nghĩa | Nguồn |
 |---|---|---|---|---|
+| `NODE_ENV` | **BẮT BUỘC = `production` trên môi trường phục vụ user thật** | không set (dev/test) | **W1.7 (2026-08-30):** gate 3 hành vi hardening cùng lúc trong `createApp()` — (1) fail-fast nếu thiếu `SESSION_SECRET`, (2) `app.set('trust proxy', 1)` để nhận đúng `X-Forwarded-Proto`, (3) cookie session `secure:true`. Quên set biến này = cookie KHÔNG có `Secure`, tương đương chưa vá F2 dù code đã đúng | `server/app.js:12-20` |
 | `PORT` | không | `3007` | Cổng HTTP; Cloud Run tự set `8080` | `server/index.js:7` |
 | `DB_CLIENT` | không | **`mysql`** | `mysql`\|`sqlite` — chọn engine DB. **Lưu ý: default là mysql, KHÔNG PHẢI sqlite** | `server/db.js:15` |
 | `DATA_DIR` | không | `<repo>/data` | Thư mục chứa `pr.db` (nếu SQLite) + `uploads/` (mọi engine) | `server/db.js:9` |
-| `SESSION_SECRET` | **nên có trên production** | `'misa-pr-dev-secret-change-me'` | Khoá ký session cookie — KHÔNG fail-fast nếu thiếu, chỉ dùng default không an toàn (F2) | `server/app.js:18` (sửa lại 2026-08-25, trước ở `index.js:20`) |
+| `SESSION_SECRET` | **BẮT BUỘC trên production** | `'misa-pr-dev-secret-change-me'` (chỉ dev/test) | Khoá ký session cookie — **W1.7 (2026-08-30): `createApp()` fail-fast (throw) nếu `NODE_ENV=production` và thiếu biến này**, không còn âm thầm dùng default không an toàn (F2) | `server/app.js:12-16` |
 | `MYSQL_SOCKET_PATH` | chỉ khi Cloud SQL qua unix socket | — | Đường dẫn socket `/cloudsql/<INSTANCE_CONNECTION_NAME>`; có giá trị này thì bỏ qua `MYSQL_HOST`/`MYSQL_PORT` | `server/mysql-worker.js:19-24` |
 | `MYSQL_HOST` | chỉ khi không dùng socket | `127.0.0.1` | Host MySQL (Docker: tên service `db`) | `mysql-worker.js:22` |
 | `MYSQL_PORT` | chỉ khi không dùng socket | `3306` | | `mysql-worker.js:23` |

@@ -1,19 +1,5 @@
 [
   {
-    "id": "F2-fixation",
-    "owner": "backend",
-    "expiry": "2026-12-31",
-    "wave": "W1.7",
-    "note": "auth.login() không gọi req.session.regenerate() — session id không đổi khi đăng nhập lại trên cookie đã tồn tại (fixation)."
-  },
-  {
-    "id": "F2-ratelimit",
-    "owner": "backend",
-    "expiry": "2026-12-31",
-    "wave": "W1.7",
-    "note": "POST /api/login không có rate-limit — không giới hạn số lần thử sai mật khẩu."
-  },
-  {
     "id": "N1-explicit-action",
     "owner": "backend",
     "expiry": "2026-12-31",

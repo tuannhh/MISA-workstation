@@ -19,10 +19,11 @@ Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật c
 - **CẬP NHẬT sau inventory G0.3 (`07-route-catalog.md`):** blast radius rộng hơn 2 ví dụ ban đầu. Write-bypass xác nhận ở **10 nhóm route**: `POST/PUT /partners` (membership_fee), sponsorships, fees, gifts, `POST /budgets` (raw SQL, ngoài helper `buildInsert/buildUpdate`), `POST/PUT /awards` (cost), award_participations (budget), supplier_transactions (value), supplier_quotes (unit_price), event_costs (amount). Củng cố quyết định D1 — vá per-route chắc chắn sót, cần PolicyEngine 1 choke-point.
 - Read-bypass xác nhận nguồn gốc **duy nhất**: `GET /files/:id` (`routes.js:467-478`) — phục vụ nội dung mọi loại attachment, chỉ gate `kind==='id_doc'`.
 
-### F2 — Session store = MemoryStore trên Cloud Run · **High / B / browser-production**
+### F2 — Session store = MemoryStore trên Cloud Run · **High / B / browser-production — MỘT PHẦN CLOSED (W1.7, 2026-08-30)**
 - `server/app.js:17-22` (sửa lại 2026-08-25, trước ở `index.js:19-24` khi chưa tách `createApp()`) không khai báo `store` → MemoryStore; cookie thiếu `secure`; không regenerate session sau login (session fixation) — `server/auth.js`.
 - Cloud Run tái chế container / cold-start / scale >1 → **user bị đăng xuất ngẫu nhiên mỗi lần redeploy**. Bug đang xảy ra.
 - Fix: durable store (khuyến nghị bảng Cloud SQL sẵn có), `secure:true`, session regenerate, fail-fast nếu production thiếu `SESSION_SECRET` (`:20` đang có default `'misa-pr-dev-secret-change-me'`).
+- **W1.7 (2026-08-30) đã sửa seam-level (đủ cho single-instance, KHÔNG cần chờ O4):** `cookie.secure=true` khi `NODE_ENV=production` (+ `trust proxy`); `req.session.regenerate()` khi login (chống fixation); fail-fast `SESSION_SECRET`; rate-limit `/api/login` (`server/login-rate-limiter.js`, 5 lần sai/15 phút theo IP+username); audit `LOGIN_FAILED`/`LOGOUT`. **CÒN LẠI, chờ DevOps (O4):** durable session store (SQL/Redis) thay MemoryStore — vẫn "leak memory, không scale qua nhiều process" đúng như warning gốc; chỉ chặn khi thật sự cần multi-replica hoặc tránh mất session lúc Cloud Run redeploy/cold-start.
 
 ### F3 — SSRF trong monitoring (metadata/internal) · **High / B / browser-production — CLOSED 2026-08-27**
 - **Root cause cũ:** `server/monitor.js` `fetchText(url)`/`resolveLink(uri)` và `server/ai.js` `/award-extract` fetch URL tùy ý từ cấu hình user hoặc Gemini grounding; redirect không được kiểm lại per-hop. Rủi ro Cloud Run là gọi metadata endpoint để lấy service-account token.
