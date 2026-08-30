@@ -1653,6 +1653,37 @@ remediation. Kết quả đo cuối: throughput ~47–69 rps không tăng theo c
 tăng tuyến tính 3.4ms→832ms, errorRate=0 — kết luận F7 (nghẽn cổ chai 1 connection + Atomics.wait)
 không đổi.
 
+## 2026-08-30 — G1.8 remediation round 2: Codex re-audit PARTIAL → rò DATA_DIR khi bootstrap MySQL lỗi (commit `018c7af`)
+
+Codex re-audit round 2 phát hiện 1 MUST-FIX còn sót từ round 1: `resources.acquire(dbHarness
+.setupTestDataDir().teardown)` và `await dbHarness.createMysqlTestDb()` vẫn nằm **NGOÀI**
+`try/finally` trong `main()`. Nếu bootstrap MySQL lỗi (vd sai mật khẩu admin) ngay ở bước
+`createMysqlTestDb()`, exception ném ra TRƯỚC khi vào `try`, nên khối `finally { await resources
+.cleanupAll() }` không bao giờ chạy — thư mục `DATA_DIR` tạm (`pr-media-test-*`) đã tạo ở dòng
+trước đó bị rò. Codex tái hiện bằng cách set `TEST_MYSQL_ADMIN_PASSWORD` sai, đo được số thư mục
+tăng thêm 1 sau mỗi lần chạy lỗi (tự dọn sau khi audit xong).
+
+Fix hẹp đúng như Codex đề nghị: chuyển cả 2 dòng (`setupTestDataDir().teardown` + `createMysqlTestDb()`)
+vào bên trong `try`, giữ nguyên toàn bộ phần còn lại và `finally { await resources.cleanupAll() }`
+— giờ dù lỗi xảy ra ở bất kỳ bước nào (kể cả bootstrap MySQL), resource-stack vẫn dọn đúng những gì
+đã acquire thành công trước đó.
+
+Thêm regression failure-path mới `server/test/perf-baseline-failure.test.js`: spawn thật
+`scripts/perf-baseline.mjs` (không phải gọi hàm harness đơn lẻ) với `TEST_MYSQL_ADMIN_PASSWORD` sai,
+assert `exit code != 0` VÀ số thư mục `pr-media-test-*` trong `os.tmpdir()` trước/sau không đổi —
+chứng minh đúng hành vi end-to-end, không chỉ đơn vị. Test này vào `server/test/`, chạy tự động
+trong `test:integration:mysql`, skip dưới SQLite.
+
+Verify sau fix: `test:security` 6/6, `test:integration:sqlite` 632 pass/8 skip,
+`test:integration:mysql` 639 pass/1 skip (đã cộng thêm 1 test failure-path mới),
+`test:verify-gate1-mapping` 145/145 route + 253 rows, `verify-g0.mjs` PASS, `git diff --check`
+sạch — không hồi quy so với baseline Codex đo trước đó (632/638). Chạy lại full baseline thật lần
+cuối sau commit `018c7af`: artifact mới `memory-bank/perf-baseline/2026-08-30T03-44-04-278Z.json`
+(`gitSha=018c7af` khớp đúng commit remediation round 2) — cả 4 tiêu chí Codex yêu cầu đều đạt: process
+tự thoát (exit 0), không còn database test sót lại, không có file mới trong `data/uploads/`, SHA
+khớp commit. Kết quả đo: throughput ~49–61 rps không tăng theo concurrency, latency p50 tăng tuyến
+tính 4.4ms→889ms, errorRate=0 — kết luận F7 không đổi qua cả 3 lần chạy (round gốc, round 1, round 2).
+
 ## 2026-08-30 — G1A.6: UI characterization smoke toàn bộ module (Codex)
 
 - Thêm `server/test/ui-characterization.test.js` với 4 rule `UI-CHAR-001..004`, script
