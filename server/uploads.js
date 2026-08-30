@@ -25,9 +25,13 @@ const ALLOWED = new Set([
   'text/plain',
 ]);
 
+// W2.1: gắn `.code` để global error middleware (app.js) phân biệt được đây là lỗi validate input
+// (client chọn sai loại file — 400 đúng), không phải lỗi server thật không xác định (500).
 function fileFilter(req, file, cb) {
   if (ALLOWED.has(file.mimetype)) return cb(null, true);
-  cb(new Error('Chỉ chấp nhận ảnh, PDF hoặc tài liệu Word/Excel/PowerPoint.'));
+  const err = new Error('Chỉ chấp nhận ảnh, PDF hoặc tài liệu Word/Excel/PowerPoint.');
+  err.code = 'UPLOAD_REJECTED';
+  cb(err);
 }
 
 const upload = multer({
@@ -50,10 +54,13 @@ const AI_SPREADSHEET_MIMES = new Set([
 ]);
 const AI_SPREADSHEET_EXTENSIONS = new Set(['.xlsx', '.xls', '.xlsb', '.csv']);
 function aiDocumentFileFilter(req, file, cb) {
-  return AI_SPREADSHEET_MIMES.has(String(file.mimetype || '').toLowerCase())
-    && AI_SPREADSHEET_EXTENSIONS.has(path.extname(file.originalname || '').toLowerCase())
-    ? cb(null, true)
-    : cb(new Error('Chỉ chấp nhận file Excel hoặc CSV.'));
+  if (AI_SPREADSHEET_MIMES.has(String(file.mimetype || '').toLowerCase())
+    && AI_SPREADSHEET_EXTENSIONS.has(path.extname(file.originalname || '').toLowerCase())) {
+    return cb(null, true);
+  }
+  const err = new Error('Chỉ chấp nhận file Excel hoặc CSV.');
+  err.code = 'UPLOAD_REJECTED';
+  cb(err);
 }
 const uploadAiDocument = multer({
   storage: multer.memoryStorage(),

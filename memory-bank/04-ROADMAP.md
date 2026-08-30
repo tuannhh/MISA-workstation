@@ -191,7 +191,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 
 | # | Task | Evidence Contract |
 |---|---|---|
-| W2.1 | Chuẩn hóa API envelope/schema/error/client dùng chung (`05-error-contract.md`: `message` canonical, `error` alias; xóa `error` khi frontend hết đọc ở Wave 3) | code+test / **XONG phần nền tảng — Claude 2026-08-30** / requestId + code ổn định cho 401/403/429/multer; DB-error→500 chưa làm (nợ kỹ thuật, xem execution update) |
+| W2.1 | Chuẩn hóa API envelope/schema/error/client dùng chung (`05-error-contract.md`: `message` canonical, `error` alias; xóa `error` khi frontend hết đọc ở Wave 3) | code+test / **XONG — Claude 2026-08-30** / requestId + code ổn định cho 401/403/429/multer + phân loại DB-constraint-error (400, không lộ raw)/lỗi thật không xác định (500, không lộ raw) — exit criterion đã đóng, xem execution update phần 2 |
 | W2.2 | Tách business/domain khỏi page layout (cần W2.1 chốt trước) | code+test / all / — |
 | W2.3 | **ACCEPTANCE gate F7:** PASS khi đạt SLO tại peak trên topology production-like. **Ngưỡng SLO + peak + topology + ngân sách instance do DevOps MISA chốt (O5→DevOps)** — Claude dựng harness đo + báo cáo, không tự đặt ngưỡng release. Nếu chưa async hóa: mitigation chỉ chấp nhận khi **đo lại vẫn PASS** + owner/DevOps + expiry + rollback. "Có async-plan" ≠ exit | test / — / **PASS bắt buộc, plan-only không đủ** |
 | W2.4 | Nếu W2.3 fail: async repository pilot theo slice; benchmark lại sau mỗi slice; xóa mitigation khi đạt SLO | code+test / — / — |
@@ -237,6 +237,36 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > sạch. Không đổi status code/`error` text của bất kỳ response nào đang tồn tại — mọi thay đổi là
 > ADDITIVE (`code`/`message`/`requestId` thêm vào, `error` giữ nguyên giá trị cũ) nên không có test
 > cũ nào cần sửa ngoài phạm vi đã liệt kê.
+
+> **Execution update — 2026-08-30 (W2.1 phần 2 — đóng nợ kỹ thuật, XONG, exit criterion đầy đủ):**
+> thay vì thêm validation tường minh trước DB cho từng route (refactor lớn, rủi ro cao — xem nợ kỹ
+> thuật ở trên), chọn cách nhỏ hơn và an toàn hơn: **phân loại lỗi bằng mã lỗi driver DB** ngay tại
+> global error middleware, xác nhận bằng thực nghiệm trực tiếp (không đoán theo tài liệu driver).
+> `error-contract.js` thêm `isDbConstraintError(err)`: SQLite (`node:sqlite`) ném constraint
+> violation (NOT NULL/UNIQUE/FK/CHECK) với `err.code==='ERR_SQLITE_ERROR'` + `err.errcode % 256===19`
+> (SQLITE_CONSTRAINT, đúng cho mọi biến thể); MySQL dùng tập mã cố định
+> (`ER_BAD_NULL_ERROR`/`ER_NO_DEFAULT_FOR_FIELD`/`ER_DUP_ENTRY`/`ER_NO_REFERENCED_ROW*`/
+> `ER_ROW_IS_REFERENCED*`/`ER_DATA_TOO_LONG`/`WARN_DATA_TRUNCATED`/`ER_TRUNCATED_WRONG_VALUE`). Phát
+> hiện **bug phụ khi thực nghiệm**: `server/mysql-sync.js`'s `_call()` đang bỏ qua `result.code` dù
+> worker thread đã gửi kèm — sửa để `err.code` MySQL đến được middleware (trước đó `err.code` luôn
+> `undefined`, không thể phân loại được lỗi MySQL). `server/app.js`'s global middleware nay có thứ tự
+> rõ ràng: `LIMIT_FILE_SIZE`→400, `MulterError`→400, `err.code==='UPLOAD_REJECTED'`
+> (`uploads.js`'s `fileFilter`/`aiDocumentFileFilter` nay tự gắn code này khi từ chối file sai loại,
+> phân biệt với lỗi thật)→400, `isUploadParseError(err)` (mới, `error-contract.js` — lỗi parse
+> multipart của busboy khi request malformed: thiếu boundary/cắt ngang form — các message này là
+> literal cố định của thư viện busboy, xác nhận đọc trực tiếp `node_modules/busboy/lib`, không chứa
+> dữ liệu client nên lộ ra vẫn an toàn)→400, `isDbConstraintError(err)`→400 `VALIDATION_FAILED`
+> (message chung, log chi tiết server-side kèm requestId, không lộ raw driver message), **còn lại**
+> →500 `INTERNAL_ERROR` (message chung cố định, log stack đầy đủ server-side, KHÔNG lộ raw DB/driver
+> error ra client — đây là exit criterion cuối cùng của `05-error-contract.md` đã đóng). 2 regression
+> phát hiện ngay sau khi đổi mặc định 400→500 (`R136`/`R141`, cả 2 do lỗi upload không có mã phân
+> loại) đã sửa đúng gốc (gắn `.code` ở nơi phát sinh lỗi, không patch vá ở middleware) và xác nhận lại
+> bằng full regression: security 6/6, **SQLite 678/8 skip (0 fail)**, **MySQL 685/1 skip (0 fail)**
+> (xác nhận cả bug `mysql-sync.js` đã sửa đúng bằng lỗi ràng buộc MySQL thật), mapping 274 rows PASS,
+> `verify-g0.mjs` PASS, `verify-g0-selftest` 6/6, `git diff --check` sạch. Không thêm test mới riêng
+> cho `isDbConstraintError`/`isUploadParseError` ở batch này (đã phủ gián tiếp qua ~40+ route
+> characterization test hiện có dựa vào cơ chế NOT NULL→400 + R136/R141); có thể bổ sung unit test
+> trực tiếp cho 2 hàm này như việc nhỏ sau, không phải exit criterion.
 
 ---
 

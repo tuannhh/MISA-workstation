@@ -213,7 +213,14 @@ class MySQLSyncDatabase {
     const length = Atomics.load(state, 1);
     const payload = Buffer.from(new Uint8Array(shared, 8, length)).toString('utf8');
     const result = JSON.parse(payload || '{}');
-    if (Atomics.load(state, 0) === 2) throw new Error(result.error || 'MySQL query failed');
+    if (Atomics.load(state, 0) === 2) {
+      // W2.1: worker đã gửi kèm `code` (mysql2 err.code, vd 'ER_BAD_NULL_ERROR') nhưng trước đây bị
+      // bỏ qua ở đây — global error middleware (app.js) cần field này để phân biệt lỗi ràng buộc dữ
+      // liệu (400, message chung) khỏi lỗi server thật không xác định (500), không lộ raw DB message.
+      const err = new Error(result.error || 'MySQL query failed');
+      if (result.code) err.code = result.code;
+      throw err;
+    }
     return result;
   }
 

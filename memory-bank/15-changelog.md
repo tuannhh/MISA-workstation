@@ -2062,3 +2062,44 @@ mysql` 685 pass/1 skip (+10), `test:verify-gate1-mapping` PASS (274 mapped rows)
 PASS, `test:verify-g0-selftest` 6/6, `git diff --check` sạch. Không route/test cũ nào cần sửa ngoài
 phạm vi đã liệt kê — mọi thay đổi field là additive (`code`/`message`/`requestId` thêm mới, `error`
 giữ nguyên giá trị cũ ký tự-cho-ký tự). Không đổi UI (Codex lane), không đụng RBAC v2 pilot.
+
+## Wave 2: batch W2.1 phần 2 — đóng nợ kỹ thuật (DB-error phân loại 400/500, không lộ raw, XONG hẳn)
+
+Batch Contract: đóng nốt exit criterion còn lại của `05-error-contract.md` — middleware toàn cục
+phải trả 500 cho lỗi server thật KHÔNG xác định, không lộ raw DB/driver error message ra client,
+trong khi VẪN giữ nguyên 400 cho các route hiện đang dựa vào lỗi ràng buộc NOT NULL của DB làm cơ
+chế validation (không phá vỡ characterization test hiện có).
+
+- Chọn cách phân loại bằng **mã lỗi driver DB** (`err.code`/`err.errcode`) thay vì thêm validation
+  tường minh trước DB cho từng route (refactor lớn hơn, rủi ro cao hơn) — xác nhận mã lỗi bằng
+  **thực nghiệm trực tiếp** (script probe chạy thật, không đoán theo tài liệu driver).
+  `error-contract.js` thêm `isDbConstraintError(err)`: SQLite (`node:sqlite`) dùng
+  `err.code==='ERR_SQLITE_ERROR'` + `err.errcode % 256===19` (SQLITE_CONSTRAINT, phủ NOT NULL/
+  UNIQUE/FK/CHECK); MySQL dùng tập mã cố định `ER_BAD_NULL_ERROR`/`ER_NO_DEFAULT_FOR_FIELD`/
+  `ER_DUP_ENTRY`/`ER_NO_REFERENCED_ROW*`/`ER_ROW_IS_REFERENCED*`/`ER_DATA_TOO_LONG`/
+  `WARN_DATA_TRUNCATED`/`ER_TRUNCATED_WRONG_VALUE`.
+- **Bug phụ phát hiện khi thực nghiệm:** `server/mysql-sync.js`'s `_call()` bỏ qua `result.code` dù
+  worker thread (`mysql-worker.js`) đã gửi kèm — sửa để `err.code` MySQL đến được middleware (trước
+  đó luôn `undefined`, không thể phân loại lỗi MySQL).
+- `server/uploads.js`: `fileFilter`/`aiDocumentFileFilter` nay gắn `err.code='UPLOAD_REJECTED'` khi
+  từ chối file sai loại — phân biệt với lỗi thật không xác định.
+- `error-contract.js` thêm `isUploadParseError(err)`: nhận diện lỗi parse `multipart/form-data` của
+  busboy (thiếu boundary, cắt ngang form...) qua tập message literal cố định của thư viện (đọc trực
+  tiếp `node_modules/busboy/lib`, xác nhận các message này không chứa dữ liệu client nên lộ ra vẫn
+  an toàn).
+- `server/app.js`: global error middleware nay có thứ tự phân loại đầy đủ: `LIMIT_FILE_SIZE`→400,
+  `MulterError`→400, `UPLOAD_REJECTED`→400, `isUploadParseError`→400, `isDbConstraintError`→400
+  `VALIDATION_FAILED` (message chung, không lộ raw), **còn lại**→500 `INTERNAL_ERROR` (message
+  chung cố định, log stack đầy đủ server-side kèm requestId, KHÔNG lộ raw DB/driver error ra client
+  — exit criterion cuối cùng của `05-error-contract.md`).
+- 2 regression phát hiện ngay sau khi đổi mặc định 400→500 (`R136`/`R141`, cả 2 do lỗi upload thiếu
+  mã phân loại) — sửa đúng gốc (gắn `.code` ở nơi phát sinh lỗi), không patch vá ở middleware.
+
+Verify: `test:security` 6/6, `test:integration:sqlite` 678 pass/8 skip (0 fail), `test:integration:
+mysql` 685 pass/1 skip (0 fail — xác nhận bug `mysql-sync.js` đã sửa đúng bằng lỗi ràng buộc MySQL
+thật), `test:verify-gate1-mapping` PASS (274 mapped rows), `verify-g0.mjs` PASS,
+`test:verify-g0-selftest` 6/6, `git diff --check` sạch. Không thêm test đơn vị riêng cho
+`isDbConstraintError`/`isUploadParseError` ở batch này (đã phủ gián tiếp qua ~40+ route
+characterization test dựa vào NOT NULL→400 + R136/R141 tự sửa) — có thể bổ sung như việc nhỏ sau,
+không phải exit criterion. Không đổi UI (Codex lane), không đụng RBAC v2 pilot. **W2.1 nay đã đóng
+hẳn (không còn nợ kỹ thuật).**

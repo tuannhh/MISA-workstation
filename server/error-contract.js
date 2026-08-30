@@ -23,4 +23,46 @@ function sendError(req, res, status, code, message, details) {
   return res.status(status).json(body);
 }
 
-module.exports = { requestIdMiddleware, sendError };
+// W2.1 phần 2 — phân loại lỗi DB ràng buộc dữ liệu (client gửi thiếu/sai) khỏi lỗi server thật
+// KHÔNG xác định (bug/kết nối/...), để middleware toàn cục trả đúng status mà KHÔNG lộ raw driver
+// error message ra client. Xác nhận bằng thực nghiệm trực tiếp (không đoán theo tài liệu mysql2):
+// SQLite (`node:sqlite`) ném lỗi constraint (NOT NULL/UNIQUE/CHECK/FK) với `err.code ===
+// 'ERR_SQLITE_ERROR'` và `err.errcode` là extended result code — base code nằm ở byte thấp
+// (`errcode % 256 === 19` = SQLITE_CONSTRAINT, đúng cho mọi biến thể NOTNULL/UNIQUE/FK/CHECK).
+// MySQL (qua mysql-sync.js, nay đã forward `err.code` từ worker) dùng mã lỗi cố định của MySQL
+// server, không đổi theo phiên bản: ER_BAD_NULL_ERROR/ER_NO_DEFAULT_FOR_FIELD (NOT NULL),
+// ER_DUP_ENTRY (UNIQUE/PK), ER_NO_REFERENCED_ROW*/ER_ROW_IS_REFERENCED* (FK), ER_DATA_TOO_LONG/
+// WARN_DATA_TRUNCATED/ER_TRUNCATED_WRONG_VALUE (kiểu dữ liệu/độ dài).
+const MYSQL_CONSTRAINT_CODES = new Set([
+  'ER_BAD_NULL_ERROR', 'ER_NO_DEFAULT_FOR_FIELD', 'ER_DUP_ENTRY',
+  'ER_NO_REFERENCED_ROW', 'ER_NO_REFERENCED_ROW_2',
+  'ER_ROW_IS_REFERENCED', 'ER_ROW_IS_REFERENCED_2',
+  'ER_DATA_TOO_LONG', 'WARN_DATA_TRUNCATED', 'ER_TRUNCATED_WRONG_VALUE',
+]);
+
+function isDbConstraintError(err) {
+  if (!err) return false;
+  if (err.code === 'ERR_SQLITE_ERROR' && Number(err.errcode) % 256 === 19) return true;
+  if (typeof err.code === 'string' && MYSQL_CONSTRAINT_CODES.has(err.code)) return true;
+  return false;
+}
+
+// W2.1 phần 2 — busboy (dùng bởi multer để đọc multipart/form-data) ném lỗi parse body (client gửi
+// request malformed: thiếu boundary, cắt ngang form...) dưới dạng `Error` thường, KHÔNG phải
+// `MulterError` (xác nhận đọc trực tiếp node_modules/busboy/lib — các message này là literal cố
+// định của thư viện, không chứa dữ liệu client nên lộ ra client vẫn an toàn). Đây vẫn là lỗi input
+// của client (400), không phải lỗi server thật không xác định.
+const BUSBOY_PARSE_ERROR_MESSAGES = new Set([
+  'Malformed content type', 'Missing Content-Type', 'Multipart: Boundary not found',
+  'Malformed part header', 'Unexpected end of form', 'Unexpected end of file',
+  'Malformed urlencoded form',
+]);
+
+function isUploadParseError(err) {
+  if (!err || typeof err.message !== 'string') return false;
+  if (BUSBOY_PARSE_ERROR_MESSAGES.has(err.message)) return true;
+  if (err.message.startsWith('Unsupported content type:')) return true;
+  return false;
+}
+
+module.exports = { requestIdMiddleware, sendError, isDbConstraintError, isUploadParseError };

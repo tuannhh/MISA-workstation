@@ -8,7 +8,7 @@ require('./db'); // khởi tạo + seed
 const auth = require('./auth');
 const apiRouter = require('./routes');
 const aiRouter = require('./ai');
-const { requestIdMiddleware, sendError } = require('./error-contract');
+const { requestIdMiddleware, sendError, isDbConstraintError, isUploadParseError } = require('./error-contract');
 
 function createApp() {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -43,12 +43,13 @@ function createApp() {
   // AI (Gemini): giọng nói + tạo thiệp
   app.use('/api/ai', aiRouter);
 
-  // Xử lý lỗi (gồm lỗi upload của multer: quá dung lượng / sai định dạng). W2.1: thêm code/message/
-  // requestId chuẩn hóa (05-error-contract.md) mà KHÔNG đổi status code hiện có — phần lớn route
-  // POST/PUT dựa vào lỗi NOT NULL của DB bubble lên đúng middleware này để trả 400 làm validation
-  // (đặc tả ở nhiều test R004/R007/R031/R045/R064/R089/R092/R047...); đổi mặc định "lỗi khác" sang
-  // 500 sẽ phá vỡ hàng loạt characterization test đó — đây là việc lớn hơn, thuộc phạm vi thêm input
-  // validation tường minh trước khi chạm DB (chưa làm ở batch W2.1 này, ghi nhận nợ kỹ thuật).
+  // Xử lý lỗi (gồm lỗi upload của multer: quá dung lượng / sai định dạng). W2.1 phần 2: phân biệt
+  // lỗi ràng buộc dữ liệu (client thiếu/sai trường bắt buộc — vẫn 400 như characterization hiện có
+  // ở R004/R007/R031/R045/R064/R089/R092/R047..., KHÔNG đổi status) khỏi lỗi server thật không xác
+  // định (500, trước đây cũng rơi vào 400 kèm nguyên message driver — nay không còn lộ). Cả 2 nhánh
+  // đều log đầy đủ chi tiết (message+code+stack) server-side kèm requestId để trace, không gửi cho
+  // client. Xem `isDbConstraintError()` (error-contract.js) cho danh sách mã lỗi đã xác nhận bằng
+  // thực nghiệm trên cả 2 driver, không phải đoán theo tài liệu.
   app.use((err, req, res, next) => {
     if (res.headersSent) return next(err);
     if (err && err.code === 'LIMIT_FILE_SIZE') {
@@ -57,8 +58,18 @@ function createApp() {
     if (err && err.name === 'MulterError') {
       return sendError(req, res, 400, 'UPLOAD_ERROR', err.message || 'Lỗi tải file lên.');
     }
-    const msg = (err && err.message) || 'Lỗi máy chủ';
-    return sendError(req, res, 400, 'UNCAUGHT_ERROR', msg);
+    if (err && err.code === 'UPLOAD_REJECTED') {
+      return sendError(req, res, 400, 'UPLOAD_ERROR', err.message || 'Lỗi tải file lên.');
+    }
+    if (isUploadParseError(err)) {
+      return sendError(req, res, 400, 'UPLOAD_ERROR', 'Dữ liệu tải file lên không hợp lệ.');
+    }
+    if (isDbConstraintError(err)) {
+      console.error(`[error] requestId=${req.requestId} VALIDATION_FAILED:`, err.code, err.message);
+      return sendError(req, res, 400, 'VALIDATION_FAILED', 'Dữ liệu không hợp lệ (thiếu trường bắt buộc hoặc vi phạm ràng buộc dữ liệu).');
+    }
+    console.error(`[error] requestId=${req.requestId} INTERNAL_ERROR:`, err && err.stack || err);
+    return sendError(req, res, 500, 'INTERNAL_ERROR', 'Đã xảy ra lỗi ở máy chủ, vui lòng thử lại sau.');
   });
 
   // Static frontend
