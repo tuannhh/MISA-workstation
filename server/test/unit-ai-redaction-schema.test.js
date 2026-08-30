@@ -155,16 +155,18 @@ test('BR-AI-014: SENT_SCHEMA (monitor.js) — mảng object yêu cầu i/sentime
   assert.deepEqual(SENT_SCHEMA.items.properties.sentiment.enum, ['positive', 'neutral', 'negative']);
 });
 
-// ===================== monitor.js#analyzeBatch — đặc tả lỗ hổng KHÔNG redact trước khi gửi Gemini =====================
+// ===================== monitor.js#analyzeBatch — W1.AI-POLICY: đã redact trước khi gửi Gemini =====================
 
-test('BR-AI-015 (đặc tả lỗ hổng hiện có, KHÔNG fix ở đây — chuyển W1.AI-POLICY): analyzeBatch() đưa content THÔ (chưa redact PII) vào prompt gửi Gemini', async (t) => {
+test('BR-AI-015 (ĐÃ SỬA — W1.AI-POLICY, trước đây đặc tả lỗ hổng KHÔNG redact): analyzeBatch() nay redact PII (SĐT/email) trước khi đưa content vào prompt gửi Gemini', async (t) => {
   let seenPrompt;
   t.mock.method(gemini, 'genJSON', async (parts) => { seenPrompt = parts[0].text; return []; });
   await analyzeBatch([{ title: 'Tin có SĐT', content: 'Liên hệ 0912345678 hoặc pr@misa.vn để biết thêm' }]);
-  // monitor.js KHÔNG gọi redactTextForAi() ở đường quét RSS/mention — toàn bộ nội dung thô (kể cả
-  // SĐT/email nếu vô tình xuất hiện trong bài báo/scrape) được đưa nguyên vào prompt gửi Gemini.
-  assert.match(seenPrompt, /0912345678/);
-  assert.match(seenPrompt, /pr@misa\.vn/);
+  // monitor.js giờ gọi redactTextForAi() trước khi đưa content vào prompt — SĐT/email (nếu vô tình
+  // xuất hiện trong bài báo/scrape) không còn xuất hiện nguyên văn trong dữ liệu gửi Gemini.
+  assert.doesNotMatch(seenPrompt, /0912345678/);
+  assert.doesNotMatch(seenPrompt, /pr@misa\.vn/);
+  assert.match(seenPrompt, /\[SĐT ĐÃ ẨN\]/);
+  assert.match(seenPrompt, /\[EMAIL ĐÃ ẨN\]/);
 });
 
 test('BR-AI-016: analyzeBatch() map kết quả theo đúng chỉ số "i", trả [] khi genJSON không trả mảng', async (t) => {

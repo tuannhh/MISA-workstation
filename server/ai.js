@@ -9,6 +9,7 @@ const { requireAuth, requirePerm } = require('./auth');
 const { uploadAudio, uploadAiDocument } = require('./uploads');
 const { isSpreadsheet, parseSpreadsheet, redactTextForAi } = require('./spreadsheet-parser');
 const outbound = require('./safe-fetch');
+const aiPolicy = require('./ai-policy');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -49,6 +50,7 @@ const VOICE_SCHEMA = {
 router.post('/interaction-voice', requirePerm('interactions', 'create'), uploadAudio.single('audio'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Không có dữ liệu ghi âm.' });
+    aiPolicy.assertEgressAllowed('AI-E001', req.principal);
     const prompt = `Đây là đoạn ghi âm tiếng Việt của một nhân viên PR (quan hệ truyền thông) đang ghi nhận một hoạt động/tương tác với đối tác.
 Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
 - channel chỉ chọn 1 trong: "Gặp mặt", "Điện thoại", "Email", "Sự kiện", "Khác".
@@ -87,6 +89,7 @@ const DATE_TYPE_VI = { birthday: 'sinh nhật', founding: 'ngày thành lập', 
 
 router.post('/card-text', requirePerm('reminders', 'view'), async (req, res) => {
   try {
+    aiPolicy.assertEgressAllowed('AI-E002', req.principal);
     const { title, date_type, subject_name, idea } = req.body || {};
     const dip = DATE_TYPE_VI[date_type] || 'dịp đặc biệt';
     const prompt = `Bạn viết lời chúc mừng đại diện cho MISA (công ty công nghệ, phần mềm hàng đầu Việt Nam) gửi tới đối tác truyền thông nhân ${dip}${subject_name ? ` của ${subject_name}` : ''}${title ? ` ("${title}")` : ''}.
@@ -112,6 +115,7 @@ router.post('/card-image', requirePerm('reminders', 'view'), async (req, res) =>
   try {
     const { text, context } = req.body || {};
     if (!text || !text.trim()) return res.status(400).json({ error: 'Chưa có nội dung lời chúc.' });
+    aiPolicy.assertEgressAllowed('AI-E003', req.principal);
     const ref = logoRef();
     const prompt = `Tạo một tấm thiệp chúc mừng chuyên nghiệp, tỷ lệ khung hình 3:2 (ngang).
 NGỮ CẢNH: ${context || 'Thiệp chúc mừng của công ty công nghệ MISA gửi đối tác.'}
@@ -160,6 +164,7 @@ function stripHtml(html) {
 
 router.post('/award-extract', requirePerm('awards', 'create'), uploadAudio.single('file'), async (req, res) => {
   try {
+    aiPolicy.assertEgressAllowed('AI-E004', req.principal);
     const instruction = `Đây là thông báo/thể lệ một GIẢI THƯỞNG (hoặc bằng khen, danh hiệu). Hãy đọc và trích xuất thông tin theo schema.
 - organizer_type: "gov" nếu là Bộ/Ban/Ngành/cơ quan nhà nước; "association" nếu Hiệp hội/Hội; còn lại "other".
 - submission_deadline: định dạng YYYY-MM-DD nếu suy ra được, nếu không thì để trống.
@@ -169,12 +174,12 @@ router.post('/award-extract', requirePerm('awards', 'create'), uploadAudio.singl
     if (req.file) {
       parts.push({ inlineData: { mimeType: req.file.mimetype || 'application/pdf', data: req.file.buffer.toString('base64') } });
     } else if (req.body.text && req.body.text.trim()) {
-      parts.push({ text: 'NỘI DUNG:\n' + req.body.text.trim().slice(0, 20000) });
+      parts.push({ text: 'NỘI DUNG ĐÃ ẨN THÔNG TIN LIÊN HỆ:\n' + redactTextForAi(req.body.text.trim()).slice(0, 20000) });
     } else if (req.body.url && /^https?:\/\//.test(req.body.url)) {
       sourceUrl = req.body.url.trim();
       const r = await outbound.safeFetch(sourceUrl, { timeoutMs: 12000, headers: { 'User-Agent': 'Mozilla/5.0 MISA-PR' } });
       const html = await r.text();
-      parts.push({ text: 'NỘI DUNG TỪ TRANG WEB:\n' + stripHtml(html) });
+      parts.push({ text: 'NỘI DUNG TỪ TRANG WEB (ĐÃ ẨN THÔNG TIN LIÊN HỆ):\n' + redactTextForAi(stripHtml(html)) });
     } else {
       return res.status(400).json({ error: 'Cần dán văn bản, nhập URL, hoặc tải lên file.' });
     }
@@ -198,6 +203,7 @@ const ADVICE_SCHEMA = {
 };
 router.post('/award-advice', requirePerm('awards', 'view'), async (req, res) => {
   try {
+    aiPolicy.assertEgressAllowed('AI-E005', req.principal);
     const a = req.body || {};
     const prompt = `MISA (công ty phần mềm/công nghệ hàng đầu Việt Nam, sản phẩm tiêu biểu: MISA AMIS, MISA SME, hóa đơn điện tử...) đang cân nhắc tham gia giải thưởng sau:
 - Tên: ${a.name || ''}
@@ -245,6 +251,7 @@ function limitEventExtract(req, res, next) {
 
 router.post('/event-extract', requirePerm('events', 'create'), limitEventExtract, uploadAiDocument.single('file'), async (req, res) => {
   try {
+    aiPolicy.assertEgressAllowed('AI-E006', req.principal);
     const instruction = `Đây là tài liệu KẾ HOẠCH một SỰ KIỆN của MISA. Đọc và trích xuất thông tin tổng quan theo schema.
 - mode: "host" nếu MISA là đơn vị tổ chức chính; "join" nếu MISA chỉ tham gia/tài trợ.
 - start_time: YYYY-MM-DD nếu suy ra được. Chỉ điền thông tin có trong tài liệu; trường không rõ để trống.`;

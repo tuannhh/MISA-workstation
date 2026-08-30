@@ -1916,3 +1916,59 @@ Verify: `test:security` 6/6, `test:integration:sqlite` 658 pass/8 skip, `test:in
 665 pass/1 skip (+9 so với trước batch), `test:verify-gate1-mapping` PASS (263 mapped rows),
 `verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi UI (Codex lane), không đổi RBAC pilot slice
 nào — batch này độc lập hoàn toàn với D13/PolicyEngine, chỉ chạm tầng Gemini gateway.
+
+## Wave 1 nhánh security: batch W1.AI-POLICY data-egress gateway (F4 — XONG)
+
+Batch Contract: F4 data-egress gateway theo `03-data-classification.md` §D/§E, O8 = PROVISIONAL
+(owner cho phép gửi Gemini tạm với dữ liệu test) → xây gateway **cấu hình được** (permissive mặc
+định, siết được sau bằng config), KHÔNG phải hard-deny. Phải bao cả 12 luồng AI-E001..E012
+(`06-threat-model.md` §A/§D) + SMTP. Không đụng RBAC v2 pilot (vẫn khoá `person`-only theo
+`02-decisions.md` §G).
+
+- Module mới `server/ai-policy.js`: `REGISTRY` (đăng ký duy nhất, 13 khoá `AI-E001`..`AI-E012` +
+  `SMTP`, mỗi khoá gắn cố định `tier`/`purpose`) — `assertEgressAllowed(flowId, principal)` gọi
+  TRƯỚC mỗi lần thật sự gửi dữ liệu ra ngoài, thứ tự: (1) kill-switch cứng — `AI_DISABLED` chặn 12
+  luồng AI-E00x, `SMTP_DISABLED` chặn riêng SMTP (2 công tắc ĐỘC LẬP, tắt email không kéo theo tắt
+  AI và ngược lại); (2) deny-list động qua `app_meta.ai_egress_deny_ids` (JSON array flow ID, Admin
+  siết chỉ bằng đổi config — không cần deploy code mới; mặc định rỗng = permissive đúng O8; JSON
+  hỏng → fail-open, có comment cảnh báo phải đổi nhánh này nếu sau này chuyển deny-by-default);
+  (3) mặc định `allowed`. Mọi quyết định ghi vào bảng `audit_log` CÓ SẴN (tái dùng, không tạo bảng
+  mới) với `action='AI_EGRESS'`, `detail` CHỈ chứa `{tier,purpose,provider,decision}` — KHÔNG bao
+  giờ chứa nội dung payload thật đã/định gửi AI. `pruneEgressLog(days)` (mặc định 90 ngày) +
+  `startRetentionSweep()` dùng lại đúng pattern `setInterval`+`timer.unref()` đã có ở
+  `scheduler.js`/`monitor.js` — không thêm cơ chế cron mới; xoá scope CHỈ `action='AI_EGRESS'`,
+  không đụng LOGIN/LOGOUT hay các loại audit khác.
+- Lắp `assertEgressAllowed()` vào TẤT CẢ điểm egress đã biết: 6 route `server/ai.js` (AI-E001
+  interaction-voice, AI-E002 card-text, AI-E003 card-image, AI-E004 award-extract, AI-E005
+  award-advice, AI-E006 event-extract); 6 luồng logic `server/monitor.js` (AI-E007 analyzeBatch,
+  AI-E008 groundIngest, AI-E009 siteGroundIngest, AI-E010 aiMisaHighlights, AI-E011
+  aiCompetitorAnalysis, AI-E012 evaluateCampaign); `server/mailer.js#send()` (SMTP, đặt SAU nhánh
+  "SMTP chưa cấu hình" có sẵn để giữ nguyên hành vi characterization cũ khi SMTP tắt).
+- Nhân dịp lắp gateway, đóng luôn 2 gap redact đã ghi sẵn trong `gate1-test-mapping.md` làm target
+  của batch này: **BR-AI-017** (`ai.js` POST /award-extract — nhánh text và nhánh URL/stripHtml đều
+  nay gọi `redactTextForAi()` trước khi đưa vào prompt, cùng chuẩn với /event-extract đã có sẵn) và
+  **BR-AI-015** (`monitor.js#analyzeBatch()` nay redact content trước khi gửi Gemini, thay vì đưa
+  content thô như trước).
+- Test mới `server/test/unit-ai-policy.test.js` (9 test, DB sqlite tmp cách ly, không HTTP): registry
+  đủ 13 khoá + đủ tier/purpose; audit "allowed" không chứa payload; throw khi flowId lạ; principal
+  null (job nền) → `username='system'`; `AI_DISABLED` chặn đủ 12 luồng AI-E00x nhưng KHÔNG chặn
+  SMTP; `SMTP_DISABLED` chặn riêng SMTP; deny-list app_meta chặn đúng luồng bị liệt kê + fail-open
+  khi JSON hỏng; `pruneEgressLog()` chỉ xoá `AI_EGRESS`, không đụng LOGIN/LOGOUT.
+- Test cũ cập nhật để khớp hành vi ĐÃ SỬA (không còn "known gap, chưa fix"): `unit-ai-redaction-
+  schema.test.js` BR-AI-015 (đổi từ assert PII xuất hiện thô sang assert PII đã bị thay bằng
+  placeholder `[SĐT ĐÃ ẨN]`/`[EMAIL ĐÃ ẨN]`, đổi tiêu đề test từ "đặc tả lỗ hổng" sang "ĐÃ SỬA").
+  `integration-ai.test.js` thêm test R139/BR-AI-017 mới (set `GEMINI_API_KEY` tạm + mock
+  `gemini.genJSON` để đọc được prompt thật route xây dựng, xác nhận SĐT/email không còn xuất hiện
+  thô) — sửa 1 lỗi restore env trong chính test này khi viết (gán `process.env.X = undefined` tạo
+  ra string `"undefined"` thay vì xoá biến — sửa bằng `delete` khi giá trị gốc là `undefined`).
+- `memory-bank/gate1-test-mapping.md`: BR-AI-015 và BR-AI-017 chuyển từ characterization/TODO sang
+  `green` với ghi chú "ĐÃ SỬA — W1.AI-POLICY". `memory-bank/04-ROADMAP.md` hàng `W1.AI-POLICY` đánh
+  dấu XONG + thêm execution update chi tiết.
+
+Verify: `test:security` 6/6, `test:integration:sqlite` 668 pass/8 skip, `test:integration:mysql`
+675 pass/1 skip (+10 so với trước batch: 9 test `unit-ai-policy` mới + 1 test `R139/BR-AI-017`
+mới), `test:verify-gate1-mapping` PASS (263 mapped rows, TODO giảm còn 1), `verify-g0.mjs` PASS.
+Không đổi UI (Codex lane), không mở rộng RBAC v2 pilot ngoài `person` (giữ nguyên khoá phạm vi theo
+`02-decisions.md` §G) — batch này độc lập hoàn toàn với D13/PolicyEngine, chỉ chạm tầng AI-egress.
+O8 vẫn PROVISIONAL: gateway hiện permissive theo đúng chỉ đạo owner, siết được bất kỳ lúc nào qua
+`AI_DISABLED`/`SMTP_DISABLED`/`ai_egress_deny_ids` khi có dữ liệu thật + Security/Legal duyệt.

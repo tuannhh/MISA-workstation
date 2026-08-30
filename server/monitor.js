@@ -10,6 +10,8 @@ const { db, metaGet } = require('./db');
 const cfg = require('./config');
 const gemini = require('./gemini');
 const outbound = require('./safe-fetch');
+const aiPolicy = require('./ai-policy');
+const { redactTextForAi } = require('./spreadsheet-parser');
 
 // Số ngày quét/lookback (cấu hình ở Settings) — dùng cho Google News + grounding
 function scanDays() { const n = parseInt(metaGet('scan_days', '30'), 10); return n >= 1 && n <= 365 ? n : 30; }
@@ -126,7 +128,8 @@ const SENT_SCHEMA = {
   },
 };
 async function analyzeBatch(rows) {
-  const list = rows.map((r, i) => `#${i}\nTiêu đề: ${r.title}\nNội dung: ${(r.content || '').slice(0, 400)}`).join('\n\n');
+  aiPolicy.assertEgressAllowed('AI-E007');
+  const list = rows.map((r, i) => `#${i}\nTiêu đề: ${r.title}\nNội dung: ${redactTextForAi((r.content || '').slice(0, 400))}`).join('\n\n');
   const prompt = `Bạn là chuyên gia phân tích truyền thông cho MISA. Với mỗi bài dưới đây, hãy:
 - Chấm sắc thái đối với MISA/chủ đề: "positive" (tích cực), "neutral" (trung tính), "negative" (tiêu cực).
 - score: số thực -1..1 (âm = tiêu cực).
@@ -187,6 +190,7 @@ async function groundIngest(q) {
   const prompt = `Hãy DÙNG GOOGLE SEARCH để tìm các tin tức, bài viết, thảo luận MỚI NHẤT trong ${scanDays()} ngày qua tại Việt Nam về: ${terms}. Liệt kê các nguồn cụ thể (báo chí, trang tin, mạng xã hội) kèm tiêu đề và đường dẫn. Càng nhiều nguồn càng tốt.`;
   let r;
   try {
+    aiPolicy.assertEgressAllowed('AI-E008');
     r = await gemini.groundedSearch(prompt);
     if (!r.chunks.length) r = await gemini.groundedSearch(`Tin tức mới nhất hôm nay về ${terms} tại Việt Nam? Trích dẫn nguồn cụ thể.`);
   } catch (e) { console.error('[monitor] grounding lỗi:', e.message); return { fetched: 0, added: 0 }; }
@@ -215,7 +219,7 @@ async function siteGroundIngest(source, q) {
   const terms = (q.include || []).map((g) => g.join(' ')).join(' OR ') || q.name;
   const prompt = `Hãy DÙNG GOOGLE SEARCH với cú pháp site:${host} để tìm các bài viết MỚI NHẤT trong ${scanDays()} ngày qua trên trang "${source.name}" (${host}) có nội dung liên quan: ${terms}. Chỉ liệt kê bài thực sự thuộc site:${host}, kèm tiêu đề và đường dẫn cụ thể.`;
   let r;
-  try { r = await gemini.groundedSearch(prompt); } catch (e) { console.error('[monitor] siteGroundIngest lỗi:', e.message); return { fetched: 0, added: 0 }; }
+  try { aiPolicy.assertEgressAllowed('AI-E009'); r = await gemini.groundedSearch(prompt); } catch (e) { console.error('[monitor] siteGroundIngest lỗi:', e.message); return { fetched: 0, added: 0 }; }
   let fetched = 0, added = 0;
   for (const ch of r.chunks) {
     fetched++;
@@ -254,6 +258,7 @@ async function detectFeed(inputUrl) {
 }
 // AI (1): Tổng hợp TIN HOẠT ĐỘNG MISA — tối đa 10 tin ấn tượng nhất
 async function aiMisaHighlights(days) {
+  aiPolicy.assertEgressAllowed('AI-E010');
   const d = days || scanDays();
   const prompt = `Hãy DÙNG GOOGLE SEARCH tìm các HOẠT ĐỘNG / TIN TỨC nổi bật của Tập đoàn MISA (phần mềm kế toán, hóa đơn điện tử, hộ kinh doanh, chuyển đổi số, AMIS…) tại Việt Nam trong ${d} ngày qua.
 Chọn TỐI ĐA 10 tin ẤN TƯỢNG NHẤT. Trả lời tiếng Việt, đánh số 1..10, mỗi tin gồm: **Tiêu đề ngắn** — 1 câu vì sao đáng chú ý (hợp tác/giải thưởng/sự kiện/sản phẩm/chính sách). Ưu tiên tin mới và có tác động lớn.`;
@@ -262,6 +267,7 @@ Chọn TỐI ĐA 10 tin ẤN TƯỢNG NHẤT. Trả lời tiếng Việt, đánh
 }
 // AI (2): Hoạt động ĐỐI THỦ + phân tích ảnh hưởng tới MISA (theo đối thủ & từ khóa đã khai báo)
 async function aiCompetitorAnalysis(days) {
+  aiPolicy.assertEgressAllowed('AI-E011');
   const d = days || scanDays();
   const comps = db.prepare('SELECT name FROM competitors ORDER BY name').all().map((r) => r.name);
   // từ khóa từ các bộ từ khóa đã khai báo (industry + competitor)
@@ -280,6 +286,7 @@ Trả lời tiếng Việt gồm 2 phần:
 
 // AI đánh giá hiệu quả chiến dịch (số liệu nội bộ + bối cảnh Google)
 async function evaluateCampaign(cp) {
+  aiPolicy.assertEgressAllowed('AI-E012');
   const kws = Array.isArray(cp.keywords) ? cp.keywords : [];
   const from = cp.start_date || '0000-01-01', to = cp.end_date || '9999-12-31';
   const rows = db.prepare(`SELECT title, content, source_name, sentiment FROM mentions WHERE published_at>=? AND published_at<=?`).all(from, to);

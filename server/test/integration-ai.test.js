@@ -139,6 +139,20 @@ test('R139 invalid: không có text/url/file trả 400', async () => {
 test('R139 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/ai/award-extract', { auth: false, body: { text: 'x' } })).status, 401);
 });
+test('R139 / BR-AI-017 (ĐÃ SỬA — W1.AI-POLICY): nhánh text redact PII trước khi đưa vào prompt gửi Gemini', async (t) => {
+  const gemini = require('../gemini');
+  const savedKey = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = 'test-gemini-key-r139';
+  t.after(() => { if (savedKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = savedKey; });
+  let seenPrompt;
+  t.mock.method(gemini, 'genJSON', async (parts) => { seenPrompt = parts.map((p) => p.text).join('\n'); return { name: 'Giải X', ai_summary: 'x' }; });
+  const res = await call('POST', '/api/ai/award-extract', { body: { text: 'Liên hệ 0912345678 hoặc pr@misa.vn để biết thêm về Giải Sao Khuê' } });
+  assert.equal(res.status, 200);
+  assert.doesNotMatch(seenPrompt, /0912345678/);
+  assert.doesNotMatch(seenPrompt, /pr@misa\.vn/);
+  assert.match(seenPrompt, /\[SĐT ĐÃ ẨN\]/);
+  assert.match(seenPrompt, /\[EMAIL ĐÃ ẨN\]/);
+});
 
 // ---------------------------------------------------------------------------
 // R140 — POST /api/ai/award-advice

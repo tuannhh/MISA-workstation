@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const aiPolicy = require('./ai-policy');
 let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch {}
 
@@ -46,6 +47,7 @@ function validateRecipient(to) {
 
 async function send({ to, subject, text, html, icsContent }) {
   if (!transporter) return { sent: false, reason: 'SMTP chưa cấu hình (email tắt)' };
+  aiPolicy.assertEgressAllowed('SMTP');
   const recipient = validateRecipient(to);
   const safeSubject = String(subject || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 200);
   const msg = {
