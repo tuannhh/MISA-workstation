@@ -38,8 +38,11 @@ function createPolicyService({ visibilityStore }) {
   function projectRecord({ principal, entity, module, record }) {
     const output = {};
     for (const [field, value] of Object.entries(record || {})) {
-      let isPublic = false;
-      try { isPublic = !!visibilityStore?.isPublic(module, field); } catch { isPublic = false; }
+      // undefined = field không nằm trong allowlist cấu hình được (chưa có visibility slice
+      // riêng) HOẶC có nhưng chưa từng bị cấu hình — cả 2 trường hợp đều nghĩa là "chưa cấu
+      // hình", để PolicyEngine áp mặc định theo classification_tier (D13.2b).
+      let isPublic;
+      try { isPublic = visibilityStore?.isPublic(module, field); } catch { isPublic = undefined; }
       if (policy.canReadField({ principal, entity, field, record, isPublic })) output[field] = value;
     }
     return output;

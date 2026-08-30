@@ -2266,3 +2266,32 @@ route PASS, `verify-g0.mjs` PASS, `git diff --check` sạch, grep xác nhận 0 
 trong `server/*.js`. Toàn bộ 709/716 test cũ vẫn pass 100% sau rename (không sửa nội dung assertion).
 **Chưa làm:** 18 entity D13.4a còn lại (batch RBAC-EXP-B2..B6, độc lập với việc bỏ 2-role); UI-flow
 matrix §B.2 (Codex lane); seed demo vẫn 2 tài khoản.
+
+## Wave 1: batch RBAC-FIELDVIS-FIX — P0 tự phát hiện: field Public bị ẩn mặc định cho viewer/executor
+
+Trước khi bắt đầu Batch RBAC-EXP-B2 (mở rộng organization/supplier/important_date), kiểm tra thủ
+công `projectRecord()` cho entity `person` với `principal.role='executor'` phát hiện: **mọi field
+Public-tier** (không thuộc nhóm mật nào — vd `email_work`/`phone_work`/`position`/`org_id`/`beat`)
+bị **ẩn mặc định**, không chỉ field mật thật sự. Vì batch RBAC-CUTOVER (cùng ngày, trước batch này)
+đã xoá nhánh legacy và cho GET `/people/:id` chạy PolicyEngine không điều kiện cho **executor**
+(vai trò thật duy nhất của toàn bộ nhân viên PR thật hiện nay, sau khi đổi tên `pr_staff`→
+`executor`), bug này **đã live trên production**: nhân viên PR mở 1 người trong danh bạ sẽ thấy
+record gần như rỗng (`{}` — mất cả `id`), không còn xem được tên/điện thoại/chức vụ/cơ quan.
+
+- `server/policy-engine.js canReadField()`: field tier `Public` giờ mặc định **hiển thị** trừ khi
+  có dòng `field_visibility` rõ ràng `is_public=0` (`isPublic !== false` thay vì `!!isPublic`) —
+  đúng D13.2b ("audience_visibility chỉ được SIẾT, không được NỚI dưới trần"). Field tier
+  Confidential/Restricted giữ nguyên fail-closed (luôn `false`, không đổi — an toàn không đụng).
+- `server/policy-visibility-store.js isPublic()`: trả `undefined` khi chưa có dòng cấu hình (thay
+  vì ép về `false`) — phân biệt "chưa cấu hình" với "đã cấu hình rõ private".
+- **Phát hiện thêm giữa batch:** `server/mysql-sync.js translate()` chưa từng dịch đúng câu UPSERT
+  `field_visibility` (`ON CONFLICT...DO UPDATE...`) sang MySQL — `setPublic()` (cách duy nhất cấu
+  hình `field_visibility` qua code thật) **chưa từng được test trên MySQL** trước batch này (unit
+  test cũ ép cứng `DB_CLIENT=sqlite`). Thêm 1 rule translate theo đúng mẫu các rule khác.
+- Test sửa lại: `integration-people.test.js` D13-011 (bỏ INSERT thủ công, field Public giờ thấy
+  mặc định) + D13-011b mới (SIẾT `full_name` xuống private qua `setPublic()` thật); D13-006 sửa kỳ
+  vọng `false`→`undefined`.
+
+Verify: security 6/6, SQLite 723 pass/8 skip, MySQL 730 pass/1 skip, mapping 145/145 PASS,
+`verify-g0.mjs` PASS, `git diff --check` sạch. Xác nhận thủ công: executor `projectRecord()` trên
+person 9 field business giờ thấy 7 (đúng ẩn `dob`/`phone_personal`, hiện phần còn lại).

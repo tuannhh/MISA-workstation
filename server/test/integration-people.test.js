@@ -114,18 +114,36 @@ test('R030 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/people/1', { auth: false })).status, 401);
 });
 
-test('D13-011 People Detail pilot: viewer only receives configured Public fields; related collections stay private', async () => {
+test('D13-011 People Detail pilot: viewer thay field Public mac dinh (D13.2b), field mat van an; collection lien quan van rong', async () => {
   const id = await createPerson({ full_name: 'Viewer public name', phone_personal: '0900123456', bank_name: 'Restricted bank' });
-  const { db } = require('../db');
-  db.prepare('INSERT INTO field_visibility (module,field,is_public) VALUES (?,?,?)').run('partners', 'full_name', 1);
   const res = await call('GET', `/api/people/${id}`, { as: viewerCookie });
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.deepEqual(body.record, { full_name: 'Viewer public name' });
+  // Field Public (khong thuoc nhom mat nao) mac dinh HIEN THI, khong can field_visibility rieng
+  // -- sua P0 2026-08-30: truoc day moi field Public deu bi an mac dinh (chi full_name duoc demo
+  // qua toggle thu cong), khien executor/viewer thay record gan nhu rong hoan toan tren production.
+  assert.equal(body.record.id, id);
+  assert.equal(body.record.full_name, 'Viewer public name');
   assert.deepEqual(body.interactions, []);
   assert.deepEqual(body.gifts, []);
   assert.equal('phone_personal' in body.record, false);
   assert.equal('bank_name' in body.record, false);
+});
+
+test('D13-011b field_visibility SIET field Public xuong private cho viewer (D13.2b: chi duoc siet, khong duoc noi)', async () => {
+  const id = await createPerson({ full_name: 'Ten se bi siet an' });
+  const { db } = require('../db');
+  const { createVisibilityStore } = require('../policy-visibility-store');
+  const store = createVisibilityStore(db);
+  store.setPublic({ module: 'partners', field: 'full_name', isPublic: false, principal: { id: 1, role: 'super_admin' } });
+  try {
+    const res = await call('GET', `/api/people/${id}`, { as: viewerCookie });
+    const body = await res.json();
+    assert.equal('full_name' in body.record, false);
+    assert.equal(body.record.id, id); // field Public khac khong bi anh huong boi cau hinh rieng full_name
+  } finally {
+    db.prepare("DELETE FROM field_visibility WHERE module='partners' AND field='full_name'").run();
+  }
 });
 
 test('D13-012 People Detail pilot write: viewer PUT/DELETE đều 403 (không được sửa/xoá gì)', async () => {

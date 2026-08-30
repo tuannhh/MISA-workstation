@@ -9,7 +9,14 @@ function createVisibilityStore(db) {
   const get = db.prepare('SELECT is_public FROM field_visibility WHERE module=? AND field=?');
   const set = db.prepare("INSERT INTO field_visibility (module,field,is_public,updated_by) VALUES (?,?,?,?) ON CONFLICT(module,field) DO UPDATE SET is_public=excluded.is_public, updated_by=excluded.updated_by, updated_at=datetime('now')");
   return {
-    isPublic(module, field) { assertAllowed(module, field); return Number(get.get(module, field)?.is_public || 0) === 1; },
+    // undefined = chưa có dòng cấu hình nào (khác với is_public=0 đã cấu hình rõ private) —
+    // PolicyEngine cần phân biệt 2 trạng thái này để áp mặc định D13.2b (Public-tier mặc định
+    // hiển thị, chỉ ẩn khi CÓ dòng is_public=0 rõ ràng).
+    isPublic(module, field) {
+      assertAllowed(module, field);
+      const row = get.get(module, field);
+      return row ? Number(row.is_public) === 1 : undefined;
+    },
     setPublic({ module, field, isPublic, principal }) {
       assertAllowed(module, field);
       if (!['admin', 'super_admin'].includes(principal?.role)) throw new Error('FORBIDDEN');

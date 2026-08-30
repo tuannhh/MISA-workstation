@@ -390,3 +390,68 @@ Exit criteria: full regression (test:security, test:integration:sqlite, test:int
       SS G cu.
 Expected commit range/count: 1 commit.
 ```
+
+## Batch RBAC-FIELDVIS-FIX (2026-08-30)
+
+```md
+Batch-ID: RBAC-FIELDVIS-FIX
+Goal: P0 tu phat hien truoc khi bat dau Batch RBAC-EXP-B2 (mo rong 3 entity Global con lai:
+      organization/supplier/important_date) -- kiem tra thu cong projectRecord() cho entity person
+      voi principal executor phat hien: MOI field Public-tier (khong thuoc SENSITIVE_GROUPS nao,
+      vd email_work/phone_work/position/org_id/beat/relationship_score...) bi AN MAC DINH cho
+      viewer/executor, khong chi field mat (Confidential/Restricted). Ly do: canReadField() cu doi
+      hoi isPublic===true (co dong field_visibility ro rang) moi cho xem field Public, va
+      ALLOWED_FIELDS trong policy-visibility-store.js chi liet ke dung nhom field mat + full_name
+      (demo) -- moi field khac (vd email_work) khong nam trong allowlist nay nen isPublic() throw,
+      catch ve false, ket qua field bi an. Sau batch RBAC-CUTOVER (cung ngay) xoa nhanh legacy,
+      GET /people/:id chay PolicyEngine KHONG DIEU KIEN cho executor (vai tro that duy nhat cua
+      toan bo nhan vien PR that hien nay, sau khi doi ten pr_staff->executor) -- nghia la BUG NAY
+      DA LIVE tren production ngay khi RBAC-CUTOVER duoc push: nhan vien PR that mo 1 nguoi trong
+      danh ba se thay record GAN NHU RONG (chi con full_name neu da duoc toggle rieng, con lai mat
+      het email/dien thoai cong viec/chuc vu/co quan...). Xac nhan bang script thu cong
+      (server/policy-service.js projectRecord voi principal role=executor) truoc khi sua: tra ve
+      '{}' cho 1 record co 9 field, chi con 'id' bi mat luon.
+In scope: (a) server/policy-engine.js canReadField(): sua logic cuoi -- tier!=='Public' luon tra
+      false (KHONG doi, giu nguyen an toan chan Confidential/Restricted bi cau hinh sai thanh
+      public -- test D13-002 "config corrupt khong public hoa Confidential" van xanh); tier===
+      'Public' gio tra `isPublic !== false` thay vi `!!isPublic` -- nghia la field Public MAC DINH
+      HIEN THI tru khi CO dong field_visibility ro rang is_public=0 (dung D13.2b: "audience_
+      visibility chi duoc SIET, khong duoc NOI" -- SIET tu mac dinh-hien-thi xuong an, khong phai
+      NOI tu mac dinh-an len hien). (b) server/policy-visibility-store.js isPublic(): tra ve
+      `undefined` khi chua co dong cau hinh nao (thay vi ep ve `false`) -- phan biet ro "chua cau
+      hinh gi" (undefined, PolicyEngine ap mac dinh theo tier) voi "da cau hinh ro private"
+      (false, luon an bat ke tier). (c) server/policy-service.js projectRecord(): bo `!!` ep kieu,
+      truyen thang gia tri tho tu store (undefined/true/false) sang canReadField(). (d) PHAT HIEN
+      THEM giua batch (khong phai backlog rieng): server/mysql-sync.js translate() chua co rule
+      dich cau UPSERT field_visibility (INSERT...ON CONFLICT(module,field) DO UPDATE SET...) sang
+      MySQL -- setPublic() (duy nhat cach cau hinh field_visibility qua code that) CHUA TUNG duoc
+      test tren MySQL truoc batch nay (test unit cu ep cung DB_CLIENT=sqlite o dau file, integration
+      test moi viet trong batch nay la lan dau goi qua HTTP/MySQL that va lap tuc lo ra loi cu
+      phap SQL) -- them 1 rule translate moi theo dung mau cac rule ON CONFLICT khac da co san.
+Out of scope: khong doi ALLOWED_FIELDS (van chi gom nhom field mat + full_name lam vi du dieu
+      chinh duoc) -- mo rong allowlist nay phu mot cot that cua module la 1 viec khac (them 1 man
+      hinh Admin cau hinh tung field), khong phai P0 can sua ngay; khong doi hanh vi Confidential/
+      Restricted (giu fail-closed nhu cu, khong lien quan bug nay).
+Behavior mode: BUG-FIX dung theo dac ta da duyet truoc do (02-decisions.md D13.2b), khong phai
+      quyet dinh moi -- "Field tier Public -> mac dinh hien thi hop ly, audience_visibility CHI
+      DUOC SIET KHONG DUOC NOI DUOI TRAN" da duoc owner duyet tu 2026-08-25 (C0.2), code cu chi
+      thuc thi SAI (an mac dinh thay vi hien mac dinh).
+Risk hotspots: (1) neu sua nham thanh "moi field deu hien thi mac dinh bat ke tier" se mo lo hong
+      nguoc lai (Confidential/Restricted bi lo) -- da chan bang if tier!=='Public' return false
+      DUNG TRUOC dong return isPublic!==false, khong doi thu tu; (2) MySQL UPSERT statement dich
+      sai thu tu regex (datetime('now') da bi 1 rule truoc do dich thanh UTC_TIMESTAMP() TRONG
+      CUNG 1 chuoi .replace(), nen rule moi phai match phan DA DICH, khong phai literal goc) --
+      da phat hien qua that bai test that, sua dung, xac nhan lai bang test.
+Required tests: server/test/integration-people.test.js D13-011 (sua lai, khong con INSERT
+      field_visibility thu cong -- gio field Public thay duoc mac dinh) + D13-011b (test moi:
+      SIET full_name xuong private qua setPublic() that, xac nhan an dung 1 field, khong anh huong
+      field Public khac); server/test/unit-policy-visibility-store.test.js D13-006 (sua lai ky
+      vong tu false -> undefined). Xac nhan thu cong lai bang script: executor projectRecord() tren
+      person co 9 field business gio thay 7 field (an dung dob/phone_personal, con lai hien).
+Allowed known-red/TODO: khong can -- bug fix co code + test di kem, khong phai hardening ly thuyet.
+Exit criteria: full regression (test:security, sqlite 723/8, mysql 730/1, verify-gate1-mapping,
+      verify-g0.mjs, git diff --check) deu xanh; script xac nhan thu cong executor thay du field
+      Public tren person; MySQL that su chay duoc setPublic() (truoc batch nay chua tung duoc thuc
+      thi tren MySQL).
+Expected commit range/count: 1 commit.
+```

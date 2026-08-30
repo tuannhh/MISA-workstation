@@ -464,6 +464,35 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > rebuild cho 4 vai trò, đã ghi chú rõ trong file đó. Seed demo (`server/db.js`) vẫn giữ 2 tài khoản
 > (super_admin + executor) — viewer/admin tạo qua API thật khi cần, không seed thêm.
 
+> **Execution update — 2026-08-30 (RBAC-FIELDVIS-FIX: P0 tự phát hiện trước khi bắt đầu Batch
+> RBAC-EXP-B2):** kiểm tra thủ công `projectRecord()` cho entity `person` với `principal.role=
+> 'executor'` trước khi mở rộng thêm 3 entity Global (organization/supplier/important_date) phát
+> hiện: **mọi field Public-tier** (không thuộc nhóm mật nào — `email_work`/`phone_work`/`position`/
+> `org_id`/`beat`...) bị **ẩn mặc định** cho viewer/executor, không chỉ field mật thật sự — script
+> xác nhận trả về `{}` cho 1 record 9 field. Vì batch RBAC-CUTOVER (cùng ngày, ngay trước) đã xoá
+> nhánh legacy khiến GET `/people/:id` chạy PolicyEngine không điều kiện cho **executor** (vai trò
+> thật duy nhất của toàn bộ nhân viên PR thật hiện nay), **bug này đã LIVE trên production ngay
+> sau RBAC-CUTOVER**: nhân viên PR mở 1 người trong danh bạ sẽ thấy record gần như rỗng.
+>
+> Root cause: `canReadField()` cũ đòi `isPublic===true` (có dòng `field_visibility` rõ ràng) mới
+> cho xem field dù tier là Public; `ALLOWED_FIELDS` (`policy-visibility-store.js`) chỉ liệt kê nhóm
+> field mật + `full_name` (demo) nên mọi field khác throw khi tra cứu, catch về `false`, bị ẩn.
+> Batch Contract: `18-g1b-rbac-batch-contract.md#batch-rbac-fieldvis-fix-2026-08-30`. Sửa: (a)
+> `canReadField()` — tier Public giờ mặc định hiển thị (`isPublic !== false` thay vì `!!isPublic`),
+> đúng D13.2b ("chỉ được SIẾT, không được NỚI dưới trần"); tier Confidential/Restricted không đổi
+> (vẫn fail-closed tuyệt đối, không phụ thuộc `isPublic`); (b) `isPublic()` trả `undefined` khi
+> chưa có dòng cấu hình (thay vì ép `false`) để phân biệt "chưa cấu hình" với "đã cấu hình private
+> rõ ràng". **Phát hiện thêm giữa batch:** `mysql-sync.js translate()` chưa từng dịch đúng UPSERT
+> `field_visibility` sang MySQL — `setPublic()` (cách duy nhất cấu hình bảng này qua code thật)
+> chưa từng chạy được trên MySQL trước batch này (unit test cũ ép cứng SQLite); đã thêm rule dịch.
+>
+> Full regression: security 6/6, SQLite 723/8 skip, MySQL 730/1 skip, mapping 145/145 PASS,
+> `verify-g0.mjs` PASS, `git diff --check` sạch. Xác nhận thủ công lại: executor `projectRecord()`
+> trên person 9 field business giờ thấy 7 (đúng ẩn `dob`/`phone_personal`, hiện phần còn lại).
+> **Batch RBAC-EXP-B2 (organization/supplier/important_date) tiếp tục ngay sau, trên nền engine đã
+> sửa đúng — nếu làm trước khi sửa sẽ lặp lại đúng bug này cho 2 entity dùng hàng ngày nhiều hơn
+> person.**
+
 ---
 
 ## WAVE 3 — Strangler UI theo vertical slice (trên RBAC v2 mới) + slice Voice (D14)

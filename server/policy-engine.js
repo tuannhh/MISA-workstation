@@ -38,7 +38,7 @@ function canWrite({ principal, entity, action, record, parentOwnerId }) {
   return DIRECT.has(entity) && ownerValue(entity, record) === principal.id && action === 'edit';
 }
 
-function canReadField({ principal, entity, field, record, isPublic = false, parentOwnerId }) {
+function canReadField({ principal, entity, field, record, isPublic, parentOwnerId }) {
   if (!principal) return false;
   if (isPrivileged(principal)) return true;
   const tier = classification(entity, field);
@@ -46,7 +46,12 @@ function canReadField({ principal, entity, field, record, isPublic = false, pare
   if (principal.role === 'executor' && isInheritedEntity(entity) && parentOwnerId === principal.id) return true;
   // A non-Public tier may never be made public by normal configuration; fail closed even if
   // a corrupt row says is_public=1.
-  return !!isPublic && tier === 'Public';
+  if (tier !== 'Public') return false;
+  // D13.2b: Public-tier field mặc định HIỂN THỊ (audience_visibility chỉ dùng để SIẾT xuống
+  // private, không phải để MỞ field mật) — isPublic===undefined nghĩa là chưa cấu hình gì,
+  // không phải "đã cấu hình private". Chỉ isPublic===false (có dòng field_visibility rõ ràng
+  // is_public=0) mới thực sự ẩn field Public này.
+  return isPublic !== false;
 }
 
 // D13.3b: attachments are not scalar `person` fields, so they get their own ceiling table instead
