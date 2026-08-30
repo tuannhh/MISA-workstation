@@ -331,6 +331,38 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > `verify-g0-selftest` 6/6, `git diff --check` sạch. Không đổi UI, không đụng RBAC v2 pilot, không
 > đổi durable session store (vẫn chờ DevOps O4 — không liên quan tới rate-limit/fixation).
 
+> **Execution update — 2026-08-30 (F15 sửa tận gốc — FK không được MySQL thực thi, backlog Wave 1):**
+> rà backlog Wave 1 tìm việc unblocked tiếp theo (không phải UI, không cần mở rộng RBAC pilot, không
+> chờ DevOps), chọn F15 — đã có bằng chứng mạnh từ trước (5 quan hệ FK: `award_participations`,
+> `supplier_quotes/transactions/contacts`, `event_costs`) nhưng chưa root-cause. Điều tra thực
+> nghiệm trực tiếp (`SHOW CREATE TABLE` trên MySQL test thật): xác nhận cột `award_id BIGINT
+> DEFAULT NULL` — **REFERENCES đã biến mất hoàn toàn** khỏi DDL thật dù `db.js` khai đủ. Root cause:
+> **MySQL/InnoDB PARSE nhưng ÂM THẦM BỎ QUA cú pháp `REFERENCES` gắn trực tiếp vào cột** (inline
+> column-level, cách SQLite chấp nhận) — hành vi đã tài liệu hoá của MySQL, không phải bug của
+> `mysql2`/`translate()` từ trước — MySQL chỉ tạo FK thật khi có `CONSTRAINT ... FOREIGN KEY (col)
+> REFERENCES tbl(col)` tách riêng (out-of-line).
+>
+> Sửa tận gốc tại đúng 1 điểm dịch DDL dùng chung (`server/mysql-sync.js`'s `translate()`, áp dụng
+> cho MỌI `CREATE TABLE` khi khởi tạo MySQL) thay vì vá từng route: tách mọi cột `col TYPE
+> REFERENCES tbl(refCol) [ON DELETE action]` inline thành `CONSTRAINT fk_<table>_<col> FOREIGN KEY
+> (col) REFERENCES tbl(refCol) [ON DELETE action]` out-of-line, giữ nguyên kiểu cột + `NOT NULL`.
+> Xác nhận trước khi áp dụng: không bảng nào trong `db.js` tham chiếu tới bảng CHƯA được tạo (rà thủ
+> công thứ tự khai báo `CREATE TABLE`), nên an toàn áp dụng ngay lúc tạo bảng, không cần hoãn/2-pass
+> ALTER TABLE thêm constraint sau. Xác nhận thật qua `information_schema.KEY_COLUMN_USAGE`: **24/24
+> FK được tạo** (khớp đúng số dòng `REFERENCES` đếm được trong `db.js`).
+>
+> 5 test characterization từng ghi nhận lệch driver (R007/R067/R075/R083/R091 — `not-found` trả 200
+> trên MySQL/400 trên SQLite; DELETE cha để lại con mồ côi trên MySQL) nay **hội tụ đúng 1 hành vi**
+> — cập nhật lại bỏ nhánh `isMysql ? 200 : 400` kiểu cũ, khẳng định thẳng 400/cascade như SQLite (đã
+> grep xác nhận không route nào dựa vào hành vi cũ "MySQL cho phép insert mồ côi" làm tính năng thật
+> trước khi sửa). Test mới `server/test/unit-mysql-sync-translate.test.js` (7 test, `BR-FK-001..007`)
+> khoá lại đúng ngữ nghĩa `translate()`: tách FK inline→out-of-line, giữ `ON DELETE SET NULL`/không
+> có `ON DELETE`, nhiều FK cùng bảng, bảng không FK không đổi gì, giữ `NOT NULL`, và 1 test round-trip
+> thật xác nhận FK tồn tại qua `information_schema` (chỉ chạy khi `DB_CLIENT=mysql`). Full
+> regression: security 6/6, SQLite 692/8 skip (+7), MySQL 699/1 skip (+7), mapping 281 rows PASS,
+> `verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi UI, không đụng RBAC v2 pilot. **F15 đóng
+> hẳn — không còn P2 nào trong backlog Wave 1 từ finding này.**
+
 ---
 
 ## WAVE 3 — Strangler UI theo vertical slice (trên RBAC v2 mới) + slice Voice (D14)
@@ -382,7 +414,7 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 | F12 event_id/API mismatch | Đăng ký ở `01-audit-findings.md`; chờ owner xác nhận ý định trước khi thêm vào Wave nào | mới (Codex round-3 re-audit R3-02D) |
 | F13 reminders/notif hỏng trên MySQL (`scheduler.js` `IS ?`) | **ĐÃ FIX ở G1A.3 commit 5** (owner yêu cầu sửa ngay, không đợi Wave) — không còn trong backlog Wave | phát hiện G1A.3 commit 4 (characterization), sửa commit 5, xem `01-audit-findings.md` §D |
 | F14 grandTotal báo cáo tổng hợp nối chuỗi trên MySQL (`routes.js` SUM() string) | **ĐÃ FIX ở G1A.3 batch reports-awards commit `119f81a`** (owner duyệt fix ngay, cùng cơ chế F13) — không còn trong backlog Wave | phát hiện batch reports-awards (characterization R052), xem `01-audit-findings.md` §D |
-| F15 FK `award_participations.award_id` không thực thi trên MySQL | Wave 1 (nhóm sửa contract/data-integrity) | phát hiện batch reports-awards (characterization R067), P2, đã có bằng chứng mạnh tại tầng DDL/migration cho 5 quan hệ, chờ inventory toàn schema, xem `01-audit-findings.md` §D |
+| F15 FK `award_participations.award_id` không thực thi trên MySQL | **ĐÃ SỬA — Claude 2026-08-30** | phát hiện batch reports-awards (characterization R067), P2. Root cause: MySQL âm thầm bỏ qua `REFERENCES` inline cột (chỉ SQLite honor); `mysql-sync.js`'s `translate()` nay tách thành `CONSTRAINT...FOREIGN KEY` out-of-line, xác nhận đủ 24/24 FK thật qua `information_schema`. Xem execution update + `01-audit-findings.md` §D |
 | F17 `POST /api/monitor/scan` 500 trên MySQL (cột `sources.mode` không tồn tại do ALTER TABLE TEXT DEFAULT fail âm thầm) | **ĐÃ FIX ở G1A.3 batch monitor phần 1** (owner duyệt fix ngay, cùng cơ chế F13/F14/F16 — bug production nghiêm trọng, không phải trade-off cần hỏi) — không còn trong backlog Wave | phát hiện batch monitor phần 1 (characterization R110), P1, xem `01-audit-findings.md` §D |
 | F18 SUM()/AVG() trả string trên MySQL ở 3 route report chưa từng sửa (`/reports` 9 mảng breakdown+tiers, `/reports/by-staff` spend/avgScore, `/reports/awards` mediaCost/totalCost nối chuỗi) | **ĐÃ FIX ở G1A.3, commit `4d133d9`** (owner duyệt fix ngay, cùng cơ chế F13/F14/F16/F17 — sai số liệu báo cáo tài chính trên MySQL, không phải trade-off cần hỏi) — không còn trong backlog Wave | phát hiện lúc rà soát toàn bộ SUM()/AVG() trong routes.js trước khi đóng route mapping 145/145, P1, xem `01-audit-findings.md` §D |
 | F6 app.js monolith | W2.1-2.2 → slice Wave 3 | |

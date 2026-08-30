@@ -2164,3 +2164,31 @@ lần sai đầu tiên, ngữ nghĩa khác: có thể hết khoá sớm hơn 15 
 Verify: security 6/6, SQLite 685 pass/8 skip (+7), MySQL 692 pass/1 skip (+7), mapping 281 rows
 PASS, `verify-g0.mjs` PASS, `verify-g0-selftest` 6/6, `git diff --check` sạch. Không đổi UI, không
 đụng RBAC v2 pilot, không đổi durable session store (vẫn chờ DevOps O4).
+
+## Wave 1: batch F15 sửa tận gốc — FK không được MySQL thực thi (backlog data-integrity)
+
+Batch Contract: root-cause + sửa tận gốc F15 (5 quan hệ FK đã xác nhận `award_participations.
+award_id`, `supplier_quotes/transactions/contacts.supplier_id`, `event_costs.event_id/supplier_id`
+không được MySQL thực thi dù `db.js` khai `REFERENCES ... ON DELETE ...`) — không phải thêm `if`
+kiểm tồn tại thủ công ở từng route (chỉ che 1 route, không đồng bộ hành vi cho FK khác).
+
+- Điều tra thực nghiệm trực tiếp trên MySQL test thật (`SHOW CREATE TABLE`): xác nhận REFERENCES
+  biến mất hoàn toàn khỏi DDL. Root cause: MySQL/InnoDB PARSE nhưng ÂM THẦM BỎ QUA cú pháp
+  REFERENCES gắn trực tiếp vào cột (inline column-level, cách SQLite chấp nhận) — hành vi đã tài
+  liệu hoá của MySQL, chỉ tạo FK thật khi có CONSTRAINT...FOREIGN KEY tách riêng (out-of-line).
+- `server/mysql-sync.js`'s `translate()` (điểm dịch DDL dùng chung cho MỌI CREATE TABLE) nay tách
+  mọi cột `col TYPE REFERENCES tbl(refCol) [ON DELETE action]` inline thành `CONSTRAINT
+  fk_<table>_<col> FOREIGN KEY (col) REFERENCES tbl(refCol) [ON DELETE action]` out-of-line, giữ
+  nguyên kiểu cột + NOT NULL. Xác nhận không bảng nào tham chiếu bảng chưa tạo (rà thứ tự khai báo
+  CREATE TABLE trong db.js) nên áp dụng ngay lúc tạo bảng, không cần 2-pass ALTER TABLE.
+- Xác nhận thật qua `information_schema.KEY_COLUMN_USAGE`: **24/24 FK được tạo** trên MySQL, khớp
+  đúng số dòng REFERENCES trong db.js.
+- 5 test characterization từng ghi nhận lệch driver (R007/R067/R075/R083/R091) nay hội tụ đúng 1
+  hành vi — bỏ nhánh `isMysql ? 200 : 400` kiểu cũ, khẳng định thẳng 400/cascade như SQLite.
+- Test mới `server/test/unit-mysql-sync-translate.test.js` (7 test, `BR-FK-001..007`): tách FK
+  inline→out-of-line, giữ ON DELETE SET NULL/không có ON DELETE, nhiều FK cùng bảng, bảng không FK
+  không đổi gì, giữ NOT NULL, round-trip thật qua information_schema (chỉ chạy DB_CLIENT=mysql).
+
+Verify: security 6/6, SQLite 692 pass/8 skip (+7), MySQL 699 pass/1 skip (+7), mapping 281 rows
+PASS, `verify-g0.mjs` PASS, `git diff --check` sạch. Không đổi UI, không đụng RBAC v2 pilot. **F15
+đóng hẳn.**

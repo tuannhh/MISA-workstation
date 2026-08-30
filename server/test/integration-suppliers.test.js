@@ -115,9 +115,9 @@ test('R075 happy: tạo liên hệ NCC trả 200 + id', async () => {
   const contacts = (await (await call('GET', `/api/suppliers/${id}`)).json()).contacts;
   assert.equal(contacts.length, 1);
 });
-test('R075 CHARACTERIZATION (F15): supplier_id không tồn tại — route không kiểm tồn tại trước khi insert; SQLite thực thi FK (400), MySQL không (200), giống R067', async () => {
+test('R075 not-found: supplier_id không tồn tại bị FK chặn, trả 400 (F15 đã sửa — MySQL nay có FOREIGN KEY thật, đồng nhất SQLite)', async () => {
   const res = await call('POST', '/api/suppliers/9999999/contacts', { body: { full_name: 'x' } });
-  assert.equal(res.status, isMysql ? 200 : 400);
+  assert.equal(res.status, 400);
 });
 test('R075 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/suppliers/1/contacts', { auth: false, body: { full_name: 'x' } })).status, 401);
@@ -257,23 +257,19 @@ test('R083 happy: xoá NCC kèm attachments trả 200, không còn truy vấn đ
   assert.equal(res.status, 200);
   assert.equal((await call('GET', `/api/suppliers/${id}`)).status, 404);
 });
-test('R083 CHARACTERIZATION (F15 mở rộng): xoá NCC có quotes/transactions/contacts liên quan — SQLite cascade xoá con (FK ON DELETE CASCADE hoạt động), MySQL để lại bản ghi con mồ côi (FK không cascade, đúng phạm vi Codex đã mở rộng ở batch reports-awards)', async () => {
+test('R083: xoá NCC cascade xoá quotes/transactions/contacts liên quan (F15 đã sửa — MySQL nay cascade thật, đồng nhất SQLite)', async () => {
   const id = await createSupplier();
   const qid = (await (await call('POST', `/api/suppliers/${id}/quotes`, { body: { item: 'In banner', qty: 1, unit_price: 100000 } })).json()).id;
   const tid = (await (await call('POST', `/api/suppliers/${id}/transactions`, { body: { contract_no: 'HD-CASCADE' } })).json()).id;
   const cid = (await (await call('POST', `/api/suppliers/${id}/contacts`, { body: { full_name: 'Liên hệ cascade' } })).json()).id;
   await call('DELETE', `/api/suppliers/${id}`);
   // Route HTTP không còn cách đọc bảng con sau khi cha đã 404 -> query trực tiếp qua cùng `db`
-  // mà app dùng (đồng bộ với F15 đã ghi ở 01-audit-findings.md, không lặp lại thí nghiệm mới).
+  // mà app dùng.
   const { db } = require('../db');
   const quote = db.prepare('SELECT id FROM supplier_quotes WHERE id=?').get(qid);
   const trans = db.prepare('SELECT id FROM supplier_transactions WHERE id=?').get(tid);
   const contact = db.prepare('SELECT id FROM supplier_contacts WHERE id=?').get(cid);
-  if (isMysql) {
-    assert.ok(quote && trans && contact, 'F15: MySQL không cascade xoá bảng con — nếu test này fail nghĩa là F15 đã được sửa, cập nhật lại 01-audit-findings.md');
-  } else {
-    assert.ok(!quote && !trans && !contact, 'SQLite phải cascade xoá đúng theo ON DELETE CASCADE');
-  }
+  assert.ok(!quote && !trans && !contact, 'ON DELETE CASCADE phải xoá luôn cả 3 bảng con');
 });
 test('R083 not-found CHARACTERIZATION: id không tồn tại vẫn trả 200 {ok:true} (DELETE 0 dòng không lỗi)', async () => {
   const res = await call('DELETE', '/api/suppliers/9999999');

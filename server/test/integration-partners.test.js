@@ -181,9 +181,9 @@ test('R007 invalid: thiếu title (NOT NULL) -> lỗi DB, trả 400', async () =
   const res = await call('POST', `/api/partners/${orgId}/sponsorships`, { body: { amount: 1000 } });
   assert.equal(res.status, 400);
 });
-test('R007 not-found CHARACTERIZATION: org_id không tồn tại — SQLite chặn (FK PRAGMA=ON, 400); MySQL KHÔNG chặn (cột `REFERENCES` inline không tạo FOREIGN KEY constraint thật trong translate(), insert mồ côi vẫn 200) — lệch hành vi 2 driver, ghi nhận cho G1A.5, không sửa ở đây', async () => {
+test('R007 not-found: org_id không tồn tại bị FK chặn, trả 400 (F15 đã sửa — MySQL nay có FOREIGN KEY thật, đồng nhất SQLite)', async () => {
   const res = await call('POST', '/api/partners/9999999/sponsorships', { body: { title: 'Tài trợ mồ côi' } });
-  assert.equal(res.status, isMysql ? 200 : 400);
+  assert.equal(res.status, 400);
 });
 test('R007 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/partners/1/sponsorships', { auth: false, body: { title: 'x' } })).status, 401);

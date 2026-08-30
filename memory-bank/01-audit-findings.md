@@ -93,7 +93,24 @@ Brief Codex §4.4-P1: kiểm tra lịch sử Git; nếu là key thật → **rot
 - Cloud Run hiện tại chạy `DB_CLIENT=mysql` nhưng **chỉ là môi trường test** (như F13) — bug đã ảnh hưởng môi trường test này và sẽ chặn production MySQL thật khi hạ tầng đó lên, nếu không sửa trước.
 - Phát hiện qua characterization batch "reports-awards" (`server/test/integration-reports.test.js`, test R052 chạy MySQL). **Đã sửa ngay** (owner yêu cầu, cùng cơ chế đã áp dụng cho F13): bọc `Number(...)` quanh 4 giá trị SUM (`totalSpend.s`, `budget.s`, `evTotal`, `feeTotal`) ngay tại điểm đọc kết quả query — sửa tận gốc kiểu dữ liệu thay vì chỉ sửa phép cộng, để mọi chỗ dùng lại các giá trị này (hiện tại và tương lai) đều nhận `number` đúng trên cả 2 driver. Test mới xác nhận `typeof === 'number'` cho cả 3 field + `grandTotal === spend.total + events.total + fees.total` đúng bằng số trên cả SQLite và MySQL.
 
-### F15 — FK không được MySQL thực thi cho `award_participations.award_id` (nghi ngờ lan rộng toàn schema) · **P2 Medium / — / backlog, Wave 1** (G1A.3 batch reports-awards, phát hiện qua characterization R067; PHẠM VI MỞ RỘNG theo Codex ONE-SHOT AUDIT `f40be9c^..c0270a1`)
+### F15 — FK không được MySQL thực thi cho `award_participations.award_id` (nghi ngờ lan rộng toàn schema) · **P2 Medium / — / ĐÃ SỬA tận gốc — Claude 2026-08-30** (G1A.3 batch reports-awards, phát hiện qua characterization R067; PHẠM VI MỞ RỘNG theo Codex ONE-SHOT AUDIT `f40be9c^..c0270a1`)
+**ĐÃ SỬA (2026-08-30) — root cause xác nhận + sửa tận gốc, không phải vá triệu chứng từng route:**
+MySQL/InnoDB **PARSE nhưng ÂM THẦM BỎ QUA** cú pháp `REFERENCES` gắn trực tiếp vào cột (inline
+column-level, như SQLite chấp nhận) — hành vi đã tài liệu hoá của MySQL, MySQL chỉ tạo FK thật khi
+có `CONSTRAINT ... FOREIGN KEY (col) REFERENCES tbl(col)` tách riêng (out-of-line). Xác nhận thực
+nghiệm trực tiếp (không đoán): `SHOW CREATE TABLE award_participations` trước khi sửa chỉ còn
+`award_id bigint DEFAULT NULL`, không còn REFERENCES/CONSTRAINT nào dù `db.js` khai đủ. `server/
+mysql-sync.js`'s `translate()` (áp dụng khi dịch DDL SQLite -> MySQL cho mọi `CREATE TABLE`) nay
+tách mọi cột `col TYPE REFERENCES tbl(refCol) [ON DELETE action]` inline thành `CONSTRAINT
+fk_<table>_<col> FOREIGN KEY (col) REFERENCES tbl(refCol) [ON DELETE action]` out-of-line — xác
+nhận đã tạo đủ **24/24 FK thật** trên MySQL qua `information_schema.KEY_COLUMN_USAGE` (khớp đúng số
+lượng dòng `REFERENCES` trong `db.js`). Không có bảng nào tham chiếu tới bảng chưa được tạo (đã rà
+thủ công thứ tự khai báo `CREATE TABLE` trong `db.js`), nên không cần hoãn/2-pass ALTER TABLE thêm
+constraint sau khi tạo bảng. 5 route characterization từng ghi nhận lệch driver (R007/R067/R075/
+R083/R091) nay hội tụ đúng 1 hành vi (400 khi FK gốc không tồn tại; cascade xoá đúng theo `ON DELETE
+CASCADE`/`SET NULL`) — cập nhật lại test bỏ nhánh `isMysql ? ... : ...`, xem `gate1-test-mapping.md`
++ test mới `unit-mysql-sync-translate.test.js` (`BR-FK-001..007`). Full regression: SQLite 692/8
+skip, MySQL 699/1 skip, security 6/6, mapping 281 rows PASS, `verify-g0.mjs` PASS.
 `server/db.js` khai `award_id INTEGER REFERENCES awards(id) ON DELETE CASCADE` cho bảng `award_participations`. `POST /api/awards/9999999/participations` (award_id không tồn tại) trả **400** trên SQLite (FK constraint chặn insert) nhưng trả **200** trên MySQL (insert thành công, tạo participation "mồ côi") — route không tự kiểm tra award tồn tại trước khi insert, hành vi phụ thuộc hoàn toàn vào driver có/không thực thi FK.
 - **Codex xác nhận độc lập và mở rộng phạm vi:** MySQL không chỉ bỏ qua FK lúc INSERT — **DELETE `awards` cũng KHÔNG cascade xoá `award_participations` liên quan** (dù schema khai `ON DELETE CASCADE`), để lại participation mồ côi **vĩnh viễn** (không chỉ tạm thời lúc insert sai award_id). Đây là dấu hiệu FK constraint có thể **không thực sự được tạo** trên MySQL cho quan hệ này (không phải chỉ `FOREIGN_KEY_CHECKS` tắt tạm thời lúc 1 câu lệnh), và khả năng ảnh hưởng **các FK khác trong schema**, chưa kiểm hết.
 - **Đã có bằng chứng mạnh tại tầng DDL/migration, chờ inventory toàn schema** (cập nhật theo Codex ONE-SHOT AUDIT batch "suppliers"): xác nhận cùng hiện tượng lặp lại ở **ít nhất 4 quan hệ FK độc lập** (`award_participations.award_id`, `supplier_quotes.supplier_id`, `supplier_transactions.supplier_id`, `supplier_contacts.supplier_id`) — đủ mẫu để loại trừ khả năng ngẫu nhiên/lỗi cục bộ 1 bảng, chỉ về hướng nguyên nhân hệ thống ở cách `mysql-sync.js` dịch `REFERENCES ... ON DELETE CASCADE` sang MySQL DDL (constraint có thể không thực sự được tạo, hoặc `FOREIGN_KEY_CHECKS` tắt trong luồng migrate/seed) — chưa xác định chính xác nguyên nhân, việc đó thuộc phạm vi inventory Wave 1 dưới đây, không điều tra thêm trong các batch characterization (đúng scope-freeze).

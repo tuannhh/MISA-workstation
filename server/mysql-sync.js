@@ -43,6 +43,28 @@ function translate(sql) {
       const safe = column.replace(/[^a-zA-Z0-9_]/g, '');
       if (safe) out = out.replace(new RegExp(`(\\b${safe}\\s+)TEXT\\b`, 'i'), '$1VARCHAR(191)');
     }
+    // F15: SQLite chấp nhận `col TYPE REFERENCES tbl(col) [ON DELETE ...]` như 1 FK thật (với
+    // PRAGMA foreign_keys=ON, đã bật ở db.js). MySQL/InnoDB thì KHÔNG — nó PARSE nhưng ÂM THẦM BỎ
+    // QUA cú pháp REFERENCES gắn trực tiếp vào cột (inline column-level), không tạo ràng buộc nào
+    // (hành vi đã tài liệu hoá của MySQL, không phải bug của driver `mysql2`/`translate()` trước
+    // đây — xác nhận thực nghiệm: SHOW CREATE TABLE sau khi tạo chỉ còn `col BIGINT DEFAULT NULL`,
+    // không còn REFERENCES/CONSTRAINT nào). MySQL chỉ tạo FK thật khi có `CONSTRAINT ... FOREIGN
+    // KEY (col) REFERENCES tbl(col)` tách riêng (out-of-line). Vì mọi bảng tham chiếu trong
+    // `db.js` đều được tạo TRƯỚC bảng tham chiếu tới nó (không có forward reference — đã kiểm tra
+    // thủ công thứ tự khai báo), an toàn để chuyển inline REFERENCES thành FOREIGN KEY out-of-line
+    // ngay tại đây mà không cần hoãn/2-pass ALTER TABLE thêm constraint sau.
+    const tableMatch = out.match(/^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+`?(\w+)`?/i);
+    const tableName = tableMatch ? tableMatch[1] : 'tbl';
+    const fkClauses = [];
+    out = out.replace(
+      /(`?\w+`?)\s+BIGINT(\s+NOT\s+NULL)?\s+REFERENCES\s+(\w+)\((\w+)\)(\s+ON\s+DELETE\s+(?:CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?/gi,
+      (match, col, notNull, refTable, refCol, onDelete) => {
+        const cleanCol = col.replace(/`/g, '');
+        fkClauses.push(`CONSTRAINT fk_${tableName}_${cleanCol} FOREIGN KEY (${cleanCol}) REFERENCES ${refTable}(${refCol})${onDelete || ''}`);
+        return `${col} BIGINT${notNull || ''}`;
+      }
+    );
+    if (fkClauses.length) out = out.replace(/\)\s*$/, `,\n    ${fkClauses.join(',\n    ')}\n  )`);
   } else if (/^ALTER\s+TABLE/i.test(out)) {
     out = out.replace(/\bINTEGER\b/gi, 'BIGINT');
   }

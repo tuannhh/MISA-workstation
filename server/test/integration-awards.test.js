@@ -157,9 +157,9 @@ test('R067 happy: tạo hồ sơ tham gia theo năm trả 200 + id', async () =>
   const parts = (await (await call('GET', `/api/awards/${id}`)).json()).participations;
   assert.equal(parts.length, 1);
 });
-test('R067 not-found CHARACTERIZATION: award_id không tồn tại — route không kiểm tồn tại trước khi insert; SQLite thực thi FK (400), MySQL KHÔNG thực thi FK cho bảng này (200) — khác biệt driver, không phải bug mới sửa trong batch này', async () => {
+test('R067 not-found: award_id không tồn tại bị FK chặn, trả 400 (F15 đã sửa — MySQL nay có FOREIGN KEY thật, đồng nhất SQLite)', async () => {
   const res = await call('POST', '/api/awards/9999999/participations', { body: { year: 2026 } });
-  assert.equal(res.status, isMysql ? 200 : 400);
+  assert.equal(res.status, 400);
 });
 test('R067 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/awards/1/participations', { auth: false, body: { year: 2026 } })).status, 401);

@@ -55,7 +55,7 @@
 | R004 | R004 | green | server/test/integration-partners.test.js | happy/invalid(thiếu name->400 lỗi DB; org_type lạ->CHARACTERIZATION tự thành 'other')/unauthenticated (forbidden N/A) |
 | R005 | R005 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true, không 404)/unauthenticated (forbidden N/A) |
 | R006 | R006 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
-| R007 | R007 | green | server/test/integration-partners.test.js | happy/invalid(thiếu title->400)/CHARACTERIZATION not-found — **lệch driver**: org_id lạ SQLite chặn 400 (FK PRAGMA=ON), MySQL không chặn vẫn 200 (cột REFERENCES inline không thành FOREIGN KEY thật qua translate() — ghi nhận cho G1A.5)/unauthenticated |
+| R007 | R007 | green | server/test/integration-partners.test.js | happy/invalid(thiếu title->400)/not-found (**F15 đã sửa 2026-08-30**: org_id lạ nay chặn 400 đồng nhất cả 2 driver)/unauthenticated |
 | R008 | R008 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
 | R009 | R009 | green | server/test/integration-partners.test.js | happy/CHARACTERIZATION not-found(200 ok:true)/unauthenticated (forbidden N/A) |
 | R010 | R010 | green | server/test/integration-partners.test.js | happy/invalid(thiếu title->400, validate rõ trong route)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
@@ -115,7 +115,7 @@
 | R064 | R064 | green | server/test/integration-awards.test.js | happy/invalid(thiếu name NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
 | R065 | R065 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
 | R066 | R066 | green | server/test/integration-awards.test.js | happy(xoá kèm file vật lý)/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
-| R067 | R067 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(F15 backlog: SQLite thực thi FK->400, MySQL KHÔNG thực thi->200)/unauthenticated (forbidden N/A) |
+| R067 | R067 | green | server/test/integration-awards.test.js | happy/not-found (**F15 đã sửa 2026-08-30**: award_id lạ nay chặn 400 đồng nhất cả 2 driver)/unauthenticated (forbidden N/A) |
 | R068 | R068 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(pid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R069 | R069 | green | server/test/integration-awards.test.js | happy/CHARACTERIZATION not-found(pid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R070 | R070 | green | server/test/integration-awards.test.js | happy(1 file + nhiều file)/invalid(0 file->400)/CHARACTERIZATION not-found(award_id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
@@ -123,7 +123,7 @@
 | R072 | R072 | green | server/test/integration-suppliers.test.js | happy(tìm+lọc industry+phân trang)/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
 | R073 | R073 | green | server/test/integration-suppliers.test.js | happy/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
 | R074 | R074 | green | server/test/integration-suppliers.test.js | happy/not-found/unauthenticated (invalid N/A; forbidden N/A) |
-| R075 | R075 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION(F15: SQLite FK->400, MySQL->200)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
+| R075 | R075 | green | server/test/integration-suppliers.test.js | happy/not-found (**F15 đã sửa 2026-08-30**: supplier_id lạ nay chặn 400 đồng nhất cả 2 driver)/unauthenticated (forbidden N/A) |
 | R076 | R076 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(cid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R077 | R077 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(cid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R078 | R078 | green | server/test/integration-suppliers.test.js | happy/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
@@ -131,7 +131,7 @@
 | R080 | R080 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(tid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R081 | R081 | green | server/test/integration-suppliers.test.js | happy/invalid(thiếu name NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
 | R082 | R082 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
-| R083 | R083 | green | server/test/integration-suppliers.test.js | happy(xoá kèm file vật lý)/CHARACTERIZATION(F15 mở rộng: cascade quotes/transactions/contacts SQLite có, MySQL không, xác nhận qua query trực tiếp db)/CHARACTERIZATION not-found(id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
+| R083 | R083 | green | server/test/integration-suppliers.test.js | happy(xoá kèm file vật lý)/cascade quotes+transactions+contacts (**F15 đã sửa 2026-08-30**: MySQL nay cascade thật đồng nhất SQLite, xác nhận qua query trực tiếp db)/CHARACTERIZATION not-found(id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
 | R084 | R084 | green | server/test/integration-suppliers.test.js | happy/unauthenticated (invalid N/A; not-found N/A; forbidden N/A) |
 | R085 | R085 | green | server/test/integration-suppliers.test.js | happy/CHARACTERIZATION not-found(qid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R086 | R086 | green | server/test/integration-suppliers.test.js | happy(1 file+nhiều file)/CHARACTERIZATION(0 file vẫn 200, khác R034/R070)/unauthenticated (not-found N/A; forbidden N/A) |
@@ -139,7 +139,7 @@
 | R088 | R088 | green | server/test/integration-events-dashboard.test.js | happy(costs 3 nhóm+totals)/happy(totals.grand cộng đúng)/not-found/unauthenticated (invalid N/A; forbidden N/A) |
 | R089 | R089 | green | server/test/integration-events-dashboard.test.js | happy/invalid(thiếu name NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
 | R090 | R090 | green | server/test/integration-events-dashboard.test.js | happy/CHARACTERIZATION not-found(id không tồn tại vẫn 200 ok:true)/unauthenticated (forbidden N/A) |
-| R091 | R091 | green | server/test/integration-events-dashboard.test.js | happy(xoá kèm file vật lý)/CHARACTERIZATION(F15: cascade event_costs SQLite có, MySQL không)/CHARACTERIZATION not-found(id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
+| R091 | R091 | green | server/test/integration-events-dashboard.test.js | happy(xoá kèm file vật lý)/cascade event_costs (**F15 đã sửa 2026-08-30**: MySQL nay cascade thật đồng nhất SQLite)/CHARACTERIZATION not-found(id không tồn tại vẫn 200)/unauthenticated (forbidden N/A) |
 | R092 | R092 | green | server/test/integration-events-dashboard.test.js | happy/invalid(thiếu category NOT NULL->400)/unauthenticated (not-found N/A vì tạo mới; forbidden N/A) |
 | R093 | R093 | green | server/test/integration-events-dashboard.test.js | happy/CHARACTERIZATION not-found(cid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
 | R094 | R094 | green | server/test/integration-events-dashboard.test.js | happy/CHARACTERIZATION not-found(cid không tồn tại vẫn 200 ok:true)/unauthenticated (invalid N/A; forbidden N/A) |
@@ -312,6 +312,13 @@
 | BR-AUTH-005 | BR-AUTH-005 | green | server/test/unit-login-rate-limiter.test.js | `recordSuccess()` xoá hẳn lịch sử sai, không cộng dồn qua lần đăng nhập sau |
 | BR-AUTH-006 | BR-AUTH-006 | green | server/test/unit-login-rate-limiter.test.js | Khoá theo từng cặp (IP, username) riêng — không lẫn giữa 2 user hoặc 2 IP khác nhau |
 | BR-AUTH-007 | BR-AUTH-007 | green | server/test/unit-login-rate-limiter.test.js | Không có request nào gọi thêm `recordFailure()` trong lúc đang khoá (đúng luồng auth.js) thì mốc hết khoá không bị đẩy xa hơn 30 phút |
+| BR-FK-001 | BR-FK-001 | green | server/test/unit-mysql-sync-translate.test.js | **F15 đã sửa (2026-08-30):** cột `REFERENCES ... ON DELETE CASCADE` inline (SQLite) chuyển thành `CONSTRAINT ... FOREIGN KEY` out-of-line thật cho MySQL, không còn dạng inline mà MySQL âm thầm bỏ qua |
+| BR-FK-002 | BR-FK-002 | green | server/test/unit-mysql-sync-translate.test.js | `ON DELETE SET NULL` giữ đúng action, không bị đổi thành CASCADE mặc định |
+| BR-FK-003 | BR-FK-003 | green | server/test/unit-mysql-sync-translate.test.js | `REFERENCES` không có `ON DELETE` vẫn tạo FK, không tự thêm CASCADE ngoài ý muốn |
+| BR-FK-004 | BR-FK-004 | green | server/test/unit-mysql-sync-translate.test.js | Nhiều FK trong cùng 1 bảng đều được tách ra đủ (không chỉ FK đầu tiên) |
+| BR-FK-005 | BR-FK-005 | green | server/test/unit-mysql-sync-translate.test.js | Bảng không có `REFERENCES` nào thì không đổi gì (không thêm FK giả) |
+| BR-FK-006 | BR-FK-006 | green | server/test/unit-mysql-sync-translate.test.js | `NOT NULL` trên cột có `REFERENCES` vẫn được giữ nguyên sau khi tách FK ra |
+| BR-FK-007 | BR-FK-007 | green | server/test/unit-mysql-sync-translate.test.js | Round-trip thật trên MySQL (chỉ chạy khi `DB_CLIENT=mysql`): `information_schema.KEY_COLUMN_USAGE` xác nhận đúng 1 FK `award_participations.award_id -> awards.id` tồn tại thật |
 | F2-logout | F2-logout-invalidation | green | server/test/target-session-f2.test.js | CHARACTERIZATION: sau `POST /api/logout`, cookie cũ dùng lại `/api/me` trả 401 — `req.session.destroy()` đã đúng từ trước, không cần known-red |
 | F2-audit-login | W1.7 audit: login sai mật khẩu | green | server/test/target-session-f2.test.js | **W1.7:** login thất bại ghi `audit_log` action=LOGIN_FAILED (trước đây chỉ LOGIN thành công được audit) |
 | F2-audit-logout | W1.7 audit: logout | green | server/test/target-session-f2.test.js | **W1.7:** logout ghi `audit_log` action=LOGOUT trước khi `session.destroy()` |

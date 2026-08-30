@@ -152,14 +152,13 @@ test('R091 happy: xoá sự kiện kèm attachments trả 200, không còn truy 
   assert.equal(res.status, 200);
   assert.equal((await call('GET', `/api/events/${id}`)).status, 404);
 });
-test('R091 CHARACTERIZATION (F15): xoá event có event_costs liên quan — SQLite cascade xoá con, MySQL để lại bản ghi con mồ côi (cùng phạm vi Codex đã xác nhận ở batch reports-awards/suppliers)', async () => {
+test('R091: xoá event cascade xoá event_costs liên quan (F15 đã sửa — MySQL nay cascade thật, đồng nhất SQLite)', async () => {
   const id = await createEvent();
   const cid = (await (await call('POST', `/api/events/${id}/costs`, { body: { category: 'media', amount: 1 } })).json()).id;
   await call('DELETE', `/api/events/${id}`);
   const { db } = require('../db');
   const cost = db.prepare('SELECT id FROM event_costs WHERE id=?').get(cid);
-  if (isMysql) assert.ok(cost, 'F15: MySQL không cascade xoá event_costs');
-  else assert.ok(!cost, 'SQLite phải cascade xoá đúng theo ON DELETE CASCADE');
+  assert.ok(!cost, 'ON DELETE CASCADE phải xoá luôn event_costs con');
 });
 test('R091 not-found CHARACTERIZATION: id không tồn tại vẫn trả 200 {ok:true} (DELETE 0 dòng không lỗi)', async () => {
   const res = await call('DELETE', '/api/events/9999999');
