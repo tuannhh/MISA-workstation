@@ -14,7 +14,7 @@
 | [05-error-contract.md](05-error-contract.md) | G0.5 — envelope lỗi target, giữ tương thích `error` field cũ |
 | [06-threat-model.md](06-threat-model.md) | G0.8 — threat model, data-flow, Gemini egress map (**v5**, PASS — 2 sửa diễn đạt P2 theo Codex C0.8) |
 | [07-route-catalog.md](07-route-catalog.md) | G0.3 — catalog **145/145 route literal 1:1** + 2 job + 13 UI view, `file:line` (thay bản wildcard-compress cũ, đã bị Codex bắt lỗi) |
-| [08-permission-matrix.md](08-permission-matrix.md) | G0.4 — Section A (auth partition 145/145) PASS, giữ nguyên. **Section B/C (UI-flow matrix) do Codex trực tiếp rebuild (C0.3, owner giao 2026-08-25)** — chưa xong |
+| [08-permission-matrix.md](08-permission-matrix.md) | G0.4 — Section A auth partition 145/145 và Section B/C UI-flow/runtime matrix đã PASS C0.3; 34 flow đủ Desktop/Native cho hai role current-state, Native-Mobile trung thực `FAIL/MISSING` |
 | [09-db-schema.md](09-db-schema.md) | G0.2 — lược đồ đầy đủ 34 bảng (cột/kiểu/PK/FK/index) + quy tắc dịch SQLite→MySQL + migration idempotent |
 | [10-api-contract.md](10-api-contract.md) | G0.2 — ý nghĩa field request/response theo nhóm resource (không lặp route catalog) |
 | [11-business-flows.md](11-business-flows.md) | G0.2 — luồng nghiệp vụ cốt lõi: đối tác, giải thưởng, sự kiện, nhà cung cấp, nhắc việc, giám sát truyền thông |
