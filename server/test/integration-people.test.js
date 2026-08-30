@@ -336,3 +336,84 @@ test('R037 forbidden: pr_staff tải file kind=id_doc trả 403 (dù có thẻ r
 test('R037 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('GET', '/api/files/1', { auth: false })).status, 401);
 });
+
+// ---------------------------------------------------------------------------
+// D13 People Detail file pilot (W1.FILE, batch RBAC-PILOT3-people-file) — R034-R037
+// role D13 mới đi qua PolicyEngine/policy-engine attachment ceiling, legacy 2-role không đổi.
+// ---------------------------------------------------------------------------
+test('D13-016 People Detail file pilot: viewer upload/set-primary/delete đều 403 (không có quyền edit)', async () => {
+  const id = await createPerson();
+  const up = await uploadFiles(`/api/people/${id}/attachments`, [{ name: 'a.png' }], { as: targetAdminCookie });
+  const aid = (await up.json()).ids[0];
+  assert.equal((await uploadFiles(`/api/people/${id}/attachments`, [{ name: 'b.png' }], { as: viewerCookie })).status, 403);
+  assert.equal((await call('PUT', `/api/people/${id}/attachments/${aid}/primary`, { as: viewerCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/attachments/${aid}`, { as: viewerCookie })).status, 403);
+});
+
+test('D13-017 People Detail file pilot: executor upload ảnh mặc định private -> chính executor cũng KHÔNG thấy lại (person là Global, không có owner bypass)', async () => {
+  const id = await createPerson();
+  const res = await uploadFiles(`/api/people/${id}/attachments`, [{ name: 'a.png' }], { as: executorCookie });
+  assert.equal(res.status, 200);
+  const detail = await (await call('GET', `/api/people/${id}`, { as: executorCookie })).json();
+  assert.deepEqual(detail.portraits, []);
+  const asAdmin = await (await call('GET', `/api/people/${id}`, { as: targetAdminCookie })).json();
+  assert.equal(asAdmin.portraits.length, 1);
+});
+
+test('D13-018 People Detail file pilot: executor upload ảnh với visibility=public -> chính executor thấy lại được', async () => {
+  const id = await createPerson();
+  const res = await uploadFiles(`/api/people/${id}/attachments?visibility=public`, [{ name: 'a.png' }], { as: executorCookie });
+  assert.equal(res.status, 200);
+  const detail = await (await call('GET', `/api/people/${id}`, { as: executorCookie })).json();
+  assert.equal(detail.portraits.length, 1);
+});
+
+test('D13-019 People Detail file pilot: executor upload giấy tờ tùy thân trả 403 (chỉ Admin/Super Admin, D13.3b trần private)', async () => {
+  const id = await createPerson();
+  const res = await uploadFiles(`/api/people/${id}/attachments?kind=id_doc`, [{ name: 'cccd.png' }], { as: executorCookie });
+  assert.equal(res.status, 403);
+  assert.equal((await res.json()).error, 'Bạn không có quyền tải lên giấy tờ tùy thân (dữ liệu mật).');
+});
+
+test('D13-020 People Detail file pilot: admin (target role) upload id_doc thành công, executor thấy idDocCount nhưng KHÔNG thấy nội dung', async () => {
+  const id = await createPerson();
+  const res = await uploadFiles(`/api/people/${id}/attachments?kind=id_doc`, [{ name: 'cccd.png' }], { as: targetAdminCookie });
+  assert.equal(res.status, 200);
+  const asExecutor = await (await call('GET', `/api/people/${id}`, { as: executorCookie })).json();
+  assert.equal(asExecutor.idDocCount, 1);
+  assert.deepEqual(asExecutor.idDocs, []);
+  const asAdmin = await (await call('GET', `/api/people/${id}`, { as: targetAdminCookie })).json();
+  assert.equal(asAdmin.idDocs.length, 1);
+});
+
+test('D13-021 People Detail file pilot: admin (target role) upload id_doc kèm visibility=public vẫn trả 400 (trần D13.3b private cứng, không có ngoại lệ Admin)', async () => {
+  const id = await createPerson();
+  const res = await uploadFiles(`/api/people/${id}/attachments?kind=id_doc&visibility=public`, [{ name: 'cccd.png' }], { as: targetAdminCookie });
+  assert.equal(res.status, 400);
+});
+
+test('D13-022 People Detail file pilot: GET /api/files/:id — executor 403 trên id_doc, 200 trên portrait public; admin 200 trên cả hai', async () => {
+  const id = await createPerson();
+  const idDocUp = await (await uploadFiles(`/api/people/${id}/attachments?kind=id_doc`, [{ name: 'cccd.png' }], { as: targetAdminCookie })).json();
+  const portraitUp = await (await uploadFiles(`/api/people/${id}/attachments?visibility=public`, [{ name: 'a.png' }], { as: executorCookie })).json();
+  assert.equal((await call('GET', `/api/files/${idDocUp.ids[0]}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('GET', `/api/files/${portraitUp.ids[0]}`, { as: executorCookie })).status, 200);
+  assert.equal((await call('GET', `/api/files/${idDocUp.ids[0]}`, { as: targetAdminCookie })).status, 200);
+});
+
+test('D13-023 People Detail file pilot: executor set-primary/delete ảnh chân dung OK (Global edit); DELETE giấy tờ tùy thân vẫn 403', async () => {
+  const id = await createPerson();
+  const up = await (await uploadFiles(`/api/people/${id}/attachments`, [{ name: 'a.png' }, { name: 'b.png' }], { as: executorCookie })).json();
+  assert.equal((await call('PUT', `/api/people/${id}/attachments/${up.ids[1]}/primary`, { as: executorCookie })).status, 200);
+  assert.equal((await call('DELETE', `/api/attachments/${up.ids[0]}`, { as: executorCookie })).status, 200);
+  const idDocUp = await (await uploadFiles(`/api/people/${id}/attachments?kind=id_doc`, [{ name: 'cccd.png' }], { as: targetAdminCookie })).json();
+  assert.equal((await call('DELETE', `/api/attachments/${idDocUp.ids[0]}`, { as: executorCookie })).status, 403);
+});
+
+test('D13-024 People Detail file pilot: DELETE /api/attachments/:aid fail-closed 403 khi owner_type khác person (chưa có policy slice riêng)', async () => {
+  const { db } = require('../db');
+  const r = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime)
+    VALUES ('award', 1, 'file', 'x.png', 'x.png', 'image/png')`).run();
+  const res = await call('DELETE', `/api/attachments/${r.lastInsertRowid}`, { as: targetAdminCookie });
+  assert.equal(res.status, 403);
+});

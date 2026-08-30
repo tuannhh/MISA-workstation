@@ -208,3 +208,53 @@ Exit criteria: full regression (test:security, test:integration:sqlite, test:int
       chua backfill du lieu that — khong phai exit criterion cua batch nay).
 Expected commit range/count: 1 commit.
 ```
+
+## Batch RBAC-PILOT3-people-file (2026-08-30)
+
+```md
+Batch-ID: RBAC-PILOT3-people-file
+Goal: hoan tat "Chuyen People Detail end-to-end (read, write, file)" (04-ROADMAP.md Wave 1, muc 4)
+      bang cach noi POST/PUT/DELETE attachments cua person + GET /api/files/:id vao PolicyEngine
+      cho target role viewer/executor/admin, dung D13.3a/b (audience_visibility tung file + tran
+      server-derived theo kind) va D13.4a (person la Global, khong co owner bypass); nhanh legacy
+      2-role (super_admin/pr_staff) giu nguyen 100% qua senGroups()/requirePerm nhu cu.
+In scope: POST /api/people/:id/attachments, PUT /api/people/:id/attachments/:aid/primary, DELETE
+      /api/attachments/:aid, GET /api/files/:id trong server/routes.js; policy-engine.js them
+      attachmentVisibilityCeiling/canSetAttachmentVisibility/canReadAttachment (pure, D13.3b: id_doc
+      tran private cung KHONG co ngoai le Admin, portrait tran public); GET /api/people/:id target-
+      role branch tu tra portraits/idDocs rong (tam trong D13-011/RBAC-PILOT2) sang du lieu that co
+      gate theo canReadAttachment; scripts/verify-g0.mjs them 3 route vao PILOT_INLINE_PERM_ROUTES;
+      07-route-catalog.md cap nhat R034/R035/R036 dung style carve-out nhu R030/R032/R033.
+Out of scope: UI chon visibility luc upload (Codex lane, khong dung trong batch nay — server chi
+      chap nhan query param ?visibility= lam seam ky thuat, khong phai UI that); attachments cua
+      owner_type khac person (award/supplier/event) — DELETE /api/attachments/:aid va GET /api/
+      files/:id la route dung chung nhieu owner_type, target role dung cham owner_type != person
+      thi fail-closed 403, KHONG tu suy dien policy cho cac entity do; bat ky pilot slice nao ngoai
+      People Detail — phai hoi lai owner truoc (02-decisions.md SS G).
+Behavior mode: target-change cho 4 route tren, chi anh huong target role moi — hanh vi legacy
+      2-role khong doi 1 dong (van dung senGroups().has('iddoc'), rbac.can(), requirePerm nhu cu).
+Risk hotspots: (1) D13.3b tran la TUYET DOI — canSetAttachmentVisibility KHONG duoc co nhanh bypass
+      cho Admin/Super Admin, neu vo tinh them isPrivileged() bypass se pha vo chinh cau "khong co
+      duong nao de 1 Nhan vien thuc thi lo tay cong khai hoa" ma ca Admin cung phai bi chan; (2)
+      person la Global (D13.4a) nen canReadAttachment KHONG co nhanh executor-owns-this-record nhu
+      canReadField danh cho Direct/Inherited — private attachment chi Admin/Super Admin doc duoc,
+      ke ca chinh nguoi da upload no; (3) DELETE /api/attachments/:aid va GET /api/files/:id phuc vu
+      NHIEU owner_type, phai kiem tra att.owner_type==='person' truoc khi ap dung canReadAttachment/
+      assertWritable cho target role, neu khong se sai lech sang xu ly nham policy cho award/supplier
+      attachments (chua co slice rieng).
+Required tests: viewer upload/set-primary/delete deu 403; executor upload portrait mac dinh private
+      -> chinh executor cung khong thay lai (khong co owner bypass tren Global); executor upload voi
+      visibility=public -> thay lai duoc; executor upload id_doc -> 403 (chi Admin/Super Admin);
+      admin (target role) upload id_doc thanh cong, executor thay idDocCount nhung KHONG thay noi
+      dung (ton tai vs noi dung, dung D13.4b); admin upload id_doc kem visibility=public van 400
+      (tran tuyet doi, khong co ngoai le Admin); GET /api/files/:id executor 403 tren id_doc + 200
+      tren portrait public, admin 200 ca hai; executor set-primary/delete anh chan dung OK (Global
+      edit) nhung DELETE id_doc van 403; DELETE /api/attachments/:aid fail-closed 403 khi owner_type
+      khac person; legacy super_admin/pr_staff giu nguyen 100% test R034/R035/R036/R037 cu.
+Allowed known-red/TODO: khong can — target-change co code that di kem.
+Exit criteria: full regression (test:security, test:integration:sqlite, test:integration:mysql,
+      test:verify-gate1-mapping, verify-g0.mjs, git diff --check) deu xanh, khong regression tren
+      R034/R035/R036/R037 legacy; ceiling D13.3b khong the bi vuot bang bat ky role nao (co test
+      xac nhan rieng cho Admin); PolicyForbiddenError/403 ro rang, khong silent-strip.
+Expected commit range/count: 1 commit.
+```

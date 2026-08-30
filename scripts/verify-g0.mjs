@@ -92,6 +92,9 @@ const PILOT_INLINE_PERM_ROUTES = {
   'GET /api/people/:id': { module: 'partners', action: 'view' }, // D13 People Detail pilot, commit 3e8b299
   'PUT /api/people/:id': { module: 'partners', action: 'edit' }, // D13 People Detail write pilot (RBAC-PILOT2-people-write)
   'DELETE /api/people/:id': { module: 'partners', action: 'delete' }, // D13 People Detail write pilot (RBAC-PILOT2-people-write)
+  'POST /api/people/:id/attachments': { module: 'partners', action: 'edit' }, // D13 People Detail file pilot (RBAC-PILOT3-people-file)
+  'PUT /api/people/:id/attachments/:aid/primary': { module: 'partners', action: 'edit' }, // D13 People Detail file pilot (RBAC-PILOT3-people-file)
+  'DELETE /api/attachments/:aid': { module: 'partners', action: 'edit' }, // D13 People Detail file pilot (RBAC-PILOT3-people-file)
 };
 
 function sourceRoutes() {

@@ -49,4 +49,24 @@ function canReadField({ principal, entity, field, record, isPublic = false, pare
   return !!isPublic && tier === 'Public';
 }
 
-module.exports = { TIER, FIELD_TIER, classification, isPrivileged, isDirectEntity, isInheritedEntity, canWrite, canReadField, ownerValue };
+// D13.3b: attachments are not scalar `person` fields, so they get their own ceiling table instead
+// of FIELD_TIER. id_doc's ceiling is hard `private` — no role, including Admin, can raise it.
+const ATTACHMENT_VISIBILITY_CEILING = Object.freeze({ id_doc: 'private', portrait: 'public' });
+function attachmentVisibilityCeiling(kind) { return ATTACHMENT_VISIBILITY_CEILING[kind] || 'private'; }
+function canSetAttachmentVisibility(kind, visibility) {
+  if (visibility === 'private') return true;
+  return attachmentVisibilityCeiling(kind) === 'public';
+}
+// person has no per-record owner (D13.4a Global), so unlike canReadField there is no
+// executor-owns-this-record bypass here: only Admin/Super Admin see non-public attachments.
+function canReadAttachment({ principal, kind, audienceVisibility }) {
+  if (!principal) return false;
+  if (isPrivileged(principal)) return true;
+  if (kind === 'id_doc') return false;
+  return audienceVisibility === 'public';
+}
+
+module.exports = {
+  TIER, FIELD_TIER, classification, isPrivileged, isDirectEntity, isInheritedEntity, canWrite, canReadField, ownerValue,
+  attachmentVisibilityCeiling, canSetAttachmentVisibility, canReadAttachment,
+};

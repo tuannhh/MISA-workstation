@@ -1759,3 +1759,55 @@ People Detail, không cutover role hàng loạt.
 
 **Còn lại của "People Detail end-to-end"**: W1.FILE (visibility gate cho attachments của person) —
 batch kế tiếp.
+
+## Wave 1 tiếp tục: batch RBAC-PILOT3-people-file (attachments person chuyển sang WRITE + gate đọc)
+
+Theo đúng thứ tự bắt buộc trong batch contract, viết Batch Contract `RBAC-PILOT3-people-file` rồi
+nối nốt phần "file" của "People Detail end-to-end":
+
+- `server/policy-engine.js`: thêm `ATTACHMENT_VISIBILITY_CEILING` (`id_doc: 'private'`, `portrait:
+  'public'`) + `attachmentVisibilityCeiling(kind)` + `canSetAttachmentVisibility(kind, visibility)`
+  (trần D13.3b — **tuyệt đối, không có nhánh bypass cho Admin/Super Admin**, khác hẳn `canWrite`) +
+  `canReadAttachment({principal, kind, audienceVisibility})` (Admin/Super Admin bypass; `id_doc`
+  luôn false cho vai trò khác; `portrait` chỉ đọc được nếu `audience_visibility='public'`). Vì
+  `person` là Global (D13.4a) — không có `owner_id` — hàm này **không có nhánh executor-owns-record**
+  như `canReadField` dành cho Direct/Inherited: file `private` chỉ Admin/Super Admin xem được, kể cả
+  chính người vừa upload.
+- `server/routes.js`: `POST /people/:id/attachments`, `PUT /people/:id/attachments/:aid/primary` đổi
+  middleware `requirePerm('partners','edit')` → `personEditGate` (dual-branch: role D13 gọi
+  `policyService.assertWritable(entity:'person',action:'edit')`, legacy giữ nguyên `requirePerm` cũ).
+  `DELETE /attachments/:aid` bỏ hẳn middleware, chuyển kiểm INLINE trong handler — route này phục vụ
+  **nhiều owner_type** (award/supplier/event...), nên role D13 đụng attachment không phải của
+  `person` bị **fail-closed 403** (chưa có policy slice riêng cho các entity đó, không tự suy diễn).
+  `GET /files/:id` thêm nhánh D13 dùng `canReadAttachment` (đồng thời giữ audit `VIEW_SENSITIVE` khi
+  Admin/Super Admin xem `id_doc`, y hệt tinh thần audit cũ). `POST /people/:id/attachments` cho role
+  D13 nhận thêm `?visibility=public|private` (seam kỹ thuật, KHÔNG phải UI — UI thuộc lane Codex),
+  validate qua `canSetAttachmentVisibility` trước khi ghi, từ chối rõ ràng (400) nếu vượt trần —
+  không silent-clamp.
+- `GET /people/:id` nhánh D13 (trước đây trả `portraits:[]/idDocs:[]` tạm ở batch RBAC-PILOT2) nay
+  trả dữ liệu attachments thật, lọc qua `canReadAttachment`; `idDocCount` vẫn đúng số lượng cho mọi
+  role (đúng D13.4b "mọi role thấy sự tồn tại bản ghi") nhưng mảng `idDocs` rỗng nếu không phải
+  Admin/Super Admin (không thấy nội dung).
+- 9 test dual-driver mới (`D13-016..024`, `server/test/integration-people.test.js`): viewer 403 trên
+  upload/set-primary/delete; executor upload private mặc định → chính executor cũng không thấy lại
+  (không có owner bypass trên Global); upload `visibility=public` → thấy lại được; executor upload
+  id_doc → 403 (chỉ Admin/Super Admin); admin upload id_doc → executor thấy `idDocCount` nhưng
+  `idDocs` rỗng, admin thấy đủ; admin upload id_doc kèm `visibility=public` vẫn 400 (trần D13.3b
+  không có ngoại lệ Admin); `GET /files/:id` executor 403 trên id_doc + 200 trên portrait public,
+  admin 200 cả hai; executor set-primary/delete ảnh chân dung OK (Global edit) nhưng DELETE id_doc
+  vẫn 403; `DELETE /attachments/:aid` fail-closed 403 khi `owner_type` khác person (test tự insert
+  1 row `owner_type='award'` qua `db` để xác nhận). Test R034/R035/R036/R037 cũ giữ nguyên nguyên
+  văn, xác nhận vẫn pass (legacy không đổi hành vi).
+- Route catalog: cập nhật R034/R035/R036 trong `07-route-catalog.md` theo đúng carve-out đã dùng cho
+  R030/R032/R033, đăng ký cả 3 route vào `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES`; sửa lại
+  line-number tham chiếu của R030/R032/R033 cho khớp vị trí mới trong `routes.js` (bị dịch do thêm
+  code populate portraits/idDocs vào `GET /people/:id`).
+
+Verify: `test:security` 6/6, `test:integration:sqlite` 645 pass/8 skip, `test:integration:mysql`
+652 pass/1 skip (+9 so với trước batch), `test:verify-gate1-mapping` 145/145, `verify-g0.mjs` PASS,
+`verify-g0-selftest` 6/6, `git diff --check` sạch. Không đổi hành vi UI (Codex lane), không đổi bất
+kỳ pilot slice nào ngoài People Detail, không cutover role hàng loạt.
+
+**"People Detail end-to-end" (read, write, file) nay đã đủ cả 3 phần.** Bước tiếp theo theo đúng
+thứ tự `18-g1b-rbac-batch-contract.md`: acceptance money/supplier/booking/event — cần hỏi lại owner
+trước khi mở rộng pilot slice mới (`02-decisions.md` §G).

@@ -8,6 +8,7 @@ const rbac = require('./rbac');
 const { requireAuth, requirePerm } = require('./auth');
 const { createVisibilityStore } = require('./policy-visibility-store');
 const { createPolicyService, PolicyForbiddenError } = require('./policy-service');
+const policy = require('./policy-engine');
 const { upload } = require('./uploads');
 const scheduler = require('./scheduler');
 const monitor = require('./monitor');
@@ -405,11 +406,18 @@ router.get('/people/:id', (req, res) => {
     LEFT JOIN organizations o ON o.id=p.org_id WHERE p.id=?`).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Không tìm thấy' });
   // First strangler endpoint for D13. New roles deliberately do not fall back to legacy masking:
-  // no policy configuration means no fields, and related collections/files remain private until
-  // their own policy slice is implemented.
+  // no policy configuration means no fields, and related collections remain private until their
+  // own policy slice is implemented. Attachments are wired (W1.FILE, batch RBAC-PILOT3-people-file).
   if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
     const record = policyService.projectRecord({ principal: req.principal, entity: 'person', module: 'partners', record: row });
-    return res.json({ record, maskedFields: [], portraits: [], idDocs: [], idDocCount: 0, interactions: [], gifts: [], caretakers: [], sensitiveVisible: req.principal.role === 'admin' });
+    const allAtts = db.prepare(`SELECT id, original_name, mime, kind, audience_visibility, is_primary FROM attachments
+      WHERE owner_type='person' AND owner_id=? ORDER BY kind, is_primary DESC, id`).all(row.id);
+    const portraits = allAtts.filter((a) => a.kind === 'portrait'
+      && policy.canReadAttachment({ principal: req.principal, kind: a.kind, audienceVisibility: a.audience_visibility }));
+    const idDocs = allAtts.filter((a) => a.kind === 'id_doc'
+      && policy.canReadAttachment({ principal: req.principal, kind: a.kind, audienceVisibility: a.audience_visibility }));
+    const idDocCount = allAtts.filter((a) => a.kind === 'id_doc').length;
+    return res.json({ record, maskedFields: [], portraits, idDocs, idDocCount, interactions: [], gifts: [], caretakers: [], sensitiveVisible: req.principal.role === 'admin' });
   }
   if (!rbac.can(req.principal?.role, 'partners', 'view')) return res.status(403).json({ error: 'Bạn không có quyền view trên partners.' });
   const allowed = senGroups(req);
@@ -482,10 +490,27 @@ router.delete('/people/:id', (req, res) => {
 
 // ---------- Attachments: ảnh chân dung + giấy tờ tùy thân ----------
 const PORTRAIT_MAX = 5;
-router.post('/people/:id/attachments', requirePerm('partners', 'edit'), upload.array('files', 5), (req, res) => {
+// D13 pilot slice 3 (People Detail file, batch RBAC-PILOT3-people-file): target role đi qua
+// PolicyEngine (action 'edit' trên person, đúng ngữ nghĩa như legacy requirePerm('partners','edit'));
+// user legacy 2-role giữ nguyên requirePerm cũ, không đổi hành vi.
+function personEditGate(req, res, next) {
+  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+    try {
+      policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
+      return next();
+    } catch (err) {
+      if (err instanceof PolicyForbiddenError) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+      return next(err);
+    }
+  }
+  return requirePerm('partners', 'edit')(req, res, next);
+}
+router.post('/people/:id/attachments', personEditGate, upload.array('files', 5), (req, res) => {
   const kind = req.query.kind === 'id_doc' ? 'id_doc' : 'portrait';
+  const isTarget = TARGET_RBAC_ROLES.has(req.principal?.role);
   // Giấy tờ tùy thân là dữ liệu mật: chỉ người đủ quyền được tải lên
-  if (kind === 'id_doc' && !senGroups(req).has('iddoc')) {
+  const idDocAllowed = isTarget ? policy.isPrivileged(req.principal) : senGroups(req).has('iddoc');
+  if (kind === 'id_doc' && !idDocAllowed) {
     (req.files || []).forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
     return res.status(403).json({ error: 'Bạn không có quyền tải lên giấy tờ tùy thân (dữ liệu mật).' });
   }
@@ -499,22 +524,33 @@ router.post('/people/:id/attachments', requirePerm('partners', 'edit'), upload.a
       return res.status(400).json({ error: `Tối đa ${PORTRAIT_MAX} ảnh chân dung (hiện có ${cur}).` });
     }
   }
-  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary)
-    VALUES ('person', ?, ?, ?, ?, ?, ?)`);
+  // D13.3a/b: chỉ role D13 mới được tự chọn visibility lúc upload; legacy giữ nguyên mặc định
+  // schema ('private'). Trần theo kind (D13.3b) áp dụng cho MỌI role, kể cả Admin.
+  let visibility = 'private';
+  if (isTarget) {
+    const requested = req.query.visibility === 'public' ? 'public' : 'private';
+    if (!policy.canSetAttachmentVisibility(kind, requested)) {
+      files.forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
+      return res.status(400).json({ error: `Không thể đặt visibility 'public' cho loại tài liệu này.` });
+    }
+    visibility = requested;
+  }
+  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, audience_visibility, is_primary)
+    VALUES ('person', ?, ?, ?, ?, ?, ?, ?)`);
   const hasPrimary = db.prepare(`SELECT COUNT(*) c FROM attachments WHERE owner_type='person' AND owner_id=? AND kind='portrait' AND is_primary=1`).get(req.params.id).c;
   let madePrimary = hasPrimary > 0;
   const created = [];
   for (const f of files) {
     const primary = kind === 'portrait' && !madePrimary ? 1 : 0;
     if (primary) madePrimary = true;
-    const r = ins.run(req.params.id, kind, f.filename, f.originalname, f.mimetype, primary);
+    const r = ins.run(req.params.id, kind, f.filename, f.originalname, f.mimetype, visibility, primary);
     created.push(r.lastInsertRowid);
   }
   logEdit(req, 'EDIT', 'person', req.params.id, `Tải lên ${files.length} ${kind === 'id_doc' ? 'giấy tờ' : 'ảnh'}`);
   res.json({ ok: true, ids: created });
 });
 
-router.put('/people/:id/attachments/:aid/primary', requirePerm('partners', 'edit'), (req, res) => {
+router.put('/people/:id/attachments/:aid/primary', personEditGate, (req, res) => {
   const att = db.prepare(`SELECT * FROM attachments WHERE id=? AND owner_id=? AND owner_type='person' AND kind='portrait'`).get(req.params.aid, req.params.id);
   if (!att) return res.status(404).json({ error: 'Không tìm thấy ảnh' });
   db.prepare(`UPDATE attachments SET is_primary=0 WHERE owner_type='person' AND owner_id=? AND kind='portrait'`).run(req.params.id);
@@ -522,10 +558,25 @@ router.put('/people/:id/attachments/:aid/primary', requirePerm('partners', 'edit
   res.json({ ok: true });
 });
 
-router.delete('/attachments/:aid', requirePerm('partners', 'edit'), (req, res) => {
+// D13 pilot slice 3: route này phục vụ NHIỀU owner_type (award/supplier/event/person...), nhưng
+// PolicyEngine mới chỉ instrument 'person' — role D13 mới đụng owner_type khác thì fail-closed
+// 403 (chưa có policy slice riêng), không suy diễn/PASS ngầm.
+router.delete('/attachments/:aid', (req, res) => {
   const att = db.prepare('SELECT * FROM attachments WHERE id=?').get(req.params.aid);
   if (!att) return res.status(404).json({ error: 'Không tìm thấy' });
-  if (att.kind === 'id_doc' && !senGroups(req).has('iddoc')) return res.status(403).json({ error: 'Không đủ quyền' });
+  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+    if (att.owner_type !== 'person') return res.status(403).json({ error: 'Bạn không có quyền delete file này.' });
+    try {
+      policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
+    } catch (err) {
+      if (err instanceof PolicyForbiddenError) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+      throw err;
+    }
+    if (att.kind === 'id_doc' && !policy.isPrivileged(req.principal)) return res.status(403).json({ error: 'Không đủ quyền' });
+  } else {
+    if (!rbac.can(req.principal?.role, 'partners', 'edit')) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+    if (att.kind === 'id_doc' && !senGroups(req).has('iddoc')) return res.status(403).json({ error: 'Không đủ quyền' });
+  }
   try { fs.unlinkSync(path.join(UPLOAD_DIR, att.filename)); } catch {}
   db.prepare('DELETE FROM attachments WHERE id=?').run(req.params.aid);
   // nếu xóa ảnh chính, đặt ảnh khác làm chính
@@ -540,7 +591,12 @@ router.delete('/attachments/:aid', requirePerm('partners', 'edit'), (req, res) =
 router.get('/files/:id', (req, res) => {
   const att = db.prepare('SELECT * FROM attachments WHERE id=?').get(req.params.id);
   if (!att) return res.status(404).json({ error: 'Không tìm thấy file' });
-  if (att.kind === 'id_doc') {
+  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+    const allowed = att.owner_type === 'person'
+      && policy.canReadAttachment({ principal: req.principal, kind: att.kind, audienceVisibility: att.audience_visibility });
+    if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền xem file này.' });
+    if (att.kind === 'id_doc') logEdit(req, 'VIEW_SENSITIVE', 'person', att.owner_id, `Tải/giấy tờ tùy thân: ${att.original_name || att.filename}`);
+  } else if (att.kind === 'id_doc') {
     if (!senGroups(req).has('iddoc')) return res.status(403).json({ error: 'Không đủ quyền xem giấy tờ tùy thân' });
     logEdit(req, 'VIEW_SENSITIVE', 'person', att.owner_id, `Tải/giấy tờ tùy thân: ${att.original_name || att.filename}`);
   }
