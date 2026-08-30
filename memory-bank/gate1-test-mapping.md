@@ -31,6 +31,12 @@
 > kèm allowlist `{id, owner, expiry}` theo §G1B.6. Một characterization xanh mô tả gap và
 > target test đỏ cho đúng gap đó là 2 dòng khác nhau trong bảng — không gộp chung 1 dòng.
 >
+> **Ngoại lệ prefix `INFRA-` (2026-08-30):** không phải finding thật, mà là fixture tự-test
+> cơ chế `known-red()` (G1B.6) chính nó — vẫn phải khai allowlist `{id, owner, expiry}` như
+> mọi known-red khác để verifier đối chiếu nhất quán, nhưng `note` phải ghi rõ "không phải
+> finding thật" để không bị hiểu nhầm là còn gap bảo mật mở. Dùng id cố định `expiry` xa
+> (2099) vì không gắn với vòng đời sửa lỗi nào — chỉ xoá nếu bỏ hẳn cơ chế self-test.
+>
 > **Quy ước riêng cho dòng `route_id` (G1A.3, khác BR-* của G1A.2):** mỗi route có NHIỀU
 > `test()` (1 test/case: happy/invalid/unauthenticated/forbidden/not-found), không phải 1
 > test duy nhất. Ở đây `test_id` = chính `route_id` (ví dụ `R143`), và quy tắc "verbatim"
@@ -304,9 +310,10 @@
 | F2-audit-logout | W1.7 audit: logout | green | server/test/target-session-f2.test.js | **W1.7:** logout ghi `audit_log` action=LOGOUT trước khi `session.destroy()` |
 | F2-failfast-secret | production fail-fast | green | server/test/integration-session-production.test.js | **W1.7:** `createApp()` throw khi `NODE_ENV=production` và thiếu `SESSION_SECRET` (không còn rơi về default không an toàn) |
 | F2-secure-cookie | production: cookie Secure | green | server/test/integration-session-production.test.js | **W1.7:** cookie session có thuộc tính `Secure` khi `NODE_ENV=production` (`trust proxy` + `X-Forwarded-Proto: https`, mô phỏng Cloud Run) |
-| N1-explicit-action | N1-explicit-action | known-red | server/test/target-n1-n2-explicit-permission.test.js | G1B.5 target (RESOLVED 02-decisions.md §B.1): 4 route side-effect (notifications/:id/read, notifications/read-all, reminders/run, monitor/alerts/:id/read) phải dùng action tường minh ack/run — hiện cả 4 đều dùng `view`. Allowlist {owner:backend, expiry:2026-12-31, wave:W1} |
+| N1-explicit-action | N1-explicit-action | green | server/test/target-n1-n2-explicit-permission.test.js | **ĐÃ SỬA — Wave 1 nhánh security (Claude 2026-08-30):** 4 route side-effect (notifications/:id/read, notifications/read-all, reminders/run, monitor/alerts/:id/read) nay dùng action tường minh `ack`/`run` thay vì tái dùng `view`; `rbac.js` MATRIX thêm `ack`/`run` cho cả 2 role. Promote từ known-red sang assertion xanh, entry xoá khỏi g1b-allowlist.json |
+| INFRA-known-red-selftest | known-red self-test | known-red | server/test/target-session-f2.test.js | **KHÔNG phải finding thật.** Fixture tự-test cơ chế `known-red()` (G1B.6) chính nó (`server/test-support/known-red-fixture.js`, 3 kịch bản match/mismatch/missing-expectedError) — trước đây mượn tạm entry N1-explicit-action vì luôn có 1 known-red thật chưa sửa; nay N1/N2 đã sửa xong nên tách hẳn thành id infra riêng, allowlist `{owner:backend, expiry:2099-12-31, wave:infra}`, không phụ thuộc còn finding thật nào mở |
 | UI-CHAR-001 | UI-CHAR-001 | green | server/test/ui-characterization.test.js | G1A.6: 14 module desktop trong NAV đều có resolver `VIEWS` tương ứng; runtime smoke Admin kiểm tra đủ 14 hash route tại 2026-08-30. Đây là evidence desktop hiện trạng, không phải MDS pass. |
 | UI-CHAR-002 | UI-CHAR-002 | green | server/test/ui-characterization.test.js | G1A.6: Vue shell tạo mount point và nạp `public/app.js` sau `nextTick`; khóa kiến trúc hybrid đang chạy để slice sau cập nhật có chủ đích. |
 | UI-CHAR-003 | UI-CHAR-003 | green | server/test/ui-characterization.test.js | G1A.6: Section B.2 có 34 flow/145 route; mỗi flow ghi `N-MISSING` cho cả 2 role current-state. `green` nghĩa là matrix trung thực, không nghĩa Native-Mobile đạt. |
 | UI-CHAR-004 | UI-CHAR-004 | green | server/test/ui-characterization.test.js | G1A.6: source/runtime characterize compact là desktop responsive; không có `.mds-mobile-app`/native bottom nav. F5 P0 vẫn mở đến W4.1 + native slice/device evidence. |
-| N2-dashboard-permission | N2-dashboard-permission | known-red | server/test/target-n1-n2-explicit-permission.test.js | G1B.5 target (RESOLVED 02-decisions.md §B.1): `GET /dashboard` phải có `requirePerm('dashboard','view')` + rbac.js khai module `dashboard` cấp cho mọi role được phép xem — hiện không có gì. Allowlist {owner:backend, expiry:2026-12-31, wave:W1} |
+| N2-dashboard-permission | N2-dashboard-permission | green | server/test/target-n1-n2-explicit-permission.test.js | **ĐÃ SỬA — Wave 1 nhánh security (Claude 2026-08-30):** `GET /dashboard` nay có `requirePerm('dashboard','view')`; `rbac.js` khai module `dashboard`, MATRIX cấp `['view']` cho cả 2 role. Promote từ known-red sang assertion xanh, entry xoá khỏi g1b-allowlist.json |

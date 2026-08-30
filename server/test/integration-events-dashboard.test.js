@@ -290,7 +290,8 @@ test('R097 unauthenticated: không cookie trả 401', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// R098 — GET /api/dashboard (requireAuth only, không requirePerm module -> không có case forbidden)
+// R098 — GET /api/dashboard (N2, W1 nhánh security: nay có requirePerm('dashboard','view') tường
+// minh — cả 2 role legacy đều được cấp dashboard:['view'] nên vẫn không có case forbidden ở đây)
 // ---------------------------------------------------------------------------
 test('R098 happy: trả overview + charts + upcoming + month/year', async () => {
   const res = await call('GET', '/api/dashboard');

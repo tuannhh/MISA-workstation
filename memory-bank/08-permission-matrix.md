@@ -26,9 +26,10 @@ awk -F'|' 'NR>4 && $2 ~ /R[0-9]{3}/ {gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$5
 | events | view/create/edit/delete | view/create/edit/delete | R087-R096, R141 | 11 |
 | admin | view/create/edit/delete | **[] — không có quyền nào** | R099-R103 | 5 |
 | monitoring | view/create/edit/delete | view/create/edit/delete | R104-R135 | 32 |
-| *(không thuộc module nào — đặc biệt)* | — | — | R037 (`requireAuth` qua router — file serving đa-owner), R098 (`requireAuth` qua router, dashboard), R142 (`requireAuth` qua router, ai/status), R143 (public login), R144 (không auth middleware; logout destroy session nếu có), R145 (handler `auth.me` tự kiểm tra session) | 6 |
+| dashboard | view | view | R098 | 1 |
+| *(không thuộc module nào — đặc biệt)* | — | — | R037 (`requireAuth` qua router — file serving đa-owner), R142 (`requireAuth` qua router, ai/status), R143 (public login), R144 (không auth middleware; logout destroy session nếu có), R145 (handler `auth.me` tự kiểm tra session) | 5 |
 
-**Tổng: 41+12+4+7+12+15+11+5+32+6 = 145.** Không route nào trùng 2 module (khác lỗi lần 1: `R096` chỉ thuộc `events`, không thuộc `reminders`; `R001/R046-R049/R097` thuộc `partners` — trước đây bị lọt hoàn toàn khỏi bảng).
+**Tổng: 41+12+4+7+12+15+11+5+32+1+5 = 145.** Không route nào trùng 2 module (khác lỗi lần 1: `R096` chỉ thuộc `events`, không thuộc `reminders`; `R001/R046-R049/R097` thuộc `partners` — trước đây bị lọt hoàn toàn khỏi bảng). **N2 ĐÃ SỬA (Wave 1, 2026-08-30):** `R098` tách khỏi hàng đặc biệt sang module `dashboard` riêng (`requirePerm('dashboard','view')`, cấp cho cả 2 role).
 
 > **Sửa cụ thể theo evidence Codex:** `R046-R049` (bookings) và `R097` (press-overview) dùng `requirePerm('partners', ...)` thật trong source (`server/routes.js:611,618,623,1148`), không phải route riêng biệt — nay đã gộp đúng vào `partners`. `R001` (assignable-users) cũng `partners:view` (`routes.js:82`).
 
@@ -49,7 +50,7 @@ Section A trả lời “middleware hiện tại kiểm tra module nào”. Sect
 |---|---|---|---|---|---|---|---|
 | F001 | Đăng nhập, phiên và hồ sơ hiện tại | R143,R144,R145 | LOGIN/LOGOUT/ME · D-AUTH | LOGIN/LOGOUT/ME · D-AUTH | N-MISSING | N-MISSING | S0 |
 | F002 | Bootstrap lookup/status dùng chung | R001,R142 | V · D-SYSTEM | V · D-SYSTEM | N-MISSING | N-MISSING | S0; caller chịu state |
-| F003 | Dashboard tổng quan | R098 | V · D-DASH | V · D-DASH | N-MISSING | N-MISSING | S0; N2 target `dashboard:view` |
+| F003 | Dashboard tổng quan | R098 | V qua `dashboard:view` · D-DASH | V qua `dashboard:view` · D-DASH | N-MISSING | N-MISSING | S0; N2 ĐÃ SỬA (Wave 1, 2026-08-30) |
 | F004 | Danh sách/tổng quan cơ quan báo chí | R002,R097 | V · D-LIST | V · D-LIST | N-MISSING | N-MISSING | S1/S2 (`membership_fee`) |
 | F005 | Chi tiết và CRUD cơ quan | R003,R004,R005,R006 | V/C/E/D · D-DETAIL | V/C/E/D · D-DETAIL | N-MISSING | N-MISSING | S1/S2; S3 |
 | F006 | Tài trợ cơ quan | R007,R008,R009 | C/E/D qua `partners:edit` · D-EMBED | C/E/D qua `partners:edit` · D-EMBED | N-MISSING | N-MISSING | S2; S3 |
@@ -66,7 +67,7 @@ Section A trả lời “middleware hiện tại kiểm tra module nào”. Sect
 | F017 | Booking truyền thông | R046,R047,R048,R049 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S2; S3 |
 | F018 | Ngân sách kỳ | R050,R051 | V/UPSERT hiện cùng `reports:view` · D-LIST | DENY · D-403 | N-MISSING | N-MISSING | S2; write dùng view hiện tại |
 | F019 | Báo cáo tổng hợp | R052,R053,R054,R055,R056 | V · D-REPORT | DENY · D-403 | N-MISSING | N-MISSING | S2 aggregate/projection |
-| F020 | Notification inbox, acknowledge và chạy nhắc | R057,R058,R059,R060 | V/ACK/RUN hiện cùng `reminders:view` · D-LIST | V/ACK/RUN hiện cùng `reminders:view` · D-LIST | N-MISSING | N-MISSING | S0; N1 target action riêng |
+| F020 | Notification inbox, acknowledge và chạy nhắc | R057,R058,R059,R060 | V qua `reminders:view`, ACK qua `reminders:ack`, RUN qua `reminders:run` · D-LIST | V/ACK/RUN cùng phân quyền · D-LIST | N-MISSING | N-MISSING | S0; N1 ĐÃ SỬA (Wave 1, 2026-08-30) |
 | F021 | Xuất lịch ICS | R061 | V/EXPORT · D-SYSTEM | V/EXPORT · D-SYSTEM | N-MISSING | N-MISSING | S0; host capability ở C |
 | F022 | Giải thưởng, tham gia, file và AI | R062,R063,R064,R065,R066,R067,R068,R069,R070,R071,R139,R140 | V/C/E/D/UPLOAD/AI · D-LIST | V/C/E/D/UPLOAD/AI · D-LIST | N-MISSING | N-MISSING | S2; S3 |
 | F023 | Nhà cung cấp, liên hệ, giao dịch, báo giá, file | R072,R073,R074,R075,R076,R077,R078,R079,R080,R081,R082,R083,R084,R085,R086 | V/C/E/D/UPLOAD · D-LIST | V/C/E/D/UPLOAD · D-LIST | N-MISSING | N-MISSING | S2; S3 |
@@ -75,7 +76,7 @@ Section A trả lời “middleware hiện tại kiểm tra module nào”. Sect
 | F026 | Audit log | R103 | V · D-LIST | DENY · D-403 | N-MISSING | N-MISSING | dữ liệu privileged; 403 page FAIL |
 | F027 | Monitor dashboard, mentions và bulk actions | R104,R105,R106,R107,R108,R109 | V/E/D · D-LIST | V/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
 | F028 | Scan, runs và AI intelligence | R110,R111,R112,R113 | V/C/AI · D-REPORT | V/C/AI · D-REPORT | N-MISSING | N-MISSING | S0; SSRF/AI findings riêng |
-| F029 | Monitor settings và acknowledge alert | R114,R115,R116 | V/E/ACK hiện cùng `monitoring:view` · D-EMBED | V/E/ACK hiện cùng `monitoring:view` · D-EMBED | N-MISSING | N-MISSING | S0; N1 target action riêng |
+| F029 | Monitor settings và acknowledge alert | R114,R115,R116 | V/E qua `monitoring:view`, ACK qua `monitoring:ack` · D-EMBED | V/E/ACK cùng phân quyền · D-EMBED | N-MISSING | N-MISSING | S0; N1 ĐÃ SỬA (Wave 1, 2026-08-30) |
 | F030 | Cấu hình scan query | R117,R118,R119,R120 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
 | F031 | Cấu hình nguồn tin | R121,R122,R123,R124 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
 | F032 | Cấu hình đối thủ | R125,R126,R127,R128 | V/C/E/D · D-LIST | V/C/E/D · D-LIST | N-MISSING | N-MISSING | S0; S3 |
@@ -87,7 +88,7 @@ Section A trả lời “middleware hiện tại kiểm tra module nào”. Sect
 | Profile | loading | empty | error | 403/access denied | Evidence hiện tại |
 |---|---|---|---|---|---|
 | D-AUTH | UNVERIFIED | N/A — form auth không phải collection | PASS cho login error | UNVERIFIED cho session hết hạn | `public/app.js` login flow; cần G1 UI characterization |
-| D-DASH | PASS — global route loading | UNVERIFIED | PASS — global route catch | **FAIL/MISSING** — current R098 chỉ requireAuth | `public/app.js:276-284`; N2 là target |
+| D-DASH | PASS — global route loading | UNVERIFIED | PASS — global route catch | **FAIL/MISSING** — R098 nay có `requirePerm(dashboard,view)` (N2 ĐÃ SỬA) nhưng UI vẫn chưa render trang 403 riêng | `public/app.js:276-284` |
 | D-LIST | PASS — global route loading | PARTIAL — bảng/pager về 0, chưa có empty-state MDS thống nhất | PASS — global route catch | **FAIL/MISSING** — hash router redirect về dashboard, không render 403 | `public/app.js:276-315` |
 | D-DETAIL | PASS — global route loading | UNVERIFIED cho từng collection con | PASS — global route catch | **FAIL/MISSING** — redirect, không có 403 state | `public/app.js:276-284`; detail render riêng |
 | D-EMBED | UNVERIFIED — phụ thuộc parent/detail | UNVERIFIED | UNVERIFIED — toast/inline/catch không đồng nhất | **FAIL/MISSING** — không có 403 component | embedded modal/section trong `public/app.js` |

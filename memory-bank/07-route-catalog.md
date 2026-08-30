@@ -63,9 +63,9 @@
 | R055 | GET | /api/reports/awards | requirePerm(reports,view) | awards+award_participations+bookings | org_fee (read-leak projection) | không | routes.js:760 |
 | R056 | GET | /api/reports/care-alerts | requirePerm(reports,view) | people+organizations+interactions+bookings | — | không | routes.js:779 |
 | R057 | GET | /api/notifications | requirePerm(reminders,view) | reminder_log+important_dates | — | không | routes.js:810 |
-| R058 | POST | /api/notifications/:id/read | requirePerm(reminders,**view**) | reminder_log | — | không | routes.js:819 — N1 |
-| R059 | POST | /api/notifications/read-all | requirePerm(reminders,**view**) | reminder_log | — | không | routes.js:823 — N1 |
-| R060 | POST | /api/reminders/run | requirePerm(reminders,**view**) | trigger `scheduler.runOnce()` → reminder_log+email side-effect | — | không | routes.js:828 — N1 (mức cao nhất, trigger side-effect thật) |
+| R058 | POST | /api/notifications/:id/read | requirePerm(reminders,ack) | reminder_log | — | không | routes.js:819 — N1 ĐÃ SỬA (Wave 1, 2026-08-30) |
+| R059 | POST | /api/notifications/read-all | requirePerm(reminders,ack) | reminder_log | — | không | routes.js:823 — N1 ĐÃ SỬA (Wave 1, 2026-08-30) |
+| R060 | POST | /api/reminders/run | requirePerm(reminders,run) | trigger `scheduler.runOnce()` → reminder_log+email side-effect | — | không | routes.js:828 — N1 ĐÃ SỬA (Wave 1, 2026-08-30, mức cao nhất, trigger side-effect thật) |
 | R061 | GET | /api/reminders/:id/ics | requirePerm(reminders,view) | important_dates | — | có (download .ics) | routes.js:833 |
 | R062 | GET | /api/awards | requirePerm(awards,view) | awards | org_fee (maskMoney ad-hoc) | không | routes.js:869 |
 | R063 | GET | /api/awards/:id | requirePerm(awards,view) | awards+award_participations+attachments | org_fee | không (metadata) | routes.js:888 |
@@ -103,7 +103,7 @@
 | R095 | POST | /api/events/:id/files | requirePerm(events,edit) | attachments (**kind từ query string, chỉ cắt 40 ký tự, không whitelist** — F9) | — | có (upload ≤10 file) | routes.js:1129 |
 | R096 | POST | /api/events/:id/remind | requirePerm(events,view) | important_dates | — | không | routes.js:1135 |
 | R097 | GET | /api/press-overview | requirePerm(partners,view) | people+organizations+interactions | — | không | routes.js:1148 |
-| R098 | GET | /api/dashboard | **requireAuth only, không requirePerm module** | organizations+people+events+association_fees+bookings+interactions+important_dates (aggregate) | — | không | routes.js:1160 — N2 |
+| R098 | GET | /api/dashboard | requirePerm(dashboard,view) | organizations+people+events+association_fees+bookings+interactions+important_dates (aggregate) | — | không | routes.js:1160 — N2 ĐÃ SỬA (Wave 1, 2026-08-30) |
 | R099 | GET | /api/admin/users | requirePerm(admin,view) | users | — | không | routes.js:1232 |
 | R100 | POST | /api/admin/users | requirePerm(admin,create) | users | — | không | routes.js:1236 |
 | R101 | PUT | /api/admin/users/:id | requirePerm(admin,edit) | users | — | không | routes.js:1246 |
@@ -121,7 +121,7 @@
 | R113 | GET | /api/monitor/competitor-brief | requirePerm(monitoring,view) | mentions+competitors (Gemini grounding) | — | không | routes.js:1397 |
 | R114 | GET | /api/monitor/settings | requirePerm(monitoring,view) | app_meta | — | không | routes.js:1402 |
 | R115 | PUT | /api/monitor/settings | requirePerm(monitoring,edit) | app_meta | — | không | routes.js:1409 |
-| R116 | POST | /api/monitor/alerts/:id/read | requirePerm(monitoring,**view**) | monitor_alerts | — | không | routes.js:1418 — N1 |
+| R116 | POST | /api/monitor/alerts/:id/read | requirePerm(monitoring,ack) | monitor_alerts | — | không | routes.js:1418 — N1 ĐÃ SỬA (Wave 1, 2026-08-30) |
 | R117 | GET | /api/monitor/queries | requirePerm(monitoring,view) | scan_queries | — | không | routes.js:1424 |
 | R118 | POST | /api/monitor/queries | requirePerm(monitoring,create) | scan_queries | — | không | routes.js:1427 |
 | R119 | PUT | /api/monitor/queries/:id | requirePerm(monitoring,edit) | scan_queries | — | không | routes.js:1435 |

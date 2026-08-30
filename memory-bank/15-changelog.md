@@ -1972,3 +1972,50 @@ Không đổi UI (Codex lane), không mở rộng RBAC v2 pilot ngoài `person` 
 `02-decisions.md` §G) — batch này độc lập hoàn toàn với D13/PolicyEngine, chỉ chạm tầng AI-egress.
 O8 vẫn PROVISIONAL: gateway hiện permissive theo đúng chỉ đạo owner, siết được bất kỳ lúc nào qua
 `AI_DISABLED`/`SMTP_DISABLED`/`ai_egress_deny_ids` khi có dữ liệu thật + Security/Legal duyệt.
+
+## Wave 1 nhánh security: batch G1B.5 N1/N2 implement thật (action tường minh + dashboard permission)
+
+Batch Contract: implement thật 2 mục RESOLVED từ `02-decisions.md` §B.1 (owner APPROVED 2026-08-25,
+C0.1.3/C0.1.4) mà `18-g1b-rbac-batch-contract.md#batch-g1b5-n1n2-2026-08-28` mới chỉ khoá target-red,
+chưa sửa code. Không phụ thuộc owner/DevOps — chạy độc lập nhánh security, không đụng RBAC v2 pilot.
+
+- **N1** (4 route side-effect tái dùng action `view` cho hành động ghi): `server/rbac.js` MATRIX
+  thêm action `ack` (`reminders`, `monitoring`) và `run` (`reminders`) cho cả `super_admin` lẫn
+  `pr_staff` — giữ nguyên đúng quyền thực tế đã cấp cho từng role (không role nào bị thu hẹp/mở
+  rộng quyền), chỉ tách rõ tên action. `server/routes.js`: `POST /notifications/:id/read` và
+  `POST /notifications/read-all` đổi sang `requirePerm('reminders','ack')`; `POST /reminders/run`
+  đổi sang `requirePerm('reminders','run')`; `POST /monitor/alerts/:id/read` đổi sang
+  `requirePerm('monitoring','ack')`.
+- **N2** (`GET /dashboard` không có `requirePerm` module riêng): `rbac.js` thêm module `dashboard`
+  vào `MODULES` + MATRIX cấp `['view']` cho cả 2 role; `routes.js` route `/dashboard` thêm
+  `requirePerm('dashboard','view')` tường minh.
+- `server/test/target-n1-n2-explicit-permission.test.js`: xoá wrapper `knownRed()`, promote 6 test
+  cũ (4 N1 wiring + 2 N2 wiring) thành assertion xanh thật; thêm 1 test mới đặc tả hành vi runtime
+  (`rbac.can()` trả `false` cho action không có trong ma trận quyền của module — fail-closed, không
+  tự suy action ghi từ `view`). 2 entry `N1-explicit-action`/`N2-dashboard-permission` xoá khỏi
+  `memory-bank/g1b-allowlist.json` (đúng quy trình G1B.6: known-red chỉ giữ khi hành vi đích còn
+  sai).
+- Đồng bộ tài liệu G0 theo đúng nguồn đã sửa (bắt buộc để `verify-g0.mjs` không rớt): `07-route-
+  catalog.md` (R058/R059/R060/R098/R116 đổi cột auth + ghi "ĐÃ SỬA — Wave 1, 2026-08-30");
+  `08-permission-matrix.md` (tách `dashboard` thành module riêng — trước đây gộp vào hàng "không
+  thuộc module nào — đặc biệt"; cập nhật flow F003/F020/F029 và state-profile `D-DASH`);
+  `scripts/verify-g0.mjs` (thêm `dashboard` vào whitelist regex Section A).
+- **Sự cố phụ phát hiện khi promote (đã sửa trong cùng batch):** cơ chế tự-test của chính
+  `known-red()` (`server/test-support/known-red-fixture.js`, chạy qua child-process trong
+  `target-session-f2.test.js`) trước đây mượn tạm entry allowlist `N1-explicit-action` làm dữ liệu
+  fixture — hợp lý lúc đó vì luôn tồn tại ít nhất 1 known-red thật chưa sửa để mượn, nhưng gãy ngay
+  khi N1 được sửa xong và entry bị xoá khỏi allowlist. Sửa triệt để: tách hẳn thành id infra riêng
+  `INFRA-known-red-selftest` (allowlist ghi rõ "KHÔNG phải finding thật", `expiry:2099-12-31`,
+  không gắn với vòng đời sửa lỗi bảo mật nào) — không còn phụ thuộc việc có finding thật nào đang
+  mở hay không. Mở rộng prefix hợp lệ của `scripts/verify-gate1-mapping.mjs` (thêm `INFRA-`) +
+  `memory-bank/gate1-test-mapping.md` thêm 1 dòng mapping cho id này, ghi chú rõ ràng để không bị
+  hiểu nhầm là còn gap bảo mật mở.
+
+Verify: `test:security` 6/6, `test:integration:sqlite` 668 pass/8 skip, `test:integration:mysql`
+675 pass/1 skip (không đổi tổng — đổi hành vi known-red→green không đổi số lượng test net),
+`test:verify-gate1-mapping` PASS (264 mapped rows, `known-red=1` — đúng 1 entry infra self-test,
+KHÔNG còn finding thật nào known-red), `verify-g0.mjs` PASS, `test:verify-g0-selftest` 6/6,
+`git diff --check` sạch. Không đổi UI (Codex lane), không đụng RBAC v2 pilot (`person`-only,
+`02-decisions.md` §G). **G1B (toàn bộ target-red batch G1B.1-G1B.6) nay đã xong phần "viết test
+target-red + implement N1/N2/F2/F3"** — phần còn thiếu để đóng hẳn G1B.1/G1B.2 là route-wiring
+PolicyEngine cho 24 entity ngoài `person`, chờ owner xác nhận mở rộng pilot theo §G.

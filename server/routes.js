@@ -953,16 +953,16 @@ router.get('/notifications', requirePerm('reminders', 'view'), (req, res) => {
   const unread = rows.filter((r) => !r.read_at).length;
   res.json({ rows, unread });
 });
-router.post('/notifications/:id/read', requirePerm('reminders', 'view'), (req, res) => {
+router.post('/notifications/:id/read', requirePerm('reminders', 'ack'), (req, res) => {
   db.prepare("UPDATE reminder_log SET read_at=datetime('now') WHERE id=? AND recipient_user_id=?").run(req.params.id, req.session.user.id);
   res.json({ ok: true });
 });
-router.post('/notifications/read-all', requirePerm('reminders', 'view'), (req, res) => {
+router.post('/notifications/read-all', requirePerm('reminders', 'ack'), (req, res) => {
   db.prepare("UPDATE reminder_log SET read_at=datetime('now') WHERE recipient_user_id=? AND read_at IS NULL AND channel='inapp'").run(req.session.user.id);
   res.json({ ok: true });
 });
 // chạy thủ công bộ nhắc (tiện kiểm thử / cập nhật ngay)
-router.post('/reminders/run', requirePerm('reminders', 'view'), (req, res) => {
+router.post('/reminders/run', requirePerm('reminders', 'run'), (req, res) => {
   const r = scheduler.runOnce();
   res.json({ ok: true, ...r });
 });
@@ -1294,7 +1294,7 @@ router.get('/press-overview', requirePerm('partners', 'view'), (req, res) => {
   res.json({ topPeople, recentInteractions });
 });
 
-router.get('/dashboard', (req, res) => {
+router.get('/dashboard', requirePerm('dashboard', 'view'), (req, res) => {
   // Mốc thời gian theo giờ Hà Nội (GMT+7) để "trong tháng" đúng với người dùng
   const now = new Date(Date.now() + 7 * 3600 * 1000);
   const year = now.getUTCFullYear();
@@ -1551,7 +1551,7 @@ router.put('/monitor/settings', requirePerm('monitoring', 'edit'), (req, res) =>
   logEdit(req, 'EDIT', 'monitor_settings', null);
   res.json({ ok: true });
 });
-router.post('/monitor/alerts/:id/read', requirePerm('monitoring', 'view'), (req, res) => {
+router.post('/monitor/alerts/:id/read', requirePerm('monitoring', 'ack'), (req, res) => {
   db.prepare(`UPDATE monitor_alerts SET read_at=datetime('now') WHERE id=?`).run(req.params.id);
   res.json({ ok: true });
 });

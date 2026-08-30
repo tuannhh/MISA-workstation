@@ -60,15 +60,15 @@ test('known-red self-test', async (t) => {
     assert.ok(new Date(expiredIso).getTime() <= Date.now(), 'mốc mẫu phải thật sự đã hết hạn để phép so sánh có ý nghĩa');
   });
 
-  await t.test('validateEntry() trả entry hợp lệ cho N1-explicit-action và N2-dashboard-permission', () => {
-    // F2-fixation/F2-ratelimit đã implement thật ở W1.7 và bị xoá khỏi allowlist (promote sang
-    // assertion xanh, xem test bên dưới) — dùng 2 entry N1/N2 còn lại (chưa implement) để tự-test
-    // khung known-red vẫn hoạt động đúng với allowlist hiện tại.
-    for (const id of ['N1-explicit-action', 'N2-dashboard-permission']) {
-      const entry = validateEntry(id);
-      assert.ok(entry.owner, `${id} thiếu owner`);
-      assert.ok(new Date(entry.expiry).getTime() > Date.now(), `${id} đã hết hạn`);
-    }
+  await t.test('validateEntry() trả entry hợp lệ cho INFRA-known-red-selftest', () => {
+    // F2-fixation/F2-ratelimit (W1.7) và N1-explicit-action/N2-dashboard-permission (Wave 1 nhánh
+    // security, 2026-08-30) đều đã implement thật và bị xoá khỏi allowlist (promote sang assertion
+    // xanh) — không còn finding thật nào để mượn tạm cho self-test. Dùng entry infra riêng
+    // `INFRA-known-red-selftest` (expiry 2099, không gắn finding nào) để tự-test khung known-red
+    // không phụ thuộc còn known-red thật nào đang mở hay không.
+    const entry = validateEntry('INFRA-known-red-selftest');
+    assert.ok(entry.owner, 'INFRA-known-red-selftest thiếu owner');
+    assert.ok(new Date(entry.expiry).getTime() > Date.now(), 'INFRA-known-red-selftest đã hết hạn');
   });
 
   // Codex audit Bundle A, finding #2 (2026-08-28): bản đầu bắt MỌI exception làm known-red PASS

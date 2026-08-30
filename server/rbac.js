@@ -19,7 +19,7 @@ const ACT = { VIEW: 'view', CREATE: 'create', EDIT: 'edit', DELETE: 'delete' };
 
 // Module nghiệp vụ (gọn lại theo mô hình Cơ quan -> Nhân sự)
 //  partners = cơ quan + nhân sự (CRM đối ngoại)
-const MODULES = ['partners', 'awards', 'events', 'suppliers', 'reminders', 'interactions', 'monitoring', 'reports', 'admin'];
+const MODULES = ['partners', 'awards', 'events', 'suppliers', 'reminders', 'interactions', 'monitoring', 'reports', 'admin', 'dashboard'];
 
 /**
  * Ma trận quyền. Mỗi vai trò khai báo quyền theo module.
@@ -31,11 +31,12 @@ const MATRIX = {
     awards: ['view', 'create', 'edit', 'delete'],
     events: ['view', 'create', 'edit', 'delete'],
     suppliers: ['view', 'create', 'edit', 'delete'],
-    reminders: ['view', 'create', 'edit', 'delete'],
+    reminders: ['view', 'create', 'edit', 'delete', 'ack', 'run'],
     interactions: ['view', 'create', 'edit', 'delete'],
-    monitoring: ['view', 'create', 'edit', 'delete'],
+    monitoring: ['view', 'create', 'edit', 'delete', 'ack'],
     reports: ['view'],
     admin: ['view', 'create', 'edit', 'delete'],
+    dashboard: ['view'],
     canSeeSensitive: true,
   },
   // Chuyên viên PR: được TẠO/SỬA/XÓA dữ liệu nghiệp vụ (để nhập liệu);
@@ -46,11 +47,12 @@ const MATRIX = {
     awards: ['view', 'create', 'edit', 'delete'],
     events: ['view', 'create', 'edit', 'delete'],
     suppliers: ['view', 'create', 'edit', 'delete'],
-    reminders: ['view', 'create', 'edit', 'delete'],
+    reminders: ['view', 'create', 'edit', 'delete', 'ack', 'run'],
     interactions: ['view', 'create', 'edit', 'delete'],
-    monitoring: ['view', 'create', 'edit', 'delete'],
+    monitoring: ['view', 'create', 'edit', 'delete', 'ack'],
     reports: [], // báo cáo tổng hợp chỉ Quản lý phòng
     admin: [],
+    dashboard: ['view'],
     canSeeSensitive: false,
   },
 };

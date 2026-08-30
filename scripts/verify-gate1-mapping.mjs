@@ -16,7 +16,7 @@ const routeIds = [...catalog.matchAll(/^\|\s*(R\d{3})\s*\|/gm)].map((m) => m[1])
 // G1B.6 dùng vocabulary {F-id/D13-target/N-id} cho known-red (xem header file mapping) — verifier
 // trước đây chỉ nhận diện route/job/AI/BR nên các dòng F2-*/D13-*/N-* của G1B bị mapping đếm ẩn
 // (PASS giả, không phản ánh đúng known-red thật). Bổ sung 3 prefix này để mapping thấy đủ.
-const rows = mapping.split('\n').filter((line) => /^\|\s*(R\d{3}|JOB-[A-Z-]+|AI-|BR-|F\d+-|D13-|N\d+-|UI-CHAR-)/.test(line));
+const rows = mapping.split('\n').filter((line) => /^\|\s*(R\d{3}|JOB-[A-Z-]+|AI-|BR-|F\d+-|D13-|N\d+-|UI-CHAR-|INFRA-)/.test(line));
 const routeRows = rows.filter((line) => /^\|\s*R\d{3}\s*\|/.test(line));
 
 function fail(message) {

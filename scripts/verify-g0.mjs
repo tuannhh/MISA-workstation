@@ -158,7 +158,7 @@ function verifyRoutesAndMatrices() {
   pass('route catalog: 145 unique IDs and exact source method/path/auth');
 
   const sectionA = matrix.slice(matrix.indexOf('## A.'), matrix.indexOf('## B.'));
-  const sectionARows = markdownRows(sectionA, /^\| (partners|reminders|interactions|reports|awards|suppliers|events|admin|monitoring|\*\(không)/);
+  const sectionARows = markdownRows(sectionA, /^\| (partners|reminders|interactions|reports|awards|suppliers|events|admin|monitoring|dashboard|\*\(không)/);
   const sectionAIds = sectionARows.flatMap((row) => expandRouteIds(row[3]));
   assertPartition(sectionAIds, expectedIds, 'Section A authorization partition');
   for (const row of sectionARows) {

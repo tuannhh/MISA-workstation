@@ -1,16 +1,9 @@
 [
   {
-    "id": "N1-explicit-action",
+    "id": "INFRA-known-red-selftest",
     "owner": "backend",
-    "expiry": "2026-12-31",
-    "wave": "W1",
-    "note": "4 route side-effect (notifications/:id/read, notifications/read-all, reminders/run, monitor/alerts/:id/read) vẫn dùng requirePerm(module,'view') thay vì action tường minh ack/run — RESOLVED 02-decisions.md §B.1 N1, chưa implement."
-  },
-  {
-    "id": "N2-dashboard-permission",
-    "owner": "backend",
-    "expiry": "2026-12-31",
-    "wave": "W1",
-    "note": "GET /dashboard không có requirePerm nào; rbac.js chưa có module 'dashboard' — RESOLVED 02-decisions.md §B.1 N2, chưa implement."
+    "expiry": "2099-12-31",
+    "wave": "infra",
+    "note": "KHÔNG phải finding thật — id cố định dùng bởi server/test-support/known-red-fixture.js + server/test/target-session-f2.test.js để tự-test cơ chế known-red() (G1B.6) chính nó (phân biệt lỗi khớp/lệch expectedError). Trước đây dùng tạm N1-explicit-action/N2-dashboard-permission vì luôn có sẵn 1 known-red thật chưa sửa; nay cả 2 đã ĐÃ SỬA và xoá khỏi allowlist nên tách hẳn thành id infra riêng, không phụ thuộc còn finding thật nào mở hay không."
   }
 ]
