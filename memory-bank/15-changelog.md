@@ -2554,3 +2554,36 @@ chỉ chưa làm vì ưu tiên P0/P1 trước.
   F21/F22), MySQL 781 total/780 pass/1 skip (+5), `test:verify-gate1-mapping` 145/145,
   `verify-g0.mjs` PASS (bao gồm `verifyNoLegacyMasking` mới), `verify-g0-selftest` 6/6, `git diff
   --check` sạch. Không đổi route path/method nào, không đổi UI.
+
+## Wave 1: batch W1.FILE-P2 — gate upload attachment theo owner_id cho entity Direct (đóng backlog P2 của F21)
+
+Theo `/goal` "làm hết các vấn đề của W1" — batch contract đầy đủ ở
+`18-g1b-rbac-batch-contract.md#batch-w1file-p2-2026-08-31`. Đóng backlog **P2** đã ghi từ batch
+F21/F22 (2026-08-31): upload file cho `award`/`event`/`agreement`/`work_log` (entity Direct, có
+`owner_id`) trước đây CHỈ gate thô theo role qua `requirePerm(module,'edit')`, không kiểm
+`owner_id` — bất kỳ executor nào cũng upload được vào hồ sơ người khác tạo, khác hẳn PUT/DELETE
+của chính 4 entity này đã gate `owner_id` từ lâu (RBAC-EXP-B4/B6).
+
+- `POST /awards/:id/files`, `POST /events/:id/files`: thêm fetch record thật + gọi
+  `policyService.assertWritable({principal, entity, action:'edit', record})` trước khi insert
+  attachment — giống hệt pattern `PUT /awards/:id`/`PUT /events/:id` đã dùng.
+- `govFileUpload(ownerType)` (dùng chung cho agreement/work_log) đổi thành
+  `govFileUpload(entity, table)` — thêm fetch record từ đúng bảng + `assertWritable()` trước khi
+  insert.
+- Bỏ `requirePerm(module,'edit')` khỏi cả 4 khai báo route (`assertWritable()` đã tự đủ: viewer
+  luôn false, executor cần `owner_id` đúng, admin/super_admin luôn true) — giống cách PUT/DELETE
+  của 4 entity này đã làm từ trước.
+- **Ngoài phạm vi có chủ đích:** `POST /suppliers/:id/files` (owner_type=`supplier`, kind=`quote`)
+  — supplier là entity **Global** (không có owner-bypass trên PUT/DELETE của chính nó, executor
+  sửa được bất kể ai tạo), nên gate thô theo role hiện tại là ĐÚNG thiết kế, không phải backlog P2
+  — xác nhận qua đọc `GLOBAL` set trong `policy-engine.js` trước khi kết luận, không tự suy diễn.
+- `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` thêm 4 route mới; `07-route-catalog.md` cập
+  nhật R016/R017/R070/R095 sang mô tả "kiểm INLINE" giống pattern PUT/DELETE của 4 entity này.
+- Test mới: `integration-awards.test.js` D13-089 (executor upload vào award người khác trả 403,
+  trước đây 200); `integration-events-dashboard.test.js` D13-086 (tương tự cho event, kèm case
+  upload vào event của chính mình 200 và admin luôn 200); `integration-partners.test.js` D13-087
+  (agreement), D13-088 (work_log).
+- Verify: `test:security` 6/6, SQLite 785 total/777 pass/8 skip (+4), MySQL 785 total/784 pass/1
+  skip (+4), `test:verify-gate1-mapping` 145/145, `verify-g0.mjs` PASS, `verify-g0-selftest` 6/6,
+  `git diff --check` sạch. Đóng backlog P2 của `W1.FILE` — xem `01-audit-findings.md` §F21,
+  `04-ROADMAP.md` hàng `W1.FILE`.

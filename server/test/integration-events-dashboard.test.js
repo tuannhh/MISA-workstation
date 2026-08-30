@@ -259,6 +259,17 @@ test('R095 happy CHARACTERIZATION: không gửi file nào vẫn trả 200 (route
 test('R095 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await uploadFiles('/api/events/1/files', [{ name: 'x.png' }], { auth: false })).status, 401);
 });
+// D13-086 — batch W1.FILE P2: event là entity Direct — upload file nay gate theo owner_id giống
+// PUT /events/:id, không chỉ gate thô theo role (trước đây bất kỳ executor nào cũng upload được
+// vào event người khác tạo).
+test('D13-086: executor upload file vào event KHÔNG phải của mình trả 403; vào event của chính mình trả 200; admin luôn 200 bất kể ai tạo', async () => {
+  const othersId = await createEvent({ name: 'Sự kiện của admin' });
+  assert.equal((await uploadFiles(`/api/events/${othersId}/files`, [{ name: 'khac.png' }], { as: executorCookie })).status, 403);
+  const myRes = await call('POST', '/api/events', { body: { name: 'Sự kiện của executor', mode: 'host', start_time: '2026-09-01T09:00:00Z' }, as: executorCookie });
+  const myId = (await myRes.json()).id;
+  assert.equal((await uploadFiles(`/api/events/${myId}/files`, [{ name: 'cuaminh.png' }], { as: executorCookie })).status, 200);
+  assert.equal((await uploadFiles(`/api/events/${othersId}/files`, [{ name: 'admin.png' }])).status, 200);
+});
 
 // ---------------------------------------------------------------------------
 // R096 — POST /api/events/:id/remind (side-effect: tạo important_dates)

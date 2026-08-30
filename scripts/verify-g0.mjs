@@ -175,6 +175,13 @@ const PILOT_INLINE_PERM_ROUTES = {
   'POST /api/partners/:id/fees': { module: 'partners', action: 'create' },
   'PUT /api/partners/:id/fees/:fid': { module: 'partners', action: 'edit' },
   'DELETE /api/partners/:id/fees/:fid': { module: 'partners', action: 'delete' },
+  // W1.FILE P2 (2026-08-31): upload file cua entity Direct (award/event/agreement/work_log) nay
+  // gate theo owner_id giong PUT cua chinh entity (assertWritable voi record that), thay
+  // requirePerm(module,edit) tho theo role -- module/action giu nguyen y nghia cu.
+  'POST /api/awards/:id/files': { module: 'awards', action: 'edit' },
+  'POST /api/events/:id/files': { module: 'events', action: 'edit' },
+  'POST /api/agreements/:id/files': { module: 'partners', action: 'edit' },
+  'POST /api/work-logs/:id/files': { module: 'partners', action: 'edit' },
 };
 
 function sourceRoutes() {

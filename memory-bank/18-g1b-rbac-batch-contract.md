@@ -773,3 +773,51 @@ Exit criteria: full regression (test:security 6/6, sqlite 781 total/773 pass/8 s
       verifyNoLegacyMasking, verify-g0-selftest 6/6, git diff --check sach) deu xanh.
 Expected commit range/count: 1 commit.
 ```
+
+## Batch W1.FILE-P2 (2026-08-31) -- gate upload attachment theo owner_id cho entity Direct
+
+```md
+Batch-ID: W1.FILE-P2
+Goal: theo `/goal` "lam het cac van de cua W1" -- dong backlog P2 cua F21 da ghi trong
+      `01-audit-findings.md`/`04-ROADMAP.md` hang `W1.FILE` tu batch F21/F22: upload file cho
+      award/event/agreement/work_log (entity Direct, co owner_id) truoc day CHI gate tho theo role
+      qua `requirePerm(module,'edit')`, khong kiem owner_id -- bat ky executor nao cung upload
+      duoc vao ho so nguoi khac tao (khac han PUT/DELETE cua chinh entity da gate owner_id tu lau
+      qua cac batch RBAC-EXP-B4/B6).
+In scope: (a) `POST /awards/:id/files`: them fetch `existing` tu bang `awards` + goi
+      `policyService.assertWritable({principal, entity:'award', action:'edit', record: existing})`
+      truoc khi insert attachment -- giong het pattern `PUT /awards/:id` da dung. (b) `POST
+      /events/:id/files`: tuong tu entity `event`. (c) `govFileUpload(ownerType)` (dung chung cho
+      agreement/work_log) doi thanh `govFileUpload(entity, table)` -- them fetch record tu dung
+      bang (`agreements`/`work_logs`) + `assertWritable()` truoc khi insert, giu nguyen logic insert
+      con lai. (d) Bo `requirePerm(module,'edit')` khoi ca 4 khai bao route (assertWritable() da tu
+      kiem du: viewer luon false, executor can owner_id dung, admin/super_admin luon true -- giong
+      het cach PUT/DELETE cua 4 entity nay da lam). (e) `scripts/verify-g0.mjs
+      #PILOT_INLINE_PERM_ROUTES` them 4 route moi (`POST /api/awards/:id/files`, `POST
+      /api/events/:id/files`, `POST /api/agreements/:id/files`, `POST /api/work-logs/:id/files`)
+      + `07-route-catalog.md` cap nhat R016/R017/R070/R095 sang mo ta "kiem INLINE" giong pattern
+      da dung cho PUT/DELETE cua 4 entity nay.
+Out of scope: (1) `POST /suppliers/:id/files` (owner_type='supplier', kind='quote') -- supplier la
+      entity Global (khong co owner-bypass tren PUT/DELETE cua chinh no, executor sua duoc bat ke
+      ai tao), nen gate tho theo role hien tai la DUNG thiet ke, khong phai backlog P2 -- da xac
+      nhan qua doc entity classification (`GLOBAL` set trong policy-engine.js) truoc khi ket luan,
+      khong tu suy dien. (2) toan bo W1.ADMIN -- batch rieng tiep theo.
+Behavior mode: TARGET-CHANGE (SIET quyen) -- executor tu "upload duoc vao bat ky record nao" sang
+      "chi upload duoc vao record minh la owner_id, hoac Admin/Super Admin luon duoc". Khong doi
+      hanh vi cho Global entity (supplier) va khong doi hanh vi cho Admin/Super Admin/viewer.
+Risk hotspots: (1) cac test CHARACTERIZATION cu (`R070 happy CHARACTERIZATION: award_id khong ton
+      tai van 200`, `R016/R017 khong gui file nao van 400`) deu dung cookie admin mac dinh -- van
+      PASS vi admin luon bypass owner check (isPrivileged), xac nhan lai bang full regression thay
+      vi tu suy dien; (2) `govFileUpload` doi tu 1 tham so (`ownerType`) sang 2 (`entity, table`) --
+      ca 2 call site (agreement/work_log) phai sua dong thoi, khong sot.
+Required tests: `integration-awards.test.js` D13-089 (executor upload vao award nguoi khac tra
+      403, truoc day 200); `integration-events-dashboard.test.js` D13-086 (executor upload vao
+      event nguoi khac 403, vao event chinh minh 200, admin luon 200); `integration-partners.test.js`
+      D13-087 (agreement, tuong tu D13-086), D13-088 (work_log, tuong tu).
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 785 total/777 pass/8 skip, mysql 785
+      total/784 pass/1 skip, verify-gate1-mapping 145/145, verify-g0.mjs PASS, verify-g0-selftest
+      6/6, git diff --check sach) deu xanh. Dong backlog P2 cua `W1.FILE` trong
+      `04-ROADMAP.md`/`01-audit-findings.md` §F21.
+Expected commit range/count: 1 commit.
+```

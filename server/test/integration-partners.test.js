@@ -381,10 +381,10 @@ test('R015 unauthenticated: không cookie trả 401', async () => {
 // ---------------------------------------------------------------------------
 // R016/R017 — upload file cho agreements/work-logs (multipart, field "files", tối đa 8)
 // ---------------------------------------------------------------------------
-async function uploadFiles(path, fieldFiles) {
+async function uploadFiles(path, fieldFiles, { as = cookie } = {}) {
   const form = new FormData();
   for (const f of fieldFiles) form.append('files', new Blob([f.content], { type: f.type || 'application/pdf' }), f.name);
-  return fetch(`${baseUrl}${path}`, { method: 'POST', headers: { cookie }, body: form });
+  return fetch(`${baseUrl}${path}`, { method: 'POST', headers: { cookie: as }, body: form });
 }
 test('R016 happy: upload 1 file cho agreement trả 200 ok:true', async () => {
   const orgId = await createOrg();
@@ -425,6 +425,28 @@ test('R017 unauthenticated: không cookie trả 401', async () => {
   form.append('files', new Blob(['x']), 'a.pdf');
   const res = await fetch(`${baseUrl}/api/work-logs/1/files`, { method: 'POST', body: form });
   assert.equal(res.status, 401);
+});
+
+// ---------------------------------------------------------------------------
+// D13-087/D13-088 — batch W1.FILE P2: agreement/work_log là entity Direct — upload file nay gate
+// theo owner_id giống PUT /agreements|work-logs/:id, không chỉ gate thô theo role (trước đây bất
+// kỳ executor nào cũng upload được vào hồ sơ người khác tạo).
+// ---------------------------------------------------------------------------
+test('D13-087: agreement — executor upload file vào MOU KHÔNG phải của mình trả 403; vào MOU của chính mình trả 200; admin luôn 200', async () => {
+  const orgId = await createOrg();
+  const othersAg = await (await call('POST', `/api/partners/${orgId}/agreements`, { body: { title: 'MOU của admin' } })).json();
+  assert.equal((await uploadFiles(`/api/agreements/${othersAg.id}/files`, [{ name: 'khac.pdf', content: 'x' }], { as: executorCookie })).status, 403);
+  const myAg = await (await call('POST', `/api/partners/${orgId}/agreements`, { body: { title: 'MOU của executor' }, as: executorCookie })).json();
+  assert.equal((await uploadFiles(`/api/agreements/${myAg.id}/files`, [{ name: 'cuaminh.pdf', content: 'x' }], { as: executorCookie })).status, 200);
+  assert.equal((await uploadFiles(`/api/agreements/${othersAg.id}/files`, [{ name: 'admin.pdf', content: 'x' }])).status, 200);
+});
+test('D13-088: work_log — executor upload file vào work-log KHÔNG phải của mình trả 403; vào work-log của chính mình trả 200; admin luôn 200', async () => {
+  const orgId = await createOrg();
+  const othersWl = await (await call('POST', `/api/partners/${orgId}/work-logs`, { body: { topic: 'Báo cáo của admin' } })).json();
+  assert.equal((await uploadFiles(`/api/work-logs/${othersWl.id}/files`, [{ name: 'khac.pdf', content: 'x' }], { as: executorCookie })).status, 403);
+  const myWl = await (await call('POST', `/api/partners/${orgId}/work-logs`, { body: { topic: 'Báo cáo của executor' }, as: executorCookie })).json();
+  assert.equal((await uploadFiles(`/api/work-logs/${myWl.id}/files`, [{ name: 'cuaminh.pdf', content: 'x' }], { as: executorCookie })).status, 200);
+  assert.equal((await uploadFiles(`/api/work-logs/${othersWl.id}/files`, [{ name: 'admin.pdf', content: 'x' }])).status, 200);
 });
 
 // ---------------------------------------------------------------------------

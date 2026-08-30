@@ -345,3 +345,9 @@ test('D13-079: attachment có owner_type lạ (không khai trong ATTACHMENT_OWNE
   assert.equal((await call('GET', `/api/files/${fileId}`, { as: executorCookie })).status, 403);
   assert.equal((await call('GET', `/api/files/${fileId}`)).status, 403);
 });
+// D13-089 — batch W1.FILE P2: upload (khác D13-078 là download) nay cũng gate theo owner_id —
+// trước đây bất kỳ executor nào cũng upload được vào award người khác tạo (chỉ gate thô theo role).
+test('D13-089: executor upload file vào award KHÔNG phải của mình trả 403 (trước đây 200, P2 đã sửa)', async () => {
+  const othersId = await createAward({ name: 'Award của admin (P2)' });
+  assert.equal((await uploadFiles(`/api/awards/${othersId}/files`, [{ name: 'khac.pdf' }], { as: executorCookie })).status, 403);
+});
