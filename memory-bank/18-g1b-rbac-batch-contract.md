@@ -168,3 +168,43 @@ Expected commit range/count: 1 commit.
 
 - **INHERITED (event_cost)** — D13.4a hàng "Chi phí sự kiện" đã owner-approved từ trước (không phải quyết định mới, chỉ là code chưa bắt kịp bảng): `event_costs` không có "người tạo" độc lập, kế thừa `owner_id` của `events` cha. `canWrite`/`canReadField` nhận thêm `parentOwnerId` (optional): executor ghi/đọc đủ `event_cost` khi `parentOwnerId === principal.id`, giống hệt ngữ nghĩa Direct nhưng lấy owner từ bản ghi cha thay vì chính nó. Trước khi thêm, `event_cost` không nằm trong `DIRECT`/`GLOBAL` nên executor không bao giờ ghi được dù là sự kiện của chính họ (RED so với D13.4a) — test cũ xác nhận đúng RED trước, GREEN sau khi thêm `INHERITED`.
 - **Phủ đủ entity** — mỗi 1 trong 14 Direct (không chỉ booking/gift) đều có 1 test canWrite executor-own=true/executor-other=false/admin=true; mỗi 4 Global (organization/person/supplier/important_date) có test create=true, edit=true bất kể owner, delete=false cho executor; mỗi 6 Module-admin-only (budget/scan_query/source/competitor/campaign/monitor_alert) có test executor bị chặn hoàn toàn (create/edit đều false), admin bypass; toàn bộ `FIELD_TIER` entries còn thiếu (sponsorship/budget/award/award_participation/supplier_quote/supplier_transaction/event_cost/association_fee/gift/supplier) có test `classification()`.
+
+## Batch RBAC-PILOT2-people-write (2026-08-30)
+
+```md
+Batch-ID: RBAC-PILOT2-people-write
+Goal: mo rong pilot People Detail (04-ROADMAP.md Wave 1, "Thu tu bat buoc" muc 4: "Chuyen People
+      Detail end-to-end (read, write, file)") tu chi READ (D13-011) sang WRITE: PUT /api/people/:id
+      va DELETE /api/people/:id di qua PolicyEngine cho target role viewer/executor/admin, giu
+      nguyen 100% hanh vi legacy 2-role (super_admin/pr_staff) qua nhanh cu.
+In scope: PUT /api/people/:id va DELETE /api/people/:id trong server/routes.js — nhanh moi goi
+      policyService.assertWritable (entity='person', action='edit'|'delete') truoc khi buildUpdate/
+      xoa; nhanh legacy (khong phai target role) giu nguyen requirePerm('partners','edit'|'delete')
+      + stripDisallowed nhu hien tai, khong doi 1 dong. Dual-driver test moi (SQLite+MySQL).
+Out of scope: W1.FILE (attachment visibility gate cho POST/GET/DELETE attachments cua person) —
+      batch rieng sau; owner reassignment UI (D13.4c, thuoc W1.ADMIN, UI la lane Codex); bat ky
+      pilot slice nao ngoai People Detail (Partner/Supplier/Booking/Event...) — phai hoi lai owner
+      truoc, khong tu mo rong pham vi (02-decisions.md SS G).
+Behavior mode: target-change cho DUNG 2 route nay, target role moi (viewer/executor/admin) — hanh
+      vi legacy 2-role khong doi (khong big-bang, dung tinh than D13-011 da lam cho GET).
+Risk hotspots: nguoi la GLOBAL (D13.4a) khong phai Direct — canWrite khong doc owner_id cua ban
+      ghi (people khong co cot owner_id), chi check role+action; phai dam bao KHONG vo tinh doi
+      sang kiem tra ownership (se sai ban chat "danh ba dung chung" da owner-approved D13-P1).
+      Field-level write khong bi gate theo classification_tier (D13.2b: "authorization tach khoi
+      audience_visibility, mot field public van co the khong sua duoc neu khong phai owner" — nguoc
+      lai cung dung: field Confidential/Restricted van ghi duoc neu co quyen edit record, day la
+      thiet ke da duyet, khong phai lo hong can va).
+Required tests: viewer PUT/DELETE nguoi -> 403 (khong duoc sua/xoa gi); executor PUT nguoi -> 200,
+      GET lai dung gia tri moi (Global edit, khong can la owner vi people khong co owner_id);
+      executor DELETE nguoi -> 403 (D13.1: khong co quyen xoa du la Global); admin PUT + DELETE ->
+      200 (full CRUD tru tao tai khoan Admin/config); legacy super_admin/pr_staff PUT/DELETE giu
+      nguyen 100% test R032/R033 cu (khong sua cac test do, chi doc lai xac nhan van pass).
+Allowed known-red/TODO: khong can — day la target-change co code that di kem, khong phai spec-first
+      cho lo hong chua sua.
+Exit criteria: full regression (test:security, test:integration:sqlite, test:integration:mysql,
+      test:verify-gate1-mapping, verify-g0.mjs, git diff --check) deu xanh, khong regression tren
+      R032/R033 legacy; PolicyForbiddenError tra 403 ro rang, khong silent-strip (dung nguyen tac
+      D1); danh gia lai npm run rbac:preflight sau batch (van se readyToFlipFailClosed=false vi
+      chua backfill du lieu that — khong phai exit criterion cua batch nay).
+Expected commit range/count: 1 commit.
+```

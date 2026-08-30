@@ -20,6 +20,8 @@ let baseUrl;
 let cookie; // super_admin — canSeeSensitive=true, có nhóm iddoc
 let staffCookie; // pr_staff — canSeeSensitive=false, KHÔNG có nhóm iddoc
 let viewerCookie;
+let executorCookie; // D13 target role — Global edit trên people, KHÔNG có quyền delete
+let targetAdminCookie; // D13 target role 'admin' — khác legacy 'super_admin' fixture (cookie)
 let fixtures;
 const resources = createResourceStack();
 
@@ -45,6 +47,10 @@ before(async () => {
   staffCookie = (await fixtures.login(baseUrl, { username: staff.username, password: staff.password })).cookie;
   const viewer = fixtures.createUser('viewer', { username: `people_viewer_${Date.now()}` });
   viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const executor = fixtures.createUser('executor', { username: `people_executor_${Date.now()}` });
+  executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
+  const targetAdmin = fixtures.createUser('admin', { username: `people_target_admin_${Date.now()}` });
+  targetAdminCookie = (await fixtures.login(baseUrl, { username: targetAdmin.username, password: targetAdmin.password })).cookie;
 });
 
 after(async () => {
@@ -120,6 +126,42 @@ test('D13-011 People Detail pilot: viewer only receives configured Public fields
   assert.deepEqual(body.gifts, []);
   assert.equal('phone_personal' in body.record, false);
   assert.equal('bank_name' in body.record, false);
+});
+
+test('D13-012 People Detail pilot write: viewer PUT/DELETE đều 403 (không được sửa/xoá gì)', async () => {
+  const id = await createPerson();
+  const putRes = await call('PUT', `/api/people/${id}`, { body: { full_name: 'x' }, as: viewerCookie });
+  assert.equal(putRes.status, 403);
+  const delRes = await call('DELETE', `/api/people/${id}`, { as: viewerCookie });
+  assert.equal(delRes.status, 403);
+});
+
+test('D13-013 People Detail pilot write: executor PUT sửa được (Global edit, không cần là owner vì people không có owner_id)', async () => {
+  const id = await createPerson({ full_name: 'Trước khi executor sửa' });
+  const res = await call('PUT', `/api/people/${id}`, { body: { full_name: 'Executor đã sửa' }, as: executorCookie });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true });
+  const detail = await (await call('GET', `/api/people/${id}`, { as: targetAdminCookie })).json();
+  assert.equal(detail.record.full_name, 'Executor đã sửa');
+});
+
+test('D13-014 People Detail pilot write: executor DELETE trả 403 (D13.1: Nhân viên thực thi không có quyền xoá dù là Global)', async () => {
+  const id = await createPerson();
+  const res = await call('DELETE', `/api/people/${id}`, { as: executorCookie });
+  assert.equal(res.status, 403);
+  const detail = await call('GET', `/api/people/${id}`, { as: targetAdminCookie });
+  assert.equal(detail.status, 200); // vẫn còn tồn tại, không bị xoá
+});
+
+test('D13-015 People Detail pilot write: admin (target role) PUT + DELETE đều 200 (full CRUD)', async () => {
+  const id = await createPerson({ full_name: 'Trước khi admin sửa' });
+  const putRes = await call('PUT', `/api/people/${id}`, { body: { full_name: 'Admin đã sửa' }, as: targetAdminCookie });
+  assert.equal(putRes.status, 200);
+  const detail = await (await call('GET', `/api/people/${id}`, { as: targetAdminCookie })).json();
+  assert.equal(detail.record.full_name, 'Admin đã sửa');
+  const delRes = await call('DELETE', `/api/people/${id}`, { as: targetAdminCookie });
+  assert.equal(delRes.status, 200);
+  assert.equal((await call('GET', `/api/people/${id}`, { as: targetAdminCookie })).status, 404);
 });
 
 // ---------------------------------------------------------------------------

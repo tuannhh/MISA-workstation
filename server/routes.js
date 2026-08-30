@@ -7,7 +7,7 @@ const { db, audit, UPLOAD_DIR, metaGet, metaSet } = require('./db');
 const rbac = require('./rbac');
 const { requireAuth, requirePerm } = require('./auth');
 const { createVisibilityStore } = require('./policy-visibility-store');
-const { createPolicyService } = require('./policy-service');
+const { createPolicyService, PolicyForbiddenError } = require('./policy-service');
 const { upload } = require('./uploads');
 const scheduler = require('./scheduler');
 const monitor = require('./monitor');
@@ -438,16 +438,39 @@ router.post('/people', requirePerm('partners', 'create'), (req, res) => {
   logEdit(req, 'CREATE', 'person', r.lastInsertRowid, req.body.full_name);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/people/:id', requirePerm('partners', 'edit'), (req, res) => {
+// D13 pilot slice 2 (People Detail write, mở rộng từ D13-011 read): target role viewer/executor/
+// admin đi qua PolicyEngine (fail-closed 403, không silent-strip); user legacy 2-role giữ nguyên
+// nhánh requirePerm+stripDisallowed cũ, không đổi hành vi.
+router.put('/people/:id', (req, res) => {
   const data = pick(req.body, P_COLS);
   jsonField(data, 'phone_ott');
-  stripDisallowed('person', data, senGroups(req)); // không cho ghi đè trường mật ngoài quyền
+  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+    try {
+      policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
+    } catch (err) {
+      if (err instanceof PolicyForbiddenError) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+      throw err;
+    }
+  } else {
+    if (!rbac.can(req.principal?.role, 'partners', 'edit')) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+    stripDisallowed('person', data, senGroups(req)); // không cho ghi đè trường mật ngoài quyền
+  }
   buildUpdate('people', req.params.id, data);
   syncAssignments('person', Number(req.params.id), req.body.caretaker_ids);
   logEdit(req, 'EDIT', 'person', req.params.id, req.body.full_name);
   res.json({ ok: true });
 });
-router.delete('/people/:id', requirePerm('partners', 'delete'), (req, res) => {
+router.delete('/people/:id', (req, res) => {
+  if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
+    try {
+      policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'delete' });
+    } catch (err) {
+      if (err instanceof PolicyForbiddenError) return res.status(403).json({ error: 'Bạn không có quyền delete trên partners.' });
+      throw err;
+    }
+  } else if (!rbac.can(req.principal?.role, 'partners', 'delete')) {
+    return res.status(403).json({ error: 'Bạn không có quyền delete trên partners.' });
+  }
   // xóa file vật lý của nhân sự
   const atts = db.prepare(`SELECT filename FROM attachments WHERE owner_type='person' AND owner_id=?`).all(req.params.id);
   for (const a of atts) { try { fs.unlinkSync(path.join(UPLOAD_DIR, a.filename)); } catch {} }

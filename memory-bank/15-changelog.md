@@ -1717,3 +1717,45 @@ allowlist hợp lệ — PASS (Bundle A 2026-08-28); (d) G1C khung đã định 
 G1.8 có artifact — PASS (CLOSED, Codex ACCEPT). **Không còn mục nào treo — toàn bộ 5 điều kiện Exit
 gate G1 đã đạt**, cả phần Claude lẫn phần Codex (G1A.6). Chuyển sang Wave 1 theo phạm vi owner đã
 duyệt (`02-decisions.md` §G: foundation fail-closed + pilot slice People Detail).
+
+## 2026-08-30 — Wave 1 bắt đầu: batch RBAC-PILOT2-people-write (People Detail chuyển sang WRITE)
+
+Trước khi code, soát lại state hiện có (vì `02-decisions.md` §G ghi rõ nhiều phần Wave 1 nền tảng
+đã lên TRƯỚC khi Gate 1 đóng, theo ngoại lệ phạm vi hẹp): `field_visibility` table,
+`owner_id`/`created_by` trên 13/14 bảng "hoạt động", `policy-engine.js`/`policy-service.js`/
+`policy-visibility-store.js` (PolicyEngine + choke point command/projection), `auth.resolvePrincipal`
+(W1.1) và pilot `GET /api/people/:id` (D13-011, đọc field theo `field_visibility`) đều đã tồn tại
+và có test — tài liệu đầy đủ ở `18-g1b-rbac-batch-contract.md`. `npm run rbac:preflight` xác nhận
+`readyToFlipFailClosed=false` (đúng dự kiến — chưa backfill owner/visibility cho dữ liệu thật, và
+database MySQL local `pr_media` thật ra CHƯA từng được khởi tạo ngoài các database test tạm dùng-rồi-xoá
+của harness — không có dữ liệu thật cục bộ nào ở rủi ro).
+
+Theo đúng thứ tự bắt buộc trong batch contract ("Chuyển People Detail end-to-end: read, write,
+file"), viết Batch Contract `RBAC-PILOT2-people-write` rồi mở rộng pilot sang WRITE:
+
+- `server/routes.js`: bỏ `requirePerm('partners','edit'|'delete')` khỏi khai báo route `PUT`/
+  `DELETE /people/:id` (y hệt cách R030/GET đã làm), chuyển kiểm tra vào trong handler — role D13
+  (`viewer`/`executor`/`admin`) đi qua `policyService.assertWritable({principal, entity:'person',
+  action})` (throw `PolicyForbiddenError` → 403 rõ ràng, không silent-strip, đúng nguyên tắc D1);
+  role legacy (`super_admin`/`pr_staff`) giữ nguyên 100% nhánh `rbac.can()` + `stripDisallowed()` cũ.
+- `person` là **Global** (D13.4a, danh bạ dùng chung) — `canWrite` không đọc `owner_id` của bản ghi
+  (people không có cột này), chỉ xét role+action: executor PUT luôn 200 (Global edit, không cần là
+  "chủ" bản ghi — D13-P1 owner-approved), executor DELETE luôn 403 (D13.1: Nhân viên thực thi không
+  có quyền xoá dù là Global — chỉ Admin/Super Admin). Field-level write KHÔNG bị gate theo
+  `classification_tier` (D13.2b: authorization tách khỏi audience_visibility — quyết định có chủ
+  đích, không phải lỗ hổng).
+- 4 test dual-driver mới (`D13-012..015`, `server/test/integration-people.test.js`): viewer PUT/DELETE
+  403; executor PUT 200 + DELETE 403; admin (target role, khác `super_admin` legacy) PUT+DELETE đều
+  200. Test R032/R033 cũ giữ nguyên nguyên văn, xác nhận vẫn pass (legacy không đổi hành vi).
+- Route catalog: cập nhật R032/R033 trong `07-route-catalog.md` theo đúng carve-out đã dùng cho
+  R030, đăng ký `PUT`/`DELETE /api/people/:id` vào `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES`
+  (thiếu bước này làm `verify-g0.mjs` FAIL đúng như thiết kế — script không tự suy diễn module/action
+  từ thân handler).
+
+Verify: `test:security` 6/6, `test:integration:sqlite` 636 pass/8 skip, `test:integration:mysql`
+643 pass/1 skip (+4 so với trước batch), `test:verify-gate1-mapping` 145/145, `verify-g0.mjs` PASS,
+`git diff --check` sạch. Không đổi hành vi UI (Codex lane), không đổi bất kỳ pilot slice nào ngoài
+People Detail, không cutover role hàng loạt.
+
+**Còn lại của "People Detail end-to-end"**: W1.FILE (visibility gate cho attachments của person) —
+batch kế tiếp.

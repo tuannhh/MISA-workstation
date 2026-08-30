@@ -90,6 +90,8 @@ function resolveRouterPrefix(file, appSource = read('server/app.js')) {
 // nếu quên khai, route sẽ rơi về module=null và FAIL rõ ràng ở Section A thay vì PASS ngầm.
 const PILOT_INLINE_PERM_ROUTES = {
   'GET /api/people/:id': { module: 'partners', action: 'view' }, // D13 People Detail pilot, commit 3e8b299
+  'PUT /api/people/:id': { module: 'partners', action: 'edit' }, // D13 People Detail write pilot (RBAC-PILOT2-people-write)
+  'DELETE /api/people/:id': { module: 'partners', action: 'delete' }, // D13 People Detail write pilot (RBAC-PILOT2-people-write)
 };
 
 function sourceRoutes() {
