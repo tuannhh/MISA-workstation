@@ -2295,3 +2295,33 @@ record gần như rỗng (`{}` — mất cả `id`), không còn xem được t�
 Verify: security 6/6, SQLite 723 pass/8 skip, MySQL 730 pass/1 skip, mapping 145/145 PASS,
 `verify-g0.mjs` PASS, `git diff --check` sạch. Xác nhận thủ công: executor `projectRecord()` trên
 person 9 field business giờ thấy 7 (đúng ẩn `dob`/`phone_personal`, hiện phần còn lại).
+
+## Wave 1: batch RBAC-EXP-B2 — gắn PolicyEngine cho 2/6 entity Global còn lại (organization/supplier/important_date)
+
+Tiếp Batch 2/6 mở rộng 24 entity D13.4a, trên nền engine đã sửa đúng ở RBAC-FIELDVIS-FIX (nếu làm
+trước khi sửa sẽ lặp lại đúng bug ẩn field Public mặc định cho 2 entity dùng hàng ngày nhiều hơn
+`person`: organization/supplier).
+
+- `organization` (`GET/PUT/DELETE /api/partners/:id`): GET dùng `policyService.projectRecord()`
+  (che `membership_fee`); PUT/DELETE bỏ `requirePerm`+`stripDisallowed` cũ, thay
+  `policyService.assertWritable()` không điều kiện — executor sửa được bất kể ai tạo, KHÔNG bao giờ
+  xoá được (Global, chỉ Admin/Super Admin). Collection lồng (people/sponsorships/gifts/fees/
+  agreements/workLogs) giữ nguyên masking cũ — thuộc Direct entity khác, ngoài phạm vi batch này.
+- `supplier` (`GET/PUT/DELETE /api/suppliers/:id`): tương tự — che `service_fee_pct`/`deposit_pct`.
+- `important_date` (`PUT/DELETE /api/reminders/:id`): không có field mật nào nên chỉ cần gate
+  ghi/xoá, không cần `projectRecord` cho GET.
+- Dọn rác: `stripDisallowed()` hết call site thật sau khi bỏ ở `organization` (person đã bỏ từ batch
+  trước) — xoá định nghĩa + khỏi `router.testables` + unit test đã mồ côi (`BR-VAL-020`).
+- `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` + `07-route-catalog.md` (R005/R006/R041/R042/
+  R082/R083) cập nhật mô tả auth theo đúng mẫu inline-check đã dùng cho person (R032/R033).
+- **Phát hiện giữa batch:** `call()` helper trong `integration-partners/suppliers/reminders.test.js`
+  chưa hỗ trợ tham số `as` (chỉ có 1 cookie `super_admin` cho cả file) — test D13 mới ban đầu chạy
+  "xanh giả" (viewer/executor thực chất gọi bằng cookie super_admin). Sửa cả 3 file thêm `as = cookie`.
+
+Test mới: D13-035..038 (organization), D13-039..042 (supplier), D13-043..045 (important_date) — mỗi
+entity: viewer thấy field Public mặc định + field mật ẩn, viewer PUT/DELETE 403, executor PUT 200
+nhưng DELETE 403, admin (target role D13) PUT+DELETE đều 200.
+
+Verify: security 6/6, SQLite 733 pass/8 skip (+10), MySQL 740 pass/1 skip (+10... trừ 1 test xoá),
+mapping 145/145 route PASS, `verify-g0.mjs` PASS, `git diff --check` sạch. **Còn lại: 14 Direct
+entity + 1 Inherited (event_cost) — batch RBAC-EXP-B3..B6 tiếp theo.**

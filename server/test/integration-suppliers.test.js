@@ -11,6 +11,9 @@ const { createResourceStack } = require('../test-support/resource-stack');
 
 let baseUrl;
 let cookie;
+let viewerCookie; // D13 target role
+let executorCookie; // D13 target role — Global edit, KHÔNG có quyền delete
+let targetAdminCookie; // D13 target role 'admin' — khác legacy 'super_admin' fixture (cookie)
 let fixtures;
 const resources = createResourceStack();
 
@@ -32,6 +35,12 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `suppliers_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
+  const viewer = fixtures.createUser('viewer', { username: `suppliers_viewer_${Date.now()}` });
+  viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const executor = fixtures.createUser('executor', { username: `suppliers_executor_${Date.now()}` });
+  executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
+  const targetAdmin = fixtures.createUser('admin', { username: `suppliers_target_admin_${Date.now()}` });
+  targetAdminCookie = (await fixtures.login(baseUrl, { username: targetAdmin.username, password: targetAdmin.password })).cookie;
 });
 
 after(async () => {
@@ -277,6 +286,42 @@ test('R083 not-found CHARACTERIZATION: id không tồn tại vẫn trả 200 {ok
 });
 test('R083 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('DELETE', '/api/suppliers/1', { auth: false })).status, 401);
+});
+
+// ---------------------------------------------------------------------------
+// D13-039..042 — batch RBAC-EXP-B2 (2/6 entity Global còn lại): supplier qua PolicyEngine, giống
+// pattern person pilot (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b2-2026-08-30)
+// ---------------------------------------------------------------------------
+test('D13-039: viewer thấy field Public (name/address) mặc định (D13.2b), service_fee_pct/deposit_pct (Confidential) vẫn ẩn', async () => {
+  const id = await createSupplier({ name: 'NCC D13-039', service_fee_pct: 10, deposit_pct: 20 });
+  const res = await call('GET', `/api/suppliers/${id}`, { as: viewerCookie });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.record.id, id);
+  assert.equal(body.record.name, 'NCC D13-039');
+  assert.equal('service_fee_pct' in body.record, false);
+  assert.equal('deposit_pct' in body.record, false);
+});
+test('D13-040: viewer PUT/DELETE supplier đều 403', async () => {
+  const id = await createSupplier();
+  assert.equal((await call('PUT', `/api/suppliers/${id}`, { body: { name: 'x' }, as: viewerCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/suppliers/${id}`, { as: viewerCookie })).status, 403);
+});
+test('D13-041: executor PUT supplier 200 (Global, không cần là người tạo); DELETE 403 (executor không bao giờ xoá được Global)', async () => {
+  const id = await createSupplier({ name: 'Trước khi executor sửa' });
+  const putRes = await call('PUT', `/api/suppliers/${id}`, { body: { name: 'Executor đã sửa' }, as: executorCookie });
+  assert.equal(putRes.status, 200);
+  const detail = await (await call('GET', `/api/suppliers/${id}`, { as: targetAdminCookie })).json();
+  assert.equal(detail.record.name, 'Executor đã sửa');
+  assert.equal((await call('DELETE', `/api/suppliers/${id}`, { as: executorCookie })).status, 403);
+});
+test('D13-042: admin (target role D13) PUT + DELETE supplier đều 200 (full CRUD)', async () => {
+  const id = await createSupplier({ name: 'Trước khi admin sửa' });
+  assert.equal((await call('PUT', `/api/suppliers/${id}`, { body: { name: 'Admin đã sửa' }, as: targetAdminCookie })).status, 200);
+  const detail = await (await call('GET', `/api/suppliers/${id}`, { as: targetAdminCookie })).json();
+  assert.equal(detail.record.name, 'Admin đã sửa');
+  assert.equal((await call('DELETE', `/api/suppliers/${id}`, { as: targetAdminCookie })).status, 200);
+  assert.equal((await call('GET', `/api/suppliers/${id}`, { as: targetAdminCookie })).status, 404);
 });
 
 // ---------------------------------------------------------------------------

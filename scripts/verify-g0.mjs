@@ -112,6 +112,15 @@ const PILOT_INLINE_PERM_ROUTES = {
   'POST /api/monitor/campaigns': { module: 'monitoring', action: 'create' },
   'PUT /api/monitor/campaigns/:id': { module: 'monitoring', action: 'edit' },
   'DELETE /api/monitor/campaigns/:id': { module: 'monitoring', action: 'delete' },
+  // D13 batch RBAC-EXP-B2 (2/6 entity Global còn lại: organization/supplier/important_date) —
+  // PolicyEngine không điều kiện (không còn dual-branch legacy từ RBAC-CUTOVER), module/action giữ
+  // nguyên ý nghĩa cũ để đối chiếu Section A.
+  'PUT /api/partners/:id': { module: 'partners', action: 'edit' },
+  'DELETE /api/partners/:id': { module: 'partners', action: 'delete' },
+  'PUT /api/suppliers/:id': { module: 'suppliers', action: 'edit' },
+  'DELETE /api/suppliers/:id': { module: 'suppliers', action: 'delete' },
+  'PUT /api/reminders/:id': { module: 'reminders', action: 'edit' },
+  'DELETE /api/reminders/:id': { module: 'reminders', action: 'delete' },
 };
 
 function sourceRoutes() {

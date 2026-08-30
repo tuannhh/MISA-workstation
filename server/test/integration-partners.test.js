@@ -19,6 +19,9 @@ const { createResourceStack } = require('../test-support/resource-stack');
 
 let baseUrl;
 let cookie; // super_admin — đủ quyền org_fee để không phải rẽ nhánh mask tiền trong test này
+let viewerCookie; // D13 target role
+let executorCookie; // D13 target role — Global edit, KHÔNG có quyền delete
+let targetAdminCookie; // D13 target role 'admin' — khác legacy 'super_admin' fixture (cookie)
 let fixtures;
 const resources = createResourceStack();
 
@@ -40,14 +43,20 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `partners_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
+  const viewer = fixtures.createUser('viewer', { username: `partners_viewer_${Date.now()}` });
+  viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const executor = fixtures.createUser('executor', { username: `partners_executor_${Date.now()}` });
+  executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
+  const targetAdmin = fixtures.createUser('admin', { username: `partners_target_admin_${Date.now()}` });
+  targetAdminCookie = (await fixtures.login(baseUrl, { username: targetAdmin.username, password: targetAdmin.password })).cookie;
 });
 
 after(async () => {
   await resources.cleanupAll();
 });
 
-async function call(method, path, { body, auth = true, headers } = {}) {
-  const opts = { method, headers: { ...(auth ? { cookie } : {}), ...(headers || {}) } };
+async function call(method, path, { body, auth = true, as = cookie, headers } = {}) {
+  const opts = { method, headers: { ...(auth ? { cookie: as } : {}), ...(headers || {}) } };
   if (body !== undefined) { opts.headers['content-type'] = 'application/json'; opts.body = JSON.stringify(body); }
   return fetch(`${baseUrl}${path}`, opts);
 }
@@ -165,6 +174,41 @@ test('R006 not-found CHARACTERIZATION: xoá id không tồn tại vẫn 200 {ok:
 });
 test('R006 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('DELETE', '/api/partners/1', { auth: false })).status, 401);
+});
+
+// ---------------------------------------------------------------------------
+// D13-035..038 — batch RBAC-EXP-B2 (2/6 entity Global còn lại): organization qua PolicyEngine,
+// giống pattern person pilot (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b2-2026-08-30)
+// ---------------------------------------------------------------------------
+test('D13-035: viewer thấy field Public (name/org_type) mặc định (D13.2b), membership_fee (Confidential) vẫn ẩn', async () => {
+  const id = await createOrg({ name: 'Org D13-035', membership_fee: 5000000 });
+  const res = await call('GET', `/api/partners/${id}`, { as: viewerCookie });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.record.id, id);
+  assert.equal(body.record.name, 'Org D13-035');
+  assert.equal('membership_fee' in body.record, false);
+});
+test('D13-036: viewer PUT/DELETE org đều 403', async () => {
+  const id = await createOrg();
+  assert.equal((await call('PUT', `/api/partners/${id}`, { body: { name: 'x' }, as: viewerCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/partners/${id}`, { as: viewerCookie })).status, 403);
+});
+test('D13-037: executor PUT org 200 (Global, không cần là người tạo); DELETE 403 (executor không bao giờ xoá được Global)', async () => {
+  const id = await createOrg({ name: 'Trước khi executor sửa' });
+  const putRes = await call('PUT', `/api/partners/${id}`, { body: { name: 'Executor đã sửa', org_type: 'press' }, as: executorCookie });
+  assert.equal(putRes.status, 200);
+  const detail = await (await call('GET', `/api/partners/${id}`, { as: targetAdminCookie })).json();
+  assert.equal(detail.record.name, 'Executor đã sửa');
+  assert.equal((await call('DELETE', `/api/partners/${id}`, { as: executorCookie })).status, 403);
+});
+test('D13-038: admin (target role D13) PUT + DELETE org đều 200 (full CRUD)', async () => {
+  const id = await createOrg({ name: 'Trước khi admin sửa' });
+  assert.equal((await call('PUT', `/api/partners/${id}`, { body: { name: 'Admin đã sửa', org_type: 'press' }, as: targetAdminCookie })).status, 200);
+  const detail = await (await call('GET', `/api/partners/${id}`, { as: targetAdminCookie })).json();
+  assert.equal(detail.record.name, 'Admin đã sửa');
+  assert.equal((await call('DELETE', `/api/partners/${id}`, { as: targetAdminCookie })).status, 200);
+  assert.equal((await call('GET', `/api/partners/${id}`, { as: targetAdminCookie })).status, 404);
 });
 
 // ---------------------------------------------------------------------------

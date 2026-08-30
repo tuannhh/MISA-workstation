@@ -198,12 +198,6 @@ test('BR-VAL-019: canMoney()/maskMoney() che field tiền khi thiếu nhóm org_
   assert.equal(untouched[0].cost, 5000);
 });
 
-test('BR-VAL-020: stripDisallowed() xoá field mật không thuộc nhóm được phép khỏi payload cập nhật', () => {
-  const data = { dob: '2000-01-01', phone_personal: 'x', full_name: 'A' };
-  const out = t.stripDisallowed('person', data, new Set(['private']));
-  assert.deepEqual(out, { dob: '2000-01-01', full_name: 'A' });
-});
-
 test('BR-VAL-021: isValidBudgetPeriod() chỉ nhận đúng dạng YYYY-MM', () => {
   assert.equal(t.isValidBudgetPeriod('2026-08'), true);
   assert.equal(t.isValidBudgetPeriod('2026-8'), false);

@@ -61,14 +61,6 @@ function maskMoney(req, rows, ...fields) {
   arr.forEach((r) => { if (r) fields.forEach((f) => { if (r[f] != null) r[f] = rbac.MASK; }); });
   return rows;
 }
-// Loại các trường mật mà user không được xem khỏi dữ liệu cập nhật (chống ghi đè/null hóa)
-function stripDisallowed(entity, data, set) {
-  for (const f of (rbac.SENSITIVE_FIELDS[entity] || [])) {
-    const g = rbac.fieldGroup(entity, f);
-    if (f in data && !(g && set.has(g))) delete data[f];
-  }
-  return data;
-}
 // Kỳ ngân sách phải dạng YYYY-MM (POST /budgets)
 function isValidBudgetPeriod(period) { return /^\d{4}-\d{2}$/.test(period || ''); }
 // Thông tin tối thiểu để tạo tài khoản mới (POST /admin/users)
@@ -169,8 +161,13 @@ router.get('/partners/:id', requirePerm('partners', 'view'), (req, res) => {
   const row = db.prepare('SELECT * FROM organizations WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Không tìm thấy' });
   const allowed = senGroups(req);
-  if (allowed.has('org_fee') && row.membership_fee) logEdit(req, 'VIEW_SENSITIVE', 'organization', row.id, `Xem hội phí: ${row.name}`);
-  const { record } = rbac.maskRecord('organization', row, allowed);
+  // D13 (RBAC v2, batch RBAC-EXP-B2 2/6 Global): record chinh chay PolicyEngine (che membership_fee
+  // theo classification_tier); cac collection long ben duoi (people/sponsorships/gifts/fees/agreements/
+  // workLogs) chua co policy slice rieng cho entity cua no (organization moi la entity duoc gan lan
+  // nay, sponsorship/gift/association_fee/agreement/work_log la Direct entity khac, batch sau) nen
+  // van dung rbac.maskList/legacy masking nhu cu, khong doi.
+  const record = policyService.projectRecord({ principal: req.principal, entity: 'organization', module: 'partners', record: row });
+  if (policy.isPrivileged(req.principal) && row.membership_fee) logEdit(req, 'VIEW_SENSITIVE', 'organization', row.id, `Xem hội phí: ${row.name}`);
 
   // Nhân sự thuộc cơ quan (kèm ảnh chính), che trường mật
   let people = db.prepare(`
@@ -205,16 +202,30 @@ router.post('/partners', requirePerm('partners', 'create'), (req, res) => {
   logEdit(req, 'CREATE', 'organization', r.lastInsertRowid, req.body.name);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/partners/:id', requirePerm('partners', 'edit'), (req, res) => {
+// D13 (RBAC v2, duy nhat): PolicyEngine quyet dinh fail-closed 403, khong silent-strip (giong
+// person). Global entity -> executor sua duoc bat ke ai tao (khong gate owner_id), khong bao gio
+// xoa duoc (canWrite chan cung 'delete' cho executor) -- chi Admin/Super Admin xoa duoc.
+router.put('/partners/:id', (req, res) => {
   const data = pick(req.body, ORG_COLS);
   jsonField(data, 'press_types');
-  stripDisallowed('organization', data, senGroups(req));
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'organization', action: 'edit' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
+  }
   buildUpdate('organizations', req.params.id, data);
   syncAssignments('org', Number(req.params.id), req.body.caretaker_ids);
   logEdit(req, 'EDIT', 'organization', req.params.id, req.body.name);
   res.json({ ok: true });
 });
-router.delete('/partners/:id', requirePerm('partners', 'delete'), (req, res) => {
+router.delete('/partners/:id', (req, res) => {
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'organization', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
+  }
   db.prepare('DELETE FROM organizations WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'organization', req.params.id);
   res.json({ ok: true });
@@ -614,12 +625,27 @@ router.post('/reminders', requirePerm('reminders', 'create'), (req, res) => {
   logEdit(req, 'CREATE', 'important_date', r.lastInsertRowid, req.body.title);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/reminders/:id', requirePerm('reminders', 'edit'), (req, res) => {
+// D13 (RBAC v2, duy nhat): Global entity, khong co field mat nao (FIELD_TIER khong khai bao
+// important_date) nen khong can projectRecord cho GET -- chi can PolicyEngine gate ghi/xoa. Executor
+// sua duoc bat ke ai tao, khong bao gio xoa duoc (chi Admin/Super Admin).
+router.put('/reminders/:id', (req, res) => {
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'important_date', action: 'edit' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên reminders.');
+    throw err;
+  }
   buildUpdate('important_dates', req.params.id, pick(req.body, D_COLS));
   logEdit(req, 'EDIT', 'important_date', req.params.id, req.body.title);
   res.json({ ok: true });
 });
-router.delete('/reminders/:id', requirePerm('reminders', 'delete'), (req, res) => {
+router.delete('/reminders/:id', (req, res) => {
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'important_date', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên reminders.');
+    throw err;
+  }
   db.prepare('DELETE FROM important_dates WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'important_date', req.params.id);
   res.json({ ok: true });
@@ -1099,7 +1125,12 @@ router.get('/suppliers/:id', requirePerm('suppliers', 'view'), (req, res) => {
   if (!senGroups(req).has('org_fee')) transactions = transactions.map((t) => ({ ...t, value: t.value != null ? rbac.MASK : t.value }));
   const dates = decorateDates(db.prepare(`SELECT * FROM important_dates WHERE subject_type='supplier' AND subject_id=? ORDER BY event_date`).all(row.id));
   const contacts = db.prepare('SELECT * FROM supplier_contacts WHERE supplier_id=? ORDER BY id').all(row.id);
-  res.json({ record: row, quotes, files, transactions, dates, contacts });
+  // D13 (RBAC v2, batch RBAC-EXP-B2 2/6 Global): record chinh chay PolicyEngine (che service_fee_pct/
+  // deposit_pct theo classification_tier). quotes/transactions/contacts la Direct entity khac
+  // (supplier_quote/supplier_transaction/supplier_contact), chua co policy slice rieng, giu nguyen
+  // maskMoney/org_fee legacy.
+  const record = policyService.projectRecord({ principal: req.principal, entity: 'supplier', module: 'suppliers', record: row });
+  res.json({ record, quotes, files, transactions, dates, contacts });
 });
 const SCONTACT_COLS = ['full_name', 'position', 'phone', 'email', 'role', 'note'];
 router.post('/suppliers/:id/contacts', requirePerm('suppliers', 'edit'), (req, res) => {
@@ -1138,11 +1169,25 @@ router.post('/suppliers', requirePerm('suppliers', 'create'), (req, res) => {
   const r = buildInsert('suppliers', pick(req.body, SUP_COLS));
   logEdit(req, 'CREATE', 'supplier', r.lastInsertRowid, req.body.name); res.json({ id: r.lastInsertRowid });
 });
-router.put('/suppliers/:id', requirePerm('suppliers', 'edit'), (req, res) => {
+// D13 (RBAC v2, duy nhat): Global entity, giong to chuc -- executor sua duoc bat ke ai tao, khong
+// bao gio xoa duoc (chi Admin/Super Admin).
+router.put('/suppliers/:id', (req, res) => {
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'supplier', action: 'edit' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên suppliers.');
+    throw err;
+  }
   buildUpdate('suppliers', req.params.id, pick(req.body, SUP_COLS));
   logEdit(req, 'EDIT', 'supplier', req.params.id, req.body.name); res.json({ ok: true });
 });
-router.delete('/suppliers/:id', requirePerm('suppliers', 'delete'), (req, res) => {
+router.delete('/suppliers/:id', (req, res) => {
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'supplier', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên suppliers.');
+    throw err;
+  }
   const atts = db.prepare(`SELECT filename FROM attachments WHERE owner_type='supplier' AND owner_id=?`).all(req.params.id);
   for (const a of atts) { try { fs.unlinkSync(path.join(UPLOAD_DIR, a.filename)); } catch {} }
   db.prepare(`DELETE FROM attachments WHERE owner_type='supplier' AND owner_id=?`).run(req.params.id);
@@ -1736,7 +1781,7 @@ router.get('/monitor/campaigns/:id/evaluate', requirePerm('monitoring', 'view'),
 // KHÔNG đổi hành vi router, chỉ thêm 1 property lên object router (Express Router bỏ qua property
 // lạ, chỉ quan tâm .get/.post/.use/stack nội bộ).
 router.testables = {
-  pageParams, pick, jsonField, senGroups, senVisible, canMoney, maskMoney, stripDisallowed,
+  pageParams, pick, jsonField, senGroups, senVisible, canMoney, maskMoney,
   isValidBudgetPeriod, isValidNewUserPayload, sanitizeSensitivePerms,
   nextOccurrence, decorateDates, deadlineInfo, jarr, periodOf, campOut,
   nsrOf, careRiskLevel, bucketOf, crisisOf, sentimentScore, awardCostOf,

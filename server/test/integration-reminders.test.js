@@ -12,6 +12,9 @@ const { createResourceStack } = require('../test-support/resource-stack');
 
 let baseUrl;
 let cookie;
+let viewerCookie; // D13 target role
+let executorCookie; // D13 target role — Global edit, KHÔNG có quyền delete
+let targetAdminCookie; // D13 target role 'admin' — khác legacy 'super_admin' fixture (cookie)
 let fixtures;
 const resources = createResourceStack();
 
@@ -33,14 +36,20 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `reminders_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
+  const viewer = fixtures.createUser('viewer', { username: `reminders_viewer_${Date.now()}` });
+  viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const executor = fixtures.createUser('executor', { username: `reminders_executor_${Date.now()}` });
+  executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
+  const targetAdmin = fixtures.createUser('admin', { username: `reminders_target_admin_${Date.now()}` });
+  targetAdminCookie = (await fixtures.login(baseUrl, { username: targetAdmin.username, password: targetAdmin.password })).cookie;
 });
 
 after(async () => {
   await resources.cleanupAll();
 });
 
-async function call(method, path, { body, auth = true, headers } = {}) {
-  const opts = { method, headers: { ...(auth ? { cookie } : {}), ...(headers || {}) } };
+async function call(method, path, { body, auth = true, as = cookie, headers } = {}) {
+  const opts = { method, headers: { ...(auth ? { cookie: as } : {}), ...(headers || {}) } };
   if (body !== undefined) { opts.headers['content-type'] = 'application/json'; opts.body = JSON.stringify(body); }
   return fetch(`${baseUrl}${path}`, opts);
 }
@@ -130,6 +139,34 @@ test('R042 not-found CHARACTERIZATION: xoá id không tồn tại vẫn 200 {ok:
 });
 test('R042 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('DELETE', '/api/reminders/1', { auth: false })).status, 401);
+});
+
+// ---------------------------------------------------------------------------
+// D13-043..045 — batch RBAC-EXP-B2 (3/6, entity Global cuối cùng): important_date qua PolicyEngine.
+// Không có field mật nào (FIELD_TIER không khai important_date) nên chỉ cần gate ghi/xoá, không cần
+// projectRecord cho GET (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b2-2026-08-30).
+// ---------------------------------------------------------------------------
+test('D13-043: viewer PUT/DELETE reminder đều 403', async () => {
+  const id = await createReminder({ title: 'D13-043' });
+  assert.equal((await call('PUT', `/api/reminders/${id}`, { body: { title: 'x' }, as: viewerCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/reminders/${id}`, { as: viewerCookie })).status, 403);
+});
+test('D13-044: executor PUT reminder 200 (Global, không cần là người tạo); DELETE 403 (executor không bao giờ xoá được Global)', async () => {
+  const id = await createReminder({ title: 'Trước khi executor sửa' });
+  const putRes = await call('PUT', `/api/reminders/${id}`, { body: { title: 'Executor đã sửa' }, as: executorCookie });
+  assert.equal(putRes.status, 200);
+  const rows = (await (await call('GET', '/api/reminders', { as: targetAdminCookie })).json()).rows;
+  assert.equal(rows.find((r) => r.id === id).title, 'Executor đã sửa');
+  assert.equal((await call('DELETE', `/api/reminders/${id}`, { as: executorCookie })).status, 403);
+});
+test('D13-045: admin (target role D13) PUT + DELETE reminder đều 200 (full CRUD)', async () => {
+  const id = await createReminder({ title: 'Trước khi admin sửa' });
+  assert.equal((await call('PUT', `/api/reminders/${id}`, { body: { title: 'Admin đã sửa' }, as: targetAdminCookie })).status, 200);
+  const rows = (await (await call('GET', '/api/reminders', { as: targetAdminCookie })).json()).rows;
+  assert.equal(rows.find((r) => r.id === id).title, 'Admin đã sửa');
+  assert.equal((await call('DELETE', `/api/reminders/${id}`, { as: targetAdminCookie })).status, 200);
+  const rowsAfter = (await (await call('GET', '/api/reminders', { as: targetAdminCookie })).json()).rows;
+  assert.ok(!rowsAfter.some((r) => r.id === id));
 });
 
 // ---------------------------------------------------------------------------

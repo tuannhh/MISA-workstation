@@ -10,8 +10,8 @@
 | R002 | GET | /api/partners | requirePerm(partners,view) | organizations | org_fee (membership_fee, masked) | không | routes.js:97 |
 | R003 | GET | /api/partners/:id | requirePerm(partners,view) | organizations+people+sponsorships+association_fees+agreements+work_logs+gifts+benefit_usages | org_fee, contact, private, social, finance | không | routes.js:125 |
 | R004 | POST | /api/partners | requirePerm(partners,create) | organizations | org_fee (membership_fee, **KHÔNG stripDisallowed** — F1) | không | routes.js:156 |
-| R005 | PUT | /api/partners/:id | requirePerm(partners,edit) | organizations | org_fee (có stripDisallowed) | không | routes.js:165 |
-| R006 | DELETE | /api/partners/:id | requirePerm(partners,delete) | organizations | — | không | routes.js:174 |
+| R005 | PUT | /api/partners/:id | **`requirePerm(partners,edit)` tương đương, kiểm INLINE trong handler (không còn literal ở khai báo route — D13 batch `RBAC-EXP-B2` 2026-08-30, PolicyEngine không điều kiện, không còn dual-branch legacy)**: router-level `requireAuth` + `policyService.assertWritable()`/PolicyEngine, module `partners`/action `edit` — khai tường minh ở `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` | organizations | membership_fee (che qua `classification_tier=Confidential`, PolicyEngine — không còn `stripDisallowed`) | không | routes.js:208 |
+| R006 | DELETE | /api/partners/:id | **`requirePerm(partners,delete)` tương đương, kiểm INLINE trong handler (D13 batch `RBAC-EXP-B2`)**: router-level `requireAuth` + `policyService.assertWritable()`/PolicyEngine (chỉ Admin/Super Admin qua — Global entity không bao giờ cho executor xoá), module `partners`/action `delete` — khai tường minh ở `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` | organizations | — | không | routes.js:222 |
 | R007 | POST | /api/partners/:id/sponsorships | requirePerm(partners,edit) | sponsorships | org_fee (amount, **KHÔNG stripDisallowed** — F1) | không | routes.js:183 |
 | R008 | PUT | /api/sponsorships/:id | requirePerm(partners,edit) | sponsorships | org_fee (F1) | không | routes.js:189 |
 | R009 | DELETE | /api/sponsorships/:id | requirePerm(partners,edit) | sponsorships | — | không | routes.js:194 |
@@ -46,8 +46,8 @@
 | R038 | GET | /api/reminders/upcoming | requirePerm(reminders,view) | important_dates | — | không | routes.js:511 |
 | R039 | GET | /api/reminders | requirePerm(reminders,view) | important_dates | — | không | routes.js:518 |
 | R040 | POST | /api/reminders | requirePerm(reminders,create) | important_dates | — | không | routes.js:522 |
-| R041 | PUT | /api/reminders/:id | requirePerm(reminders,edit) | important_dates | — | không | routes.js:530 |
-| R042 | DELETE | /api/reminders/:id | requirePerm(reminders,delete) | important_dates | — | không | routes.js:535 |
+| R041 | PUT | /api/reminders/:id | **`requirePerm(reminders,edit)` tương đương, kiểm INLINE trong handler (D13 batch `RBAC-EXP-B2` 2026-08-30)**: router-level `requireAuth` + `policyService.assertWritable()`/PolicyEngine, module `reminders`/action `edit` — khai tường minh ở `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` | important_dates | — | không | routes.js:631 |
+| R042 | DELETE | /api/reminders/:id | **`requirePerm(reminders,delete)` tương đương, kiểm INLINE trong handler (D13 batch `RBAC-EXP-B2`)**: router-level `requireAuth` + `policyService.assertWritable()`/PolicyEngine (chỉ Admin/Super Admin qua), module `reminders`/action `delete` — khai tường minh ở `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` | important_dates | — | không | routes.js:642 |
 | R043 | GET | /api/entities/search | requirePerm(interactions,view) | people+organizations | — | không | routes.js:545 |
 | R044 | GET | /api/interactions | requirePerm(interactions,view) | interactions | — | không | routes.js:559 |
 | R045 | POST | /api/interactions | requirePerm(interactions,create) | interactions | — | không | routes.js:571 |
@@ -87,8 +87,8 @@
 | R079 | PUT | /api/suppliers/:id/transactions/:tid | requirePerm(suppliers,edit) | supplier_transactions | org_fee (F1) | không | routes.js:1018 |
 | R080 | DELETE | /api/suppliers/:id/transactions/:tid | requirePerm(suppliers,edit) | supplier_transactions | — | không | routes.js:1023 |
 | R081 | POST | /api/suppliers | requirePerm(suppliers,create) | suppliers | — | không | routes.js:1027 |
-| R082 | PUT | /api/suppliers/:id | requirePerm(suppliers,edit) | suppliers | — | không | routes.js:1031 |
-| R083 | DELETE | /api/suppliers/:id | requirePerm(suppliers,delete) | suppliers+attachments | — | có (xoá file vật lý) | routes.js:1035 |
+| R082 | PUT | /api/suppliers/:id | **`requirePerm(suppliers,edit)` tương đương, kiểm INLINE trong handler (D13 batch `RBAC-EXP-B2` 2026-08-30)**: router-level `requireAuth` + `policyService.assertWritable()`/PolicyEngine, module `suppliers`/action `edit` — khai tường minh ở `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` | suppliers | service_fee_pct,deposit_pct (che qua `classification_tier=Confidential`, PolicyEngine) | không | routes.js:1174 |
+| R083 | DELETE | /api/suppliers/:id | **`requirePerm(suppliers,delete)` tương đương, kiểm INLINE trong handler (D13 batch `RBAC-EXP-B2`)**: router-level `requireAuth` + `policyService.assertWritable()`/PolicyEngine (chỉ Admin/Super Admin qua), module `suppliers`/action `delete` — khai tường minh ở `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` | suppliers+attachments | — | có (xoá file vật lý) | routes.js:1184 |
 | R084 | POST | /api/suppliers/:id/quotes | requirePerm(suppliers,edit) | supplier_quotes | org_fee (**KHÔNG gate write** — F1) | không | routes.js:1042 |
 | R085 | DELETE | /api/suppliers/:id/quotes/:qid | requirePerm(suppliers,edit) | supplier_quotes | — | không | routes.js:1046 |
 | R086 | POST | /api/suppliers/:id/files | requirePerm(suppliers,edit) | attachments (kind=quote) | org_fee (file chứa tiền; download qua R037 KHÔNG gate org_fee) | có (upload ≤5 file) | routes.js:1049 |

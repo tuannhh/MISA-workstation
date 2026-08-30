@@ -455,3 +455,53 @@ Exit criteria: full regression (test:security, sqlite 723/8, mysql 730/1, verify
       thi tren MySQL).
 Expected commit range/count: 1 commit.
 ```
+
+## Batch RBAC-EXP-B2 (2026-08-30)
+
+```md
+Batch-ID: RBAC-EXP-B2
+Goal: batch 2/6 mo rong PolicyEngine ra ngoai person -- gan not 3 entity Global con lai
+      (organization/supplier/important_date, D13.4a) theo dung pattern da dung cho person pilot,
+      TREN NEN engine da sua dung o batch RBAC-FIELDVIS-FIX ngay truoc do (neu lam truoc khi sua se
+      lap lai dung bug an mac dinh field Public cho 2 entity dung hang ngay nhieu hon person).
+In scope: (a) organization (`GET/PUT/DELETE /api/partners/:id`): GET dung
+      `policyService.projectRecord()` thay `rbac.maskRecord()` cho record chinh (che membership_fee
+      theo classification_tier=Confidential); PUT/DELETE bo `requirePerm('partners',edit/delete)` +
+      `stripDisallowed` cu, thay bang `policyService.assertWritable()` khong dieu kien (giong
+      person) -- Global entity: executor sua duoc bat ke ai tao, KHONG bao gio xoa duoc (chi
+      Admin/Super Admin). Cac collection long (people/sponsorships/gifts/fees/agreements/workLogs)
+      GIU NGUYEN rbac.maskList/legacy masking -- do la Direct entity KHAC (sponsorship/gift/
+      association_fee/agreement/work_log), chua co policy slice rieng, ngoai pham vi batch nay.
+      (b) supplier (`GET/PUT/DELETE /api/suppliers/:id`): tuong tu -- che service_fee_pct/
+      deposit_pct (Confidential); quotes/transactions/contacts la Direct entity khac, giu nguyen
+      maskMoney/org_fee legacy. (c) important_date (`PUT/DELETE /api/reminders/:id`): KHONG co field
+      mat nao (FIELD_TIER khong khai important_date) nen KHONG can projectRecord cho GET -- chi can
+      gate ghi/xoa qua assertWritable. (d) Don rac phat sinh: `stripDisallowed()` (server/routes.js)
+      het call site that su sau khi bo o organization (person da bo tu batch truoc) -- xoa han dinh
+      nghia + xoa khoi `router.testables` export + xoa unit test rieng da mo coi (BR-VAL-020, khong
+      con ham nao de test). (e) `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` them 6 route moi
+      (PUT/DELETE partners, suppliers, reminders) + `07-route-catalog.md` R005/R006/R041/R042/
+      R082/R083 doi mo ta auth sang dung "kiem INLINE" giong R032/R033 (person) da lam truoc do.
+Out of scope: 14 Direct entity + 1 Inherited (event_cost) con lai -- batch RBAC-EXP-B3..B6; UI-flow
+      matrix SS B.2 (Codex lane); khong dong ALLOWED_FIELDS them field organization/supplier nao (da
+      khong con can thiet sau RBAC-FIELDVIS-FIX -- field Public mac dinh hien thi, khong can dang
+      ky rieng).
+Behavior mode: TARGET-CHANGE tiep tuc tu person pilot, khong doi nguyen tac -- chi ap dung dung mau
+      da duyet cho 2 entity Global con lai dung hang ngay (to chuc/nha cung cap).
+Risk hotspots: (1) neu lam truoc RBAC-FIELDVIS-FIX se lap lai bug an field Public mac dinh cho 2
+      entity nay -- da lam SAU, xac nhan qua test D13-035/D13-039 (viewer thay name/address mac
+      dinh, chi membership_fee/service_fee_pct/deposit_pct bi an); (2) test file cu
+      (integration-partners/suppliers/reminders.test.js) `call()` helper CHUA ho tro tham so `as`
+      (chi co 1 cookie super_admin toan file) -- phat hien qua that bai test that (viewer/executor
+      test tra ve nhu super_admin), sua ca 3 file them `as = cookie` vao `call()`.
+Required tests: `integration-partners.test.js` D13-035..038, `integration-suppliers.test.js`
+      D13-039..042, `integration-reminders.test.js` D13-043..045 -- moi entity: viewer thay field
+      Public mac dinh + field mat an (chi organization/supplier co field mat, important_date
+      khong), viewer PUT/DELETE 403, executor PUT 200 nhung DELETE 403 (Global khong bao gio xoa
+      duoc), admin (target role D13) PUT+DELETE deu 200.
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security, sqlite 733/8, mysql 740/1, verify-gate1-mapping,
+      verify-g0.mjs, git diff --check) deu xanh; script xac nhan lai executor/viewer thay dung field
+      tren organization/supplier (khong con bug RBAC-FIELDVIS-FIX).
+Expected commit range/count: 1 commit.
+```
