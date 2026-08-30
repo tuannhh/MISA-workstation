@@ -614,6 +614,28 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > `policyService.prepareUpdate()` chưa route nào gọi thật — không phải exit criterion của
 > RBAC-EXP-B1..B6.
 
+> **Execution update — 2026-08-31 (remediation F21/F22 — Codex audit BLOCKED trên Evidence Bundle
+> F15→RBAC-EXP-B6):** Codex audit `21-audit-bundle-f15-rbac-exp-b1-b6.md` trả BLOCKED với 2 finding
+> tái hiện được: **F21 (P0)** `GET /api/files/:id` phục vụ file `private` của 5 owner_type ngoài
+> `person` (award/supplier/event/agreement/work_log) không gate gì — Viewer tải được tài liệu private
+> của người khác (bypass D13.3, IDOR); **F22 (P1)** batch RBAC-CUTOVER thiếu migration dữ liệu
+> `users.role='pr_staff'`→`'executor'`, user cũ bị lockout 403 toàn bộ sau deploy. Chi tiết root
+> cause + resolution đầy đủ: `01-audit-findings.md` §F21/§F22.
+>
+> Fix: `server/policy-engine.js#canReadAttachment()` thêm owner-bypass Direct/Inherited giống
+> `canReadField()`; `server/routes.js` thêm `ATTACHMENT_OWNER_ENTITY` map cố định 6 owner_type thật
+> → owner_type lạ fail-closed 403 cho MỌI role kể cả Admin; `server/db.js#migrate()` thêm
+> `UPDATE users SET role='executor' WHERE role='pr_staff'` (idempotent tự nhiên). Test mới:
+> D13-078/079 (`integration-awards.test.js`), D13-080 (`integration-suppliers.test.js`),
+> DB-CONTRACT-006 (`integration-db-contract.test.js`).
+>
+> Full regression: security 6/6, SQLite 770 pass/8 skip (+4), MySQL 777 pass/1 skip (+4), mapping
+> 145/145 route PASS (không route mới), `verify-g0.mjs` PASS, `git diff --check` sạch. Backlog
+> ngoài phạm vi P0/P1 (không sửa, đã báo cáo trong `01-audit-findings.md` §F21): upload file
+> award/supplier/event/agreement/work_log chưa gate owner_id của Direct entity (P2); metadata
+> attachment (tên file, không phải nội dung) chưa lọc theo owner (P3). **Sẵn sàng Codex re-audit
+> tập trung đúng 2 điểm F21/F22.**
+
 ---
 
 ## WAVE 3 — Strangler UI theo vertical slice (trên RBAC v2 mới) + slice Voice (D14)

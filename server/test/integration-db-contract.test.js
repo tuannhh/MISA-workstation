@@ -131,3 +131,15 @@ test('DB-CONTRACT-004: app_meta upsert giữ đúng một key và giá trị m�
   const rows = db.prepare('SELECT value FROM app_meta WHERE `key`=?').all(key);
   assert.deepEqual(rows.map((row) => row.value), ['second']);
 });
+
+test('DB-CONTRACT-006: migrate() chuyển user role legacy pr_staff -> executor, idempotent (remediation P1 audit F19 — RBAC-CUTOVER thiếu migration này, user cũ sẽ bị khoá hoàn toàn sau deploy vì rbac.MATRIX không còn key pr_staff)', () => {
+  const { migrate } = require('../db');
+  const username = `pr_staff_legacy_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  db.prepare('INSERT INTO users (username,password_hash,full_name,role,email) VALUES (?,?,?,?,?)')
+    .run(username, 'hash', 'User cũ pr_staff', 'pr_staff', null);
+  migrate();
+  assert.equal(db.prepare('SELECT role FROM users WHERE username=?').get(username).role, 'executor');
+  // idempotent: chạy lại (giả lập app restart lần 2) không lỗi, không đổi thêm gì
+  migrate();
+  assert.equal(db.prepare('SELECT role FROM users WHERE username=?').get(username).role, 'executor');
+});

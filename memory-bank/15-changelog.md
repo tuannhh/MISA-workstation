@@ -2457,3 +2457,42 @@ association_fee/benefit_usage). Kế hoạch 6 batch RBAC-EXP-B1..B6 owner duy�
 TẤT. Còn lại ngoài scope entity-wiring: UI-flow matrix SS B.2 (Codex lane); `policyService.
 prepareUpdate()` chưa route nào gọi thật (routes vẫn `buildUpdate()` sau `assertWritable()`) —
 không phải exit criterion của RBAC-EXP-B1..B6, ghi nhận riêng nếu cần dọn sau.
+
+## Wave 1: remediation F21 (P0)/F22 (P1) — Codex audit trên Evidence Bundle F15→RBAC-EXP-B6 BLOCKED
+
+Batch remediation hẹp theo đúng 2 điểm Codex audit trả BLOCKED trên
+`18-audit-bundle` (`21-audit-bundle-f15-rbac-exp-b1-b6.md`) — không mở rộng phạm vi sang các phát
+hiện Backlog Codex đã liệt kê không chặn bundle (`prepareUpdate()` chưa route nào gọi, mapping
+`TODO=1`/`known-red=1` là fixture infra).
+
+- **F21 (P0):** `GET /api/files/:id` trước đây chỉ gate `owner_type='person'`; 5 owner_type còn lại
+  (award/supplier/event/agreement/work_log) phục vụ file `private` mặc định không qua bất kỳ policy
+  check nào — Viewer tải được tài liệu private của award/supplier/event người khác (bypass D13.3,
+  IDOR). Xem chi tiết root cause + resolution đầy đủ ở `01-audit-findings.md` §F21.
+  - `server/policy-engine.js#canReadAttachment()`: thêm `entity`/`record`/`parentOwnerId`, owner-
+    bypass giống hệt `canReadField()` (Direct: `ownerValue()===principal.id`; Inherited:
+    `parentOwnerId===principal.id`; Global/lạ: chỉ Admin/Super Admin).
+  - `server/routes.js`: `ATTACHMENT_OWNER_ENTITY` map cố định 6 owner_type có thật →
+    `{entity, module, table}`. owner_type KHÔNG có trong map → 403 fail-closed cho MỌI role kể cả
+    Admin/Super Admin (không suy diễn). owner_type hợp lệ: check `rbac.can(role,module,'view')`
+    rồi fetch bản ghi cha thật, truyền vào `canReadAttachment()`.
+  - `person` giữ nguyên 100% hành vi cũ (test D13-011 cũ không sửa, vẫn xanh).
+- **F22 (P1):** batch RBAC-CUTOVER (`f170e62`) chỉ rename khoá MATRIX trong code, không migrate dữ
+  liệu `users.role='pr_staff'` cũ sang `'executor'` — user thật mang role legacy bị lockout 403 toàn
+  bộ route sau deploy (`rbac.MATRIX` không còn khoá `pr_staff`). Fix: `server/db.js#migrate()` thêm
+  `UPDATE users SET role='executor' WHERE role='pr_staff'` (tự nhiên idempotent, không cần bọc
+  `add()`/`isIgnorableMigrationError()` vì không phải DDL). Export thêm `migrate` từ `db.js` để test
+  gọi trực tiếp (tiền lệ giống export `isIgnorableMigrationError` ở F17).
+- Test mới: `integration-awards.test.js` D13-078 (award Direct, owner-bypass đúng cả 2 chiều),
+  D13-079 (owner_type lạ fail-closed); `integration-suppliers.test.js` D13-080 (supplier Global,
+  private luôn Admin-only kể cả người tự upload); `integration-db-contract.test.js` DB-CONTRACT-006
+  (migrate() chuyển role + idempotent qua 2 lần gọi).
+- Out-of-scope tự phát hiện, KHÔNG sửa (báo cáo theo `12-phase-maintenance.md` mục 4, không phải
+  P0/P1 nên không giữ gate theo `CLAUDE.md` mục 5): upload file cho award/supplier/event/agreement/
+  work_log vẫn `requirePerm(module,'edit')` thô theo role, chưa gate owner_id của Direct entity (P2,
+  backlog); metadata attachment (`id/original_name/mime`, không phải nội dung) trong
+  `GET /awards/:id`/`GET /suppliers/:id`/... vẫn trả không lọc theo owner (P3, backlog).
+
+Verify: security 6/6, SQLite 770 pass/8 skip (+4), MySQL 777 pass/1 skip (+4), mapping 145/145
+route PASS (route đã tồn tại từ trước, không route mới), `verify-g0.mjs` PASS, `git diff --check`
+sạch. Không đổi UI, không đụng route/entity nào ngoài `GET /api/files/:id` và `migrate()`.

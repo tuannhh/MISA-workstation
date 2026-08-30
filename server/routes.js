@@ -682,22 +682,40 @@ router.delete('/attachments/:aid', (req, res) => {
   res.json({ ok: true });
 });
 
+// D13.3 remediation P0 (audit F19): map owner_type -> {entity, module, table} de GET /files/:id
+// gate dung luat owner/visibility that cua tung entity, khong con phuc vu tho theo owner_type
+// chua duoc khai. owner_type LA VOID (khong co trong map) fail-closed 403, khong suy dien.
+const ATTACHMENT_OWNER_ENTITY = Object.freeze({
+  person: { entity: 'person', module: 'partners', table: 'people' },
+  award: { entity: 'award', module: 'awards', table: 'awards' },
+  supplier: { entity: 'supplier', module: 'suppliers', table: 'suppliers' },
+  event: { entity: 'event', module: 'events', table: 'events' },
+  agreement: { entity: 'agreement', module: 'partners', table: 'agreements' },
+  work_log: { entity: 'work_log', module: 'partners', table: 'work_logs' },
+});
+
 // Phục vụ file (có bảo vệ). Giấy tờ tùy thân yêu cầu quyền xem dữ liệu mật + ghi audit.
 router.get('/files/:id', (req, res) => {
   const att = db.prepare('SELECT * FROM attachments WHERE id=?').get(req.params.id);
   if (!att) return res.status(404).json({ error: 'Không tìm thấy file' });
-  // id_doc (giấy tờ tùy thân) luôn mật, kể cả nếu owner_type lạ (chưa từng xảy ra trong thực tế).
-  // Attachment thuộc owner_type khác 'person' (award/supplier/event...) chưa có policy slice riêng
-  // nên tiếp tục phục vụ không gate thêm (đúng hành vi trước đây — route này chưa từng gate theo
-  // owner_type ngoài id_doc).
+  const map = ATTACHMENT_OWNER_ENTITY[att.owner_type];
+  if (!map) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
+  // id_doc (giấy tờ tùy thân) luôn mật, chỉ tồn tại thật trên owner_type='person'.
   if (att.kind === 'id_doc') {
-    const allowed = att.owner_type === 'person'
-      && policy.canReadAttachment({ principal: req.principal, kind: att.kind, audienceVisibility: att.audience_visibility });
+    const allowed = map.entity === 'person'
+      && policy.canReadAttachment({ principal: req.principal, entity: map.entity, kind: att.kind, audienceVisibility: att.audience_visibility });
     if (!allowed) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền xem giấy tờ tùy thân');
     logEdit(req, 'VIEW_SENSITIVE', 'person', att.owner_id, `Tải/giấy tờ tùy thân: ${att.original_name || att.filename}`);
-  } else if (att.owner_type === 'person'
-      && !policy.canReadAttachment({ principal: req.principal, kind: att.kind, audienceVisibility: att.audience_visibility })) {
-    return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
+  } else {
+    // Trần theo module (defense-in-depth: mọi role hiện có đều có 'view' trên 4 module này, nhưng
+    // fail-closed nếu module đổi quyền sau này) rồi mới xét owner/visibility theo entity thật.
+    if (!rbac.can(req.principal.role, map.module, 'view')) {
+      return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
+    }
+    const record = db.prepare(`SELECT * FROM ${map.table} WHERE id=?`).get(att.owner_id);
+    if (!policy.canReadAttachment({ principal: req.principal, entity: map.entity, kind: att.kind, audienceVisibility: att.audience_visibility, record })) {
+      return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
+    }
   }
   const fp = path.join(UPLOAD_DIR, att.filename);
   if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File không tồn tại' });

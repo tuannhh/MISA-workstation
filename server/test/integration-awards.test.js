@@ -317,3 +317,31 @@ test('D13-058: executor DELETE award_participation (kể cả của chính mình
   assert.equal((await call('DELETE', `/api/awards/${id}/participations/${pid}`, { as: executorCookie })).status, 403);
   assert.equal((await call('DELETE', `/api/awards/${id}/participations/${pid}`)).status, 200);
 });
+
+// ---------------------------------------------------------------------------
+// D13-078..079 — remediation P0 audit F19: GET /api/files/:id trước đây phục vụ file private của
+// MỌI owner_type khác 'person' (award/supplier/event/agreement/work_log) mà không gate gì — Viewer
+// tải được tài liệu private của award người khác. Nay award (entity Direct) theo đúng luật
+// owner-bypass giống canReadField; owner_type lạ fail-closed 403 cho MỌI role.
+// ---------------------------------------------------------------------------
+test('D13-078: award là entity Direct — file private của award chỉ owner (executor tạo ra nó) hoặc Admin/Super Admin tải được; viewer và executor không sở hữu luôn 403', async () => {
+  const myId = (await (await call('POST', '/api/awards', { body: { name: 'Award của executor (file mật)' }, as: executorCookie })).json()).id;
+  assert.equal((await uploadFiles(`/api/awards/${myId}/files`, [{ name: 'ho-so-mat.pdf' }], { as: executorCookie })).status, 200);
+  const myFileId = (await (await call('GET', `/api/awards/${myId}`, { as: executorCookie })).json()).attachments[0].id;
+  assert.equal((await call('GET', `/api/files/${myFileId}`, { as: viewerCookie })).status, 403);
+  assert.equal((await call('GET', `/api/files/${myFileId}`, { as: executorCookie })).status, 200);
+  assert.equal((await call('GET', `/api/files/${myFileId}`)).status, 200); // cookie mặc định = super_admin
+
+  const othersId = await createAward({ name: 'Award của người khác (file mật)' });
+  assert.equal((await uploadFiles(`/api/awards/${othersId}/files`, [{ name: 'khac.pdf' }])).status, 200);
+  const othersFileId = (await (await call('GET', `/api/awards/${othersId}`)).json()).attachments[0].id;
+  assert.equal((await call('GET', `/api/files/${othersFileId}`, { as: executorCookie })).status, 403);
+});
+test('D13-079: attachment có owner_type lạ (không khai trong ATTACHMENT_OWNER_ENTITY) fail-closed 403 cho MỌI role kể cả Admin/Super Admin', async () => {
+  const { db } = require('../db');
+  const fileId = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary)
+    VALUES ('khong_ton_tai', 1, 'file', 'x.pdf', 'x.pdf', 'application/pdf', 0)`).run().lastInsertRowid;
+  assert.equal((await call('GET', `/api/files/${fileId}`, { as: viewerCookie })).status, 403);
+  assert.equal((await call('GET', `/api/files/${fileId}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('GET', `/api/files/${fileId}`)).status, 403);
+});

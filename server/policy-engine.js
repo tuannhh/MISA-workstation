@@ -62,12 +62,16 @@ function canSetAttachmentVisibility(kind, visibility) {
   if (visibility === 'private') return true;
   return attachmentVisibilityCeiling(kind) === 'public';
 }
-// person has no per-record owner (D13.4a Global), so unlike canReadField there is no
-// executor-owns-this-record bypass here: only Admin/Super Admin see non-public attachments.
-function canReadAttachment({ principal, kind, audienceVisibility }) {
+// D13.3 mo rong (remediation P0 audit F19): attachment gan tren entity Direct (award/event/
+// agreement/work_log...) hoac Inherited phai theo dung luat owner cua entity do, giong
+// canReadField — khong con "khong instrument thi phuc vu luon" nhu truoc. Entity Global (person/
+// supplier) khong co owner bypass, giu dung hanh vi cu: chi Admin/Super Admin xem duoc private.
+function canReadAttachment({ principal, entity, kind, audienceVisibility, record, parentOwnerId }) {
   if (!principal) return false;
   if (isPrivileged(principal)) return true;
   if (kind === 'id_doc') return false;
+  if (principal.role === 'executor' && isDirectEntity(entity) && ownerValue(entity, record) === principal.id) return true;
+  if (principal.role === 'executor' && isInheritedEntity(entity) && parentOwnerId === principal.id) return true;
   return audienceVisibility === 'public';
 }
 

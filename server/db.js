@@ -709,6 +709,13 @@ function migrate() {
   add("ALTER TABLE sponsorships ADD COLUMN contact_point TEXT");    // đầu mối làm việc
   add("ALTER TABLE sponsorships ADD COLUMN staff TEXT");            // nhân sự phụ trách
   add("ALTER TABLE sponsorships ADD COLUMN status TEXT");           // trạng thái
+  // D13 RBAC-CUTOVER (2026-08-30, remediation P1 audit F19): anh xa co dinh owner da duyet —
+  // user cu con mang role legacy 'pr_staff' phai duoc chuyen thanh 'executor' THAT trong DB,
+  // khong chi doi ten trong code. rbac.js MATRIX khong con key 'pr_staff' tu sau RBAC-CUTOVER
+  // (90b8853/f170e62) nen thieu migration nay se khoa hoan toan user cu sau deploy (moi
+  // requirePerm/rbac.can deu tra false). UPDATE tu than idempotent (chay lai anh huong 0 dong),
+  // khong can boc qua add()/isIgnorableMigrationError.
+  db.exec("UPDATE users SET role='executor' WHERE role='pr_staff'");
 }
 
 function seed() {
@@ -989,4 +996,4 @@ function closeDb() {
   return typeof db.close === 'function' ? db.close() : undefined;
 }
 
-module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb, isIgnorableMigrationError };
+module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb, isIgnorableMigrationError, migrate };

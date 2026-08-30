@@ -439,3 +439,19 @@ test('D13-070: supplier_quote — executor tạo trả 200, owner_id đúng; th�
   assert.equal((await call('DELETE', `/api/suppliers/${id}/quotes/${myQid}`, { as: executorCookie })).status, 403);
   assert.equal((await call('DELETE', `/api/suppliers/${id}/quotes/${myQid}`)).status, 200);
 });
+
+// ---------------------------------------------------------------------------
+// D13-080 — remediation P0 audit F19: GET /api/files/:id trước đây phục vụ file báo giá supplier
+// không gate gì. supplier là entity Global (không có owner-bypass, giống service_fee_pct/
+// deposit_pct luôn ẩn với executor) — nên KHÁC award (D13-078): file private chỉ Admin/Super Admin
+// tải được, kể cả executor tự upload file đó cũng không tải lại được.
+// ---------------------------------------------------------------------------
+test('D13-080: supplier là entity Global — file báo giá private chỉ Admin/Super Admin tải được; viewer và executor (kể cả người đã tự upload) đều 403', async () => {
+  const id = await createSupplier();
+  assert.equal((await uploadFiles(`/api/suppliers/${id}/files`, [{ name: 'bao-gia-mat.pdf' }], { as: executorCookie })).status, 200);
+  const fileId = (await (await call('GET', `/api/suppliers/${id}`, { as: executorCookie })).json()).files[0].id;
+  assert.equal((await call('GET', `/api/files/${fileId}`, { as: viewerCookie })).status, 403);
+  assert.equal((await call('GET', `/api/files/${fileId}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('GET', `/api/files/${fileId}`, { as: targetAdminCookie })).status, 200);
+  assert.equal((await call('GET', `/api/files/${fileId}`)).status, 200); // cookie mặc định = super_admin
+});
