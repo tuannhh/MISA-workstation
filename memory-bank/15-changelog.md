@@ -2353,3 +2353,44 @@ booking của người khác 403, executor DELETE booking CỦA CHÍNH MÌNH v�
 Verify: security 6/6, SQLite 748 pass/8 skip, MySQL 747 pass/1 skip, mapping 145/145 PASS,
 `verify-g0.mjs` PASS, `git diff --check` sạch. **Còn lại: 12 Direct entity + 1 Inherited
 (event_cost) — batch RBAC-EXP-B4..B6 tiếp theo (nhóm tạm thời, chưa chốt với chủ).**
+
+## Wave 1: batch RBAC-EXP-B4 — gắn PolicyEngine cho award/award_participation/event + entity Inherited đầu tiên (event_cost)
+
+Batch 4/6. Trước khi wiring, mở rộng `policy-service.js` để `assertWritable/prepareCreate/
+prepareUpdate/projectRecord` nhận thêm `parentOwnerId` (tương thích ngược, forward thẳng vào
+`policy.canWrite`/`policy.canReadField`) — cần thiết vì đây là lần đầu service layer thật sự gọi
+tới nhánh Inherited (engine đã hỗ trợ sẵn từ G1B.1 nhưng chưa route nào dùng).
+
+- **Phát hiện trước khi viết code:** `award_participations`/`event_costs` chưa từng có cột
+  `created_by` thật (chỉ có `owner_id` gán qua migration trước; `awards`/`events` có sẵn
+  `created_by` từ lúc `CREATE TABLE`) — `prepareCreate()` luôn gán `created_by` không điều kiện,
+  thiếu cột sẽ làm INSERT lỗi ngay lập tức. Fix bằng 2 dòng `ALTER TABLE ... ADD COLUMN
+  created_by INTEGER` **trước khi wiring**, không phải vá lại sau khi gặp lỗi.
+- `award` (`GET/POST/PUT/DELETE /api/awards`, `/api/awards/:id`): GET dùng `projectRecord()` che
+  `cost`; PUT dùng `assertWritable()` theo owner_id; DELETE không điều kiện owner (chỉ Admin/Super
+  Admin).
+- `award_participation`: entity Direct **riêng** — KHÔNG kế thừa owner của award cha (dễ nhầm vì là
+  "con" của award về route path, nhưng D13.4a liệt kê rõ nó thuộc nhóm 14 Direct, có `owner_id`
+  riêng). DELETE **sửa đúng**: trước batch này map nhầm vào quyền `edit` (executor xoá được), nay
+  đúng `delete` (chỉ Admin/Super Admin).
+- `event`: không có field Confidential riêng của chính nó, nhưng `total_cost`/`costs`/`totals` là
+  tổng hợp từ `event_cost` (Inherited) nên vẫn phải che theo `owner_id` của CHÍNH EVENT ở mỗi
+  row — dùng `policy.canReadField()` trực tiếp (không qua `projectRecord()`, vì đây là trường tổng
+  hợp, không phải field thật trên record).
+- `event_cost` (Inherited): `parentOwnerId` = `owner_id` của event cha; POST dùng action `create`
+  cho đúng thực tế (trước batch này map nhầm sang `edit`); DELETE không điều kiện owner (chỉ
+  Admin/Super Admin — `canWrite()` chặn `action==='delete'` ngay từ đầu bất kể Direct/Inherited).
+- `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` + `07-route-catalog.md` (R064-R069, R089-R094 +
+  sửa mô tả masking R062/R063/R087/R088) cập nhật theo mẫu đã dùng ở B2/B3.
+
+Test mới: `integration-awards.test.js` D13-052..058 (award + award_participation: viewer POST
+403, executor POST 200 + owner_id đúng + che cost theo owner, executor PUT người khác 403/của
+mình 200, executor DELETE luôn 403 kể cả của mình, viewer PUT/DELETE 403, admin DELETE 200);
+`integration-events-dashboard.test.js` D13-059..065 (event + event_cost: cùng pattern, riêng
+event_cost — executor tạo cost cho event NGƯỜI KHÁC sở hữu 403, thấy amount/total_cost đúng theo
+chủ sở hữu CỦA EVENT CHA, viewer không bao giờ thấy amount).
+
+Verify: security 6/6, SQLite 754 pass/8 skip, MySQL 761 pass/1 skip, mapping 145/145 PASS,
+`verify-g0.mjs` PASS, `git diff --check` sạch. **Còn lại: 9 Direct entity (sponsorship/agreement/
+work_log/gift/association_fee/supplier_quote/supplier_transaction/supplier_contact/benefit_usage)
+— batch RBAC-EXP-B5..B6 tiếp theo.**

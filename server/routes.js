@@ -1051,8 +1051,10 @@ router.get('/awards', requirePerm('awards', 'view'), (req, res) => {
   rows = rows.map((r) => ({ ...r, deadlineDays: deadlineInfo(r.submission_deadline).days }));
   if (req.query.deadline === 'soon') rows = rows.filter((r) => r.deadlineDays != null && r.deadlineDays >= 0 && r.deadlineDays <= 30);
   if (req.query.deadline === 'overdue') rows = rows.filter((r) => r.deadlineDays != null && r.deadlineDays < 0);
-  maskMoney(req, rows, 'cost');
-  res.json({ rows, total, page, pageSize });
+  // D13 (RBAC v2, batch RBAC-EXP-B4 4/6, entity Direct): che `cost` (Confidential) qua PolicyEngine
+  // thay maskMoney legacy — executor chỉ thấy cost của giải thưởng CHÍNH họ tạo (owner_id).
+  const projected = rows.map((r) => policyService.projectRecord({ principal: req.principal, entity: 'award', module: 'awards', record: r }));
+  res.json({ rows: projected, total, page, pageSize });
 });
 
 router.get('/awards/:id', requirePerm('awards', 'view'), (req, res) => {
@@ -1061,25 +1063,44 @@ router.get('/awards/:id', requirePerm('awards', 'view'), (req, res) => {
   row.deadlineDays = deadlineInfo(row.submission_deadline).days;
   const participations = db.prepare('SELECT * FROM award_participations WHERE award_id=? ORDER BY year DESC, id DESC').all(row.id);
   const attachments = db.prepare(`SELECT id, original_name, mime, kind FROM attachments WHERE owner_type='award' AND owner_id=? ORDER BY id`).all(row.id);
-  if (!canMoney(req)) { maskMoney(req, row, 'cost'); maskMoney(req, participations, 'budget'); }
-  res.json({ record: row, participations, attachments, caretakers: getCaretakers('award', row.id) });
+  const projectedRow = policyService.projectRecord({ principal: req.principal, entity: 'award', module: 'awards', record: row });
+  const projectedParts = participations.map((p) => policyService.projectRecord({ principal: req.principal, entity: 'award_participation', module: 'award_participations', record: p }));
+  res.json({ record: projectedRow, participations: projectedParts, attachments, caretakers: getCaretakers('award', row.id) });
 });
 
-router.post('/awards', requirePerm('awards', 'create'), (req, res) => {
-  const data = pick(req.body, AW_COLS);
-  data.created_by = req.session.user.id;
+router.post('/awards', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'award', input: pick(req.body, AW_COLS) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên awards.');
+    throw err;
+  }
   const r = buildInsert('awards', data);
   syncAssignments('award', r.lastInsertRowid, req.body.caretaker_ids);
   logEdit(req, 'CREATE', 'award', r.lastInsertRowid, req.body.name);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/awards/:id', requirePerm('awards', 'edit'), (req, res) => {
+router.put('/awards/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM awards WHERE id=?').get(req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'award', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên awards.');
+    throw err;
+  }
   buildUpdate('awards', req.params.id, pick(req.body, AW_COLS));
   syncAssignments('award', Number(req.params.id), req.body.caretaker_ids);
   logEdit(req, 'EDIT', 'award', req.params.id, req.body.name);
   res.json({ ok: true });
 });
-router.delete('/awards/:id', requirePerm('awards', 'delete'), (req, res) => {
+router.delete('/awards/:id', (req, res) => {
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'award', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên awards.');
+    throw err;
+  }
   const atts = db.prepare(`SELECT filename FROM attachments WHERE owner_type='award' AND owner_id=?`).all(req.params.id);
   for (const a of atts) { try { fs.unlinkSync(path.join(UPLOAD_DIR, a.filename)); } catch {} }
   db.prepare(`DELETE FROM attachments WHERE owner_type='award' AND owner_id=?`).run(req.params.id);
@@ -1088,18 +1109,41 @@ router.delete('/awards/:id', requirePerm('awards', 'delete'), (req, res) => {
   res.json({ ok: true });
 });
 
-// Hồ sơ tham gia theo năm
-router.post('/awards/:id/participations', requirePerm('awards', 'create'), (req, res) => {
-  const data = pick(req.body, PART_COLS); data.award_id = req.params.id;
+// Hồ sơ tham gia theo năm — award_participation cũng là entity Direct riêng (owner_id của chính
+// nó, KHÔNG kế thừa owner của award cha — D13.4a liệt kê rõ trong nhóm 14 Direct)
+router.post('/awards/:id/participations', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'award_participation', input: pick(req.body, PART_COLS) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên awards.');
+    throw err;
+  }
+  data.award_id = req.params.id;
   const r = buildInsert('award_participations', data);
   logEdit(req, 'CREATE', 'award_participation', r.lastInsertRowid, `Năm ${req.body.year}`);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/awards/:id/participations/:pid', requirePerm('awards', 'edit'), (req, res) => {
+router.put('/awards/:id/participations/:pid', (req, res) => {
+  const existing = db.prepare('SELECT * FROM award_participations WHERE id=? AND award_id=?').get(req.params.pid, req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'award_participation', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên awards.');
+    throw err;
+  }
   buildUpdate('award_participations', req.params.pid, pick(req.body, PART_COLS));
   res.json({ ok: true });
 });
-router.delete('/awards/:id/participations/:pid', requirePerm('awards', 'edit'), (req, res) => {
+router.delete('/awards/:id/participations/:pid', (req, res) => {
+  // D13.1: xoá LUÔN chỉ Admin/Super Admin, kể cả award_participation của chính executor tạo —
+  // trước batch này map nhầm vào quyền 'edit' (executor xoá được), nay sửa đúng bằng 'delete'.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'award_participation', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên awards.');
+    throw err;
+  }
   db.prepare('DELETE FROM award_participations WHERE id=? AND award_id=?').run(req.params.pid, req.params.id);
   res.json({ ok: true });
 });
@@ -1264,8 +1308,13 @@ router.get('/events', requirePerm('events', 'view'), (req, res) => {
       (SELECT COALESCE(SUM(amount),0) FROM event_costs ec WHERE ec.event_id=e.id) AS total_cost
     FROM events e LEFT JOIN organizations o ON o.id=e.organizer_org_id
     ${where} ORDER BY (e.start_time IS NULL), e.start_time DESC LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
-  rows = rows.map((r) => ({ ...r, total_cost: Number(r.total_cost), daysToStart: deadlineInfo(r.start_time).days }));
-  maskMoney(req, rows, 'total_cost');
+  // D13 (RBAC v2, batch RBAC-EXP-B4): `event` không có field Confidential riêng, nhưng
+  // `total_cost` là tổng hợp từ event_costs (Inherited — Confidential `amount`) nên vẫn phải che
+  // theo đúng chủ sở hữu CỦA EVENT CHA (parentOwnerId=owner_id của chính row này).
+  rows = rows.map((r) => {
+    const canSeeCost = policy.canReadField({ principal: req.principal, entity: 'event_cost', field: 'amount', parentOwnerId: r.owner_id });
+    return { ...r, total_cost: canSeeCost ? Number(r.total_cost) : rbac.MASK, daysToStart: deadlineInfo(r.start_time).days };
+  });
   res.json({ rows, total, page, pageSize });
 });
 
@@ -1274,45 +1323,91 @@ router.get('/events/:id', requirePerm('events', 'view'), (req, res) => {
   if (!row) return res.status(404).json({ error: 'Không tìm thấy' });
   row.daysToStart = deadlineInfo(row.start_time).days;
   const costRows = db.prepare(`SELECT ec.*, s.name AS supplier_name FROM event_costs ec LEFT JOIN suppliers s ON s.id=ec.supplier_id WHERE ec.event_id=? ORDER BY ec.id`).all(row.id);
+  const canSeeCost = policy.canReadField({ principal: req.principal, entity: 'event_cost', field: 'amount', parentOwnerId: row.owner_id });
   const costs = { sponsor: [], organization: [], media: [] };
   const totals = { sponsor: 0, organization: 0, media: 0, grand: 0 };
-  for (const c of costRows) { (costs[c.category] || (costs[c.category] = [])).push(c); totals[c.category] = (totals[c.category] || 0) + (c.amount || 0); totals.grand += (c.amount || 0); }
-  const attachments = db.prepare(`SELECT id, original_name, mime, kind FROM attachments WHERE owner_type='event' AND owner_id=? ORDER BY id`).all(row.id);
-  if (!canMoney(req)) {
-    Object.values(costs).forEach((arr) => maskMoney(req, arr, 'amount'));
-    ['sponsor', 'organization', 'media', 'grand'].forEach((k) => { totals[k] = rbac.MASK; });
+  for (const c of costRows) {
+    (costs[c.category] || (costs[c.category] = [])).push(canSeeCost ? c : { ...c, amount: rbac.MASK });
+    totals[c.category] = (totals[c.category] || 0) + (c.amount || 0);
+    totals.grand += (c.amount || 0);
   }
+  if (!canSeeCost) { ['sponsor', 'organization', 'media', 'grand'].forEach((k) => { totals[k] = rbac.MASK; }); }
+  const attachments = db.prepare(`SELECT id, original_name, mime, kind FROM attachments WHERE owner_type='event' AND owner_id=? ORDER BY id`).all(row.id);
   res.json({ record: row, costs, totals, attachments, caretakers: getCaretakers('event', row.id) });
 });
 
-router.post('/events', requirePerm('events', 'create'), (req, res) => {
-  const data = pick(req.body, EVENT_COLS); jsonField(data, 'image_links'); jsonField(data, 'video_links');
-  data.created_by = req.session.user.id;
+router.post('/events', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'event', input: pick(req.body, EVENT_COLS) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên events.');
+    throw err;
+  }
+  jsonField(data, 'image_links'); jsonField(data, 'video_links');
   const r = buildInsert('events', data);
   syncAssignments('event', r.lastInsertRowid, req.body.caretaker_ids);
   logEdit(req, 'CREATE', 'event', r.lastInsertRowid, req.body.name); res.json({ id: r.lastInsertRowid });
 });
-router.put('/events/:id', requirePerm('events', 'edit'), (req, res) => {
+router.put('/events/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM events WHERE id=?').get(req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'event', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên events.');
+    throw err;
+  }
   const data = pick(req.body, EVENT_COLS); jsonField(data, 'image_links'); jsonField(data, 'video_links');
   buildUpdate('events', req.params.id, data);
   syncAssignments('event', Number(req.params.id), req.body.caretaker_ids);
   logEdit(req, 'EDIT', 'event', req.params.id, req.body.name); res.json({ ok: true });
 });
-router.delete('/events/:id', requirePerm('events', 'delete'), (req, res) => {
+router.delete('/events/:id', (req, res) => {
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'event', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên events.');
+    throw err;
+  }
   const atts = db.prepare(`SELECT filename FROM attachments WHERE owner_type='event' AND owner_id=?`).all(req.params.id);
   for (const a of atts) { try { fs.unlinkSync(path.join(UPLOAD_DIR, a.filename)); } catch {} }
   db.prepare(`DELETE FROM attachments WHERE owner_type='event' AND owner_id=?`).run(req.params.id);
   db.prepare('DELETE FROM events WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'event', req.params.id); res.json({ ok: true });
 });
-router.post('/events/:id/costs', requirePerm('events', 'edit'), (req, res) => {
-  const data = pick(req.body, EC_COLS); data.event_id = req.params.id;
+// event_cost là entity Inherited (D13.4a): không có owner_id riêng, chủ sở hữu = owner_id của
+// event cha, truyền vào PolicyEngine qua parentOwnerId thay vì record.owner_id.
+router.post('/events/:id/costs', (req, res) => {
+  const event = db.prepare('SELECT owner_id FROM events WHERE id=?').get(req.params.id);
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'event_cost', input: pick(req.body, EC_COLS), parentOwnerId: event ? event.owner_id : undefined });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên events.');
+    throw err;
+  }
+  data.event_id = req.params.id;
   const r = buildInsert('event_costs', data); res.json({ id: r.lastInsertRowid });
 });
-router.put('/events/:id/costs/:cid', requirePerm('events', 'edit'), (req, res) => {
+router.put('/events/:id/costs/:cid', (req, res) => {
+  const cost = db.prepare(`SELECT ec.*, e.owner_id AS event_owner_id FROM event_costs ec JOIN events e ON e.id=ec.event_id WHERE ec.id=? AND ec.event_id=?`).get(req.params.cid, req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'event_cost', action: 'edit', parentOwnerId: cost ? cost.event_owner_id : undefined });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên events.');
+    throw err;
+  }
   buildUpdate('event_costs', req.params.cid, pick(req.body, EC_COLS)); res.json({ ok: true });
 });
-router.delete('/events/:id/costs/:cid', requirePerm('events', 'edit'), (req, res) => {
+router.delete('/events/:id/costs/:cid', (req, res) => {
+  // Xoá LUÔN chỉ Admin/Super Admin — canWrite() chặn action='delete' ngay từ đầu bất kể entity
+  // Direct hay Inherited, nên không cần tra parentOwnerId cho nhánh xoá.
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'event_cost', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên events.');
+    throw err;
+  }
   db.prepare('DELETE FROM event_costs WHERE id=? AND event_id=?').run(req.params.cid, req.params.id); res.json({ ok: true });
 });
 router.post('/events/:id/files', requirePerm('events', 'edit'), upload.array('files', 10), (req, res) => {

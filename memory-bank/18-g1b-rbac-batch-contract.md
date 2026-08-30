@@ -502,6 +502,74 @@ Exit criteria: full regression (test:security 6/6, sqlite 748/8, mysql 748/1, ve
 Expected commit range/count: 1 commit.
 ```
 
+## Batch RBAC-EXP-B4 (2026-08-30)
+
+```md
+Batch-ID: RBAC-EXP-B4
+Goal: batch 4/6 -- gan PolicyEngine cho 2 entity Direct (award, award_participation) + 1 entity
+      Direct khac (event) + 1 entity Inherited (event_cost, ke thua owner_id cua event cha qua
+      parentOwnerId -- lan dau service layer thuc su xai nhanh Inherited da co san trong engine tu
+      G1B.1 nhung chua tung duoc policy-service.js/routes.js goi toi).
+In scope: (a) `policy-service.js`: mo rong `assertWritable/prepareCreate/prepareUpdate/
+      projectRecord` nhan them tham so `parentOwnerId` (optional, forward thang vao
+      `policy.canWrite`/`policy.canReadField`) -- thay doi tuong thich nguoc, khong anh huong
+      entity Direct/Global da wiring truoc do. (b) Schema: `award_participations`/`event_costs`
+      CHUA TUNG co cot `created_by` that (chi duoc gan `owner_id` qua migration truoc, awards/
+      events co san `created_by` tu luc CREATE TABLE) -- them `ALTER TABLE ... ADD COLUMN
+      created_by INTEGER` cho 2 bang nay (KHONG them `owner_id` cho event_costs -- Inherited,
+      khong tu co chu so huu rieng). (c) `award` (`GET/POST/PUT/DELETE /api/awards`,`/api/
+      awards/:id`): GET dung `projectRecord()` che `cost` (Confidential); POST dung
+      `prepareCreate()`; PUT dung `assertWritable()` theo owner_id; DELETE khong dieu kien owner
+      (chi Admin/Super Admin). (d) `award_participation`: entity Direct RIENG (KHONG ke thua owner
+      cua award cha -- D13.4a liet ke rieng trong nhom 14 Direct), CRUD tuong tu award; DELETE SUA
+      DUNG tu map nham 'edit' (executor xoa duoc) sang 'delete' that (chi Admin/Super Admin). (e)
+      `event` (`GET/POST/PUT/DELETE /api/events`,`/api/events/:id`): khong co field Confidential
+      rieng cua chinh no nhung `total_cost`/`costs`/`totals` la tong hop tu event_costs (Inherited)
+      nen van phai che theo `owner_id` cua CHINH EVENT o moi row -- dung `policy.canReadField()`
+      truc tiep (khong qua `projectRecord()` vi day la truong tong hop, khong phai field tren
+      chinh record). (f) `event_cost` (`POST/PUT/DELETE /api/events/:id/costs`(`/:cid`)): Inherited
+      -- tra ve `owner_id` cua event cha lam `parentOwnerId`; POST dung action `create` cho dung
+      thuc te (truoc batch nay map nham sang 'edit'); DELETE khong dieu kien owner (chi Admin/
+      Super Admin, canWrite() chan action='delete' ngay tu dau bat ke Direct/Inherited).
+      `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` them 12 route + `07-route-catalog.md`
+      (R064-R069, R089-R094 va sua mo ta masking cua R062/R063/R087/R088) cap nhat theo mau da
+      dung.
+Out of scope: 8 Direct entity con lai (sponsorship/agreement/work_log/gift/association_fee/
+      supplier_quote/supplier_transaction/supplier_contact/benefit_usage -- 9 thuc ra) -- batch
+      RBAC-EXP-B5..B6 (nhom tam thoi, chua chot voi chu).
+Behavior mode: TARGET-CHANGE tiep tuc dung mau owner_id-gate cua Direct (B3), lan dau ap dung cho
+      Inherited that qua service layer (truoc chi co trong engine/unit test, chua co route nao
+      goi that).
+Risk hotspots: (1) `prepareCreate()` luon gan `created_by` khong dieu kien -- neu thieu cot se lam
+      INSERT loi ngay lap tuc (khong phai loi tham lang) -- da phat hien truoc khi viet code qua
+      doc schema (award_participations/event_costs thieu created_by that), fix bang migration
+      TRUOC khi wiring, khong phai vua lam vua vaTM; (2) `event`/`event_cost` la truong hop DAU
+      TIEN can phan biet "field Confidential tren CHINH record" (khong co, vi event khong co field
+      mat) voi "truong tong hop tu bang con Inherited" (total_cost/costs/totals) -- neu dung
+      `projectRecord()` cho ca object `row` cua event se KHONG che duoc total_cost (vi no khong
+      phai field that trong `record`, ma la gia tri tinh rieng) -- da tranh bang cach goi
+      `policy.canReadField()` truc tiep voi `parentOwnerId` cho rieng phan cost, KHONG boc toan bo
+      event row qua projectRecord (khong can thiet, event khong co field mat nao); (3)
+      `award_participation` la Direct RIENG khong phai Inherited tu award -- de nham thanh Inherited
+      (ke thua owner cua award cha) vi no la "con" cua award ve mat UI/route path, nhung D13.4a da
+      liet ke ro no thuoc nhom 14 Direct (co owner_id rieng qua migration) -- xac nhan lai bang
+      D13-057 (owner_id cua participation la CHINH executor tao, khong phai owner cua award cha).
+Required tests: `integration-awards.test.js` D13-052..058 (award: viewer POST 403, executor POST
+      200 + owner_id dung + che cost theo owner, executor PUT nguoi khac 403/cua minh 200, executor
+      DELETE luon 403 ke ca cua minh, viewer PUT/DELETE 403; award_participation: executor POST 200
+      + owner_id dung rieng no KHONG phai cua award cha, executor DELETE luon 403, admin DELETE
+      200); `integration-events-dashboard.test.js` D13-059..065 (event: viewer POST 403, executor
+      POST 200 + owner_id dung, executor PUT nguoi khac 403/cua minh 200, executor DELETE luon 403,
+      viewer PUT/DELETE 403; event_cost Inherited: executor tao cost cho event MINH so huu 200,
+      cho event NGUOI KHAC so huu 403, executor thay amount/total_cost tren event minh so huu KHONG
+      thay tren event nguoi khac, viewer khong bao gio thay amount, executor DELETE cost luon 403 ke
+      ca tren event minh so huu, admin DELETE 200).
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 754/8 skip, mysql 761/1 skip, mapping
+      145/145, verify-g0.mjs PASS, git diff --check sach) deu xanh.
+Expected commit range/count: 1 commit.
+```
+
 ## Batch RBAC-EXP-B2 (2026-08-30)
 
 ```md

@@ -9,9 +9,12 @@ const isMysql = String(process.env.DB_CLIENT || 'mysql').toLowerCase() === 'mysq
 const dbHarness = require('../test-support/db-harness');
 const { startTestApp } = require('../test-support/app-harness');
 const { createResourceStack } = require('../test-support/resource-stack');
+const rbac = require('../rbac');
 
 let baseUrl;
 let cookie;
+let viewerCookie; // D13 target role
+let executorCookie; // D13 target role
 let fixtures;
 const resources = createResourceStack();
 
@@ -33,6 +36,10 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `events_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
+  const viewer = fixtures.createUser('viewer', { username: `events_viewer_${Date.now()}` });
+  viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const executor = fixtures.createUser('executor', { username: `events_executor_${Date.now()}` });
+  executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
 });
 
 after(async () => {
@@ -273,6 +280,73 @@ test('R096 invalid CHARACTERIZATION: event_id không tồn tại cũng trả 400
 });
 test('R096 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/events/1/remind', { auth: false })).status, 401);
+});
+
+// ---------------------------------------------------------------------------
+// D13-059..065 — batch RBAC-EXP-B4 (1/6 entity Inherited — event_cost, + entity Direct event):
+// event tự sở hữu owner_id (Direct); event_cost KHÔNG có owner_id riêng, kế thừa owner_id của
+// event cha qua parentOwnerId (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b4)
+// ---------------------------------------------------------------------------
+test('D13-059: viewer tạo event trả 403', async () => {
+  const res = await call('POST', '/api/events', { body: { name: 'x' }, as: viewerCookie });
+  assert.equal(res.status, 403);
+});
+test('D13-060: executor tạo event trả 200, owner_id = chính executor đó', async () => {
+  const { db } = require('../db');
+  const myId = (await (await call('POST', '/api/events', { body: { name: 'Của executor' }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM events WHERE id=?').get(myId);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'events_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+});
+test('D13-061: executor PUT event của người khác trả 403; PUT event mình sở hữu trả 200', async () => {
+  const myId = (await (await call('POST', '/api/events', { body: { name: 'Trước sửa' }, as: executorCookie })).json()).id;
+  assert.equal((await call('PUT', `/api/events/${myId}`, { body: { name: 'Executor tự sửa' }, as: executorCookie })).status, 200);
+  const othersId = await createEvent({ name: 'Của người khác' });
+  assert.equal((await call('PUT', `/api/events/${othersId}`, { body: { name: 'x' }, as: executorCookie })).status, 403);
+});
+test('D13-062: executor DELETE event (kể cả của chính mình) luôn 403; viewer PUT/DELETE cũng 403', async () => {
+  const myId = (await (await call('POST', '/api/events', { body: { name: 'Của executor để xoá' }, as: executorCookie })).json()).id;
+  assert.equal((await call('DELETE', `/api/events/${myId}`, { as: executorCookie })).status, 403);
+  const id = await createEvent();
+  assert.equal((await call('PUT', `/api/events/${id}`, { body: { name: 'x' }, as: viewerCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/events/${id}`, { as: viewerCookie })).status, 403);
+});
+test('D13-063: event_cost kế thừa owner_id CỦA EVENT CHA — executor tạo cost cho event MÌNH sở hữu trả 200, tạo cho event NGƯỜI KHÁC sở hữu trả 403', async () => {
+  const myEventId = (await (await call('POST', '/api/events', { body: { name: 'Event của executor cho cost' }, as: executorCookie })).json()).id;
+  const ok = await call('POST', `/api/events/${myEventId}/costs`, { body: { category: 'media', amount: 100 }, as: executorCookie });
+  assert.equal(ok.status, 200);
+  const othersEventId = await createEvent({ name: 'Event của người khác cho cost' });
+  const denied = await call('POST', `/api/events/${othersEventId}/costs`, { body: { category: 'media', amount: 100 }, as: executorCookie });
+  assert.equal(denied.status, 403);
+});
+test('D13-064: executor thấy amount/total_cost trên event mình sở hữu, KHÔNG thấy trên event người khác sở hữu; viewer không bao giờ thấy amount', async () => {
+  const myEventId = (await (await call('POST', '/api/events', { body: { name: 'Event executor xem cost' }, as: executorCookie })).json()).id;
+  await call('POST', `/api/events/${myEventId}/costs`, { body: { category: 'media', amount: 500000 }, as: executorCookie });
+  const mine = await (await call('GET', `/api/events/${myEventId}`, { as: executorCookie })).json();
+  assert.equal(typeof mine.totals.grand, 'number');
+  assert.equal(mine.costs.media[0].amount, 500000);
+
+  const othersName = `Event người khác xem cost ${Date.now()}`;
+  const othersEventId = await createEvent({ name: othersName });
+  await call('POST', `/api/events/${othersEventId}/costs`, { body: { category: 'media', amount: 700000 } });
+  const theirs = await (await call('GET', `/api/events/${othersEventId}`, { as: executorCookie })).json();
+  assert.equal(theirs.totals.grand, rbac.MASK);
+  assert.equal(theirs.costs.media[0].amount, rbac.MASK);
+
+  const myRow = (await (await call('GET', `/api/events?search=${encodeURIComponent('Event executor xem cost')}`, { as: executorCookie })).json()).rows.find((r) => r.id === myEventId);
+  const theirRow = (await (await call('GET', `/api/events?search=${encodeURIComponent(othersName)}`, { as: executorCookie })).json()).rows.find((r) => r.id === othersEventId);
+  assert.equal(typeof myRow.total_cost, 'number');
+  assert.equal(theirRow.total_cost, rbac.MASK);
+
+  const viewerView = await (await call('GET', `/api/events/${myEventId}`, { as: viewerCookie })).json();
+  assert.equal(viewerView.totals.grand, rbac.MASK);
+});
+test('D13-065: executor DELETE event_cost (kể cả trên event mình sở hữu) luôn 403; admin xoá 200', async () => {
+  const myEventId = (await (await call('POST', '/api/events', { body: { name: 'Event executor xoá cost' }, as: executorCookie })).json()).id;
+  const cid = (await (await call('POST', `/api/events/${myEventId}/costs`, { body: { category: 'media', amount: 1 }, as: executorCookie })).json()).id;
+  assert.equal((await call('DELETE', `/api/events/${myEventId}/costs/${cid}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/events/${myEventId}/costs/${cid}`)).status, 200);
 });
 
 // ---------------------------------------------------------------------------

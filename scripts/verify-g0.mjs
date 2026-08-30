@@ -127,6 +127,21 @@ const PILOT_INLINE_PERM_ROUTES = {
   'POST /api/bookings': { module: 'partners', action: 'create' },
   'PUT /api/bookings/:id': { module: 'partners', action: 'edit' },
   'DELETE /api/bookings/:id': { module: 'partners', action: 'delete' },
+  // D13 batch RBAC-EXP-B4 (2/6 entity Direct — award/award_participation — + 1 entity Inherited —
+  // event_cost, kế thừa owner_id của event cha qua parentOwnerId) — PolicyEngine không điều kiện.
+  'POST /api/awards': { module: 'awards', action: 'create' },
+  'PUT /api/awards/:id': { module: 'awards', action: 'edit' },
+  'DELETE /api/awards/:id': { module: 'awards', action: 'delete' },
+  'POST /api/awards/:id/participations': { module: 'awards', action: 'create' },
+  'PUT /api/awards/:id/participations/:pid': { module: 'awards', action: 'edit' },
+  // truoc batch nay map nham vao 'edit' (executor xoa duoc) -- sua dung 'delete' (Admin/Super Admin).
+  'DELETE /api/awards/:id/participations/:pid': { module: 'awards', action: 'delete' },
+  'POST /api/events': { module: 'events', action: 'create' },
+  'PUT /api/events/:id': { module: 'events', action: 'edit' },
+  'DELETE /api/events/:id': { module: 'events', action: 'delete' },
+  'POST /api/events/:id/costs': { module: 'events', action: 'create' },
+  'PUT /api/events/:id/costs/:cid': { module: 'events', action: 'edit' },
+  'DELETE /api/events/:id/costs/:cid': { module: 'events', action: 'delete' },
 };
 
 function sourceRoutes() {

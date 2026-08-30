@@ -13,11 +13,11 @@ function ownerColumn(entity) { return entity === 'gift' ? 'responsible_user_id' 
 
 function createPolicyService({ visibilityStore }) {
   function forbidIf(condition, reason) { if (condition) throw new PolicyForbiddenError(reason); }
-  function assertWritable({ principal, entity, action, record }) {
-    forbidIf(!policy.canWrite({ principal, entity, action, record }), 'ACTION_DENIED');
+  function assertWritable({ principal, entity, action, record, parentOwnerId }) {
+    forbidIf(!policy.canWrite({ principal, entity, action, record, parentOwnerId }), 'ACTION_DENIED');
   }
-  function prepareCreate({ principal, entity, input }) {
-    assertWritable({ principal, entity, action: 'create' });
+  function prepareCreate({ principal, entity, input, parentOwnerId }) {
+    assertWritable({ principal, entity, action: 'create', parentOwnerId });
     const out = { ...(input || {}) };
     const owner = ownerColumn(entity);
     // Provenance and ownership are server-derived, never accepted from client payload.
@@ -27,15 +27,15 @@ function createPolicyService({ visibilityStore }) {
     if (policy.isDirectEntity(entity)) out[owner] = principal.id;
     return out;
   }
-  function prepareUpdate({ principal, entity, record, input }) {
-    assertWritable({ principal, entity, action: 'edit', record });
+  function prepareUpdate({ principal, entity, record, input, parentOwnerId }) {
+    assertWritable({ principal, entity, action: 'edit', record, parentOwnerId });
     const out = { ...(input || {}) };
     const owner = ownerColumn(entity);
     forbidIf(Object.hasOwn(out, 'created_by'), 'CREATED_BY_IMMUTABLE');
     if (Object.hasOwn(out, owner)) forbidIf(!policy.isPrivileged(principal), 'OWNER_TRANSFER_ADMIN_ONLY');
     return out;
   }
-  function projectRecord({ principal, entity, module, record }) {
+  function projectRecord({ principal, entity, module, record, parentOwnerId }) {
     const output = {};
     for (const [field, value] of Object.entries(record || {})) {
       // undefined = field không nằm trong allowlist cấu hình được (chưa có visibility slice
@@ -43,7 +43,7 @@ function createPolicyService({ visibilityStore }) {
       // hình", để PolicyEngine áp mặc định theo classification_tier (D13.2b).
       let isPublic;
       try { isPublic = visibilityStore?.isPublic(module, field); } catch { isPublic = undefined; }
-      if (policy.canReadField({ principal, entity, field, record, isPublic })) output[field] = value;
+      if (policy.canReadField({ principal, entity, field, record, isPublic, parentOwnerId })) output[field] = value;
     }
     return output;
   }

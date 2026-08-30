@@ -11,6 +11,8 @@ const { createResourceStack } = require('../test-support/resource-stack');
 
 let baseUrl;
 let cookie;
+let viewerCookie; // D13 target role
+let executorCookie; // D13 target role
 let fixtures;
 const resources = createResourceStack();
 
@@ -32,6 +34,10 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `awards_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
+  const viewer = fixtures.createUser('viewer', { username: `awards_viewer_${Date.now()}` });
+  viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const executor = fixtures.createUser('executor', { username: `awards_executor_${Date.now()}` });
+  executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
 });
 
 after(async () => {
@@ -254,4 +260,60 @@ test('R071 not-found: award_id không tồn tại trả 404', async () => {
 });
 test('R071 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/awards/1/remind', { auth: false })).status, 401);
+});
+
+// ---------------------------------------------------------------------------
+// D13-052..058 — batch RBAC-EXP-B4 (2/6 entity Direct — award/award_participation): award.cost là
+// Confidential — che theo owner-bypass; executor chỉ sửa được award/participation CHÍNH mình sở
+// hữu, không bao giờ xoá được (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b4)
+// ---------------------------------------------------------------------------
+test('D13-052: viewer tạo award trả 403', async () => {
+  const res = await call('POST', '/api/awards', { body: { name: 'x' }, as: viewerCookie });
+  assert.equal(res.status, 403);
+});
+test('D13-053: executor tạo award trả 200, owner_id = chính executor đó; thấy cost trên award mình tạo, không thấy cost award người khác', async () => {
+  const { db } = require('../db');
+  const myId = (await (await call('POST', '/api/awards', { body: { name: 'Của executor', cost: 111 }, as: executorCookie })).json()).id;
+  const row = db.prepare('SELECT owner_id, created_by FROM awards WHERE id=?').get(myId);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'awards_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+  const othersId = await createAward({ name: 'Của người khác', cost: 222 });
+  const mine = await (await call('GET', `/api/awards/${myId}`, { as: executorCookie })).json();
+  assert.equal('cost' in mine.record, true);
+  const theirs = await (await call('GET', `/api/awards/${othersId}`, { as: executorCookie })).json();
+  assert.equal('cost' in theirs.record, false);
+});
+test('D13-054: executor PUT award của người khác trả 403; PUT award mình sở hữu trả 200', async () => {
+  const myId = (await (await call('POST', '/api/awards', { body: { name: 'Trước sửa' }, as: executorCookie })).json()).id;
+  const putOwn = await call('PUT', `/api/awards/${myId}`, { body: { name: 'Executor tự sửa' }, as: executorCookie });
+  assert.equal(putOwn.status, 200);
+  const othersId = await createAward({ name: 'Của người khác 2' });
+  assert.equal((await call('PUT', `/api/awards/${othersId}`, { body: { name: 'x' }, as: executorCookie })).status, 403);
+});
+test('D13-055: executor DELETE award (kể cả của chính mình) luôn 403', async () => {
+  const myId = (await (await call('POST', '/api/awards', { body: { name: 'Của executor để xoá' }, as: executorCookie })).json()).id;
+  assert.equal((await call('DELETE', `/api/awards/${myId}`, { as: executorCookie })).status, 403);
+});
+test('D13-056: viewer PUT/DELETE award đều 403', async () => {
+  const id = await createAward();
+  assert.equal((await call('PUT', `/api/awards/${id}`, { body: { name: 'x' }, as: viewerCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/awards/${id}`, { as: viewerCookie })).status, 403);
+});
+test('D13-057: award_participation là entity Direct riêng — executor tạo participation trả 200, owner_id = chính executor; viewer tạo trả 403', async () => {
+  const id = await createAward();
+  const resViewer = await call('POST', `/api/awards/${id}/participations`, { body: { year: 2026 }, as: viewerCookie });
+  assert.equal(resViewer.status, 403);
+  const pid = (await (await call('POST', `/api/awards/${id}/participations`, { body: { year: 2027 }, as: executorCookie })).json()).id;
+  const { db } = require('../db');
+  const row = db.prepare('SELECT owner_id, created_by FROM award_participations WHERE id=?').get(pid);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'awards_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
+});
+test('D13-058: executor DELETE award_participation (kể cả của chính mình) luôn 403; admin xoá 200', async () => {
+  const id = await createAward();
+  const pid = (await (await call('POST', `/api/awards/${id}/participations`, { body: { year: 2028 }, as: executorCookie })).json()).id;
+  assert.equal((await call('DELETE', `/api/awards/${id}/participations/${pid}`, { as: executorCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/awards/${id}/participations/${pid}`)).status, 200);
 });

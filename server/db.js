@@ -613,6 +613,12 @@ function migrate() {
     add(`ALTER TABLE ${table} ADD COLUMN owner_id INTEGER`);
   }
   add('ALTER TABLE gifts ADD COLUMN responsible_user_id INTEGER');
+  // D13 batch RBAC-EXP-B4: award_participations/event_costs chua tung co created_by that (chi
+  // awards/events co san tu CREATE TABLE ban dau) -- policyService.prepareCreate() luon gan
+  // created_by, thieu cot se lam INSERT loi. event_costs KHONG duoc them owner_id (Inherited,
+  // ke thua owner_id cua event cha, khong tu co chu so huu rieng — D13.4a).
+  add('ALTER TABLE award_participations ADD COLUMN created_by INTEGER');
+  add('ALTER TABLE event_costs ADD COLUMN created_by INTEGER');
   add("ALTER TABLE people ADD COLUMN phone_other TEXT");
   add("ALTER TABLE bookings ADD COLUMN award_id INTEGER");
   add("ALTER TABLE bookings ADD COLUMN event_id INTEGER");
