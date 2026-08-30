@@ -2019,3 +2019,46 @@ KHÔNG còn finding thật nào known-red), `verify-g0.mjs` PASS, `test:verify-g
 `02-decisions.md` §G). **G1B (toàn bộ target-red batch G1B.1-G1B.6) nay đã xong phần "viết test
 target-red + implement N1/N2/F2/F3"** — phần còn thiếu để đóng hẳn G1B.1/G1B.2 là route-wiring
 PolicyEngine cho 24 entity ngoài `person`, chờ owner xác nhận mở rộng pilot theo §G.
+
+## Wave 2: batch W2.1 chuẩn hóa error envelope (phần nền tảng — requestId + code ổn định)
+
+Batch Contract: implement phần đầu của `05-error-contract.md` cho Wave 2 — `message` là field
+canonical, `error` là alias tương thích ngược (luôn `=== message`); thêm `code` ổn định + `requestId`
+cho response lỗi MỚI mà không phá vỡ hợp đồng ngầm hiện tại (frontend đọc `data.error` khắp nơi).
+Không đổi status code của bất kỳ response nào đang tồn tại — chỉ thêm field mới (additive).
+
+- Module mới `server/error-contract.js`: `requestIdMiddleware(req,res,next)` gắn `req.requestId`
+  (`req_<24-hex>`, `crypto.randomBytes`) + header `X-Request-Id` cho MỌI request kể cả thành công;
+  `sendError(req,res,status,code,message,details)` là điểm serialize DUY NHẤT cho response lỗi mới
+  — luôn tự đặt `error = message` (không để từng call site tự gán `error` riêng, tránh lệch giá trị
+  giữa 2 field — đúng lỗi mà Codex re-audit round 2 F3 từng phải sửa ở chính tài liệu đặc tả).
+- `server/app.js`: thêm `requestIdMiddleware` là middleware đầu tiên (trước `express.json`); viết
+  lại global error middleware dùng `sendError()`, phân biệt `multer.MulterError` (400 đúng —
+  `LIMIT_FILE_SIZE`→code `FILE_TOO_LARGE`, các lỗi multer khác→`UPLOAD_ERROR`) khỏi lỗi khác (giữ
+  nguyên 400 + code `UNCAUGHT_ERROR` — xem nợ kỹ thuật bên dưới, KHÔNG đổi thành 500).
+- `server/auth.js`: toàn bộ 7 điểm `res.status(401/403/429/500).json({error:...})` (login sai mật
+  khẩu, rate-limit, session-regenerate lỗi, `me`, `requireAuth`, `requirePerm`) đổi sang
+  `sendError()` với code chuẩn `UNAUTHENTICATED`/`RATE_LIMITED`/`INTERNAL_ERROR`/`FORBIDDEN_MODULE`.
+  Vì `requireAuth`/`requirePerm` là middleware dùng chung bởi ~140/145 route, batch này phủ được
+  phần lớn 401/403 của toàn hệ thống chỉ qua 1 file.
+- `server/routes.js`: 14 điểm `res.status(403)` rải rác (D13 PolicyEngine pilot People Detail +
+  attachment gate — `PolicyForbiddenError`, `rbac.can()` inline, kiểm tra nhóm mật `iddoc`) đổi sang
+  `sendError()`, phân loại `FORBIDDEN_MODULE` (denial chung) vs `FORBIDDEN_SENSITIVE_GROUP` (giấy tờ
+  tùy thân/dữ liệu mật — đúng ví dụ 2 code trong bảng `05-error-contract.md`).
+- **Nợ kỹ thuật cố ý chưa làm (quyết định có cân nhắc, ghi rõ để không lẫn với bỏ sót):** đặc tả gốc
+  muốn middleware toàn cục trả 500 cho "lỗi khác" ngoài multer, không lộ raw DB error. Khảo sát
+  trước khi code phát hiện: ít nhất 8 route (R004/R007/R031/R045/R064/R089/R092/R047, có thể nhiều
+  hơn không gắn nhãn "(NOT NULL)" trong tên test) dựa hẳn vào lỗi ràng buộc NOT NULL của DB bubble
+  lên đúng middleware này để trả 400 làm cơ chế validation hiện tại — đổi mặc định sang 500 phá vỡ
+  hàng loạt characterization test cùng lúc, và đòi hỏi thêm validation tường minh trước khi chạm DB
+  cho từng route (quy mô ngang đợt sửa F13/F16 trước đây). Đây là việc lớn hơn phạm vi "chuẩn hóa
+  envelope" — để lại làm batch kế tiếp của W2.1, chưa đóng exit criterion "không lộ raw DB error".
+- Test mới: `server/test/unit-error-contract.test.js` (5 test thuần module) + `server/test/
+  integration-error-contract.test.js` (5 test HTTP thật qua `app-harness`) — cả 10 gắn id
+  `BR-ERR-001..010`, thêm vào `gate1-test-mapping.md`.
+
+Verify: `test:security` 6/6, `test:integration:sqlite` 678 pass/8 skip (+10), `test:integration:
+mysql` 685 pass/1 skip (+10), `test:verify-gate1-mapping` PASS (274 mapped rows), `verify-g0.mjs`
+PASS, `test:verify-g0-selftest` 6/6, `git diff --check` sạch. Không route/test cũ nào cần sửa ngoài
+phạm vi đã liệt kê — mọi thay đổi field là additive (`code`/`message`/`requestId` thêm mới, `error`
+giữ nguyên giá trị cũ ký tự-cho-ký tự). Không đổi UI (Codex lane), không đụng RBAC v2 pilot.

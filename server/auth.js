@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { db, audit } = require('./db');
 const rbac = require('./rbac');
 const { createLoginRateLimiter } = require('./login-rate-limiter');
+const { sendError } = require('./error-contract');
 
 const loginRateLimiter = createLoginRateLimiter();
 
@@ -14,19 +15,19 @@ function login(req, res) {
   const username = String((req.body || {}).username || '').trim();
   const password = String((req.body || {}).password || '');
   if (loginRateLimiter.isBlocked(req, username)) {
-    return res.status(429).json({ error: 'Quá nhiều lần đăng nhập sai, vui lòng thử lại sau.' });
+    return sendError(req, res, 429, 'RATE_LIMITED', 'Quá nhiều lần đăng nhập sai, vui lòng thử lại sau.');
   }
   const user = findUser(username);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     loginRateLimiter.recordFailure(req, username);
     audit({ user_id: user?.id, username, action: 'LOGIN_FAILED', detail: 'Sai tài khoản hoặc mật khẩu' });
-    return res.status(401).json({ error: 'Sai tài khoản hoặc mật khẩu.' });
+    return sendError(req, res, 401, 'UNAUTHENTICATED', 'Sai tài khoản hoặc mật khẩu.');
   }
   loginRateLimiter.recordSuccess(req, username);
   // F2-fixation: đổi hẳn session id sau khi xác thực thành công, không tái dùng cookie đã tồn tại
   // trước đó (attacker có thể đã cắm sẵn cookie cho nạn nhân trước khi nạn nhân đăng nhập).
   req.session.regenerate((err) => {
-    if (err) return res.status(500).json({ error: 'Lỗi máy chủ' });
+    if (err) return sendError(req, res, 500, 'INTERNAL_ERROR', 'Lỗi máy chủ');
     req.session.user = { id: user.id, username: user.username, full_name: user.full_name, role: user.role, sensitive_perms: user.sensitive_perms };
     req.principal = req.session.user;
     audit({ user_id: user.id, username: user.username, action: 'LOGIN', detail: 'Đăng nhập thành công' });
@@ -41,7 +42,7 @@ function logout(req, res) {
 }
 
 function me(req, res) {
-  if (!req.session.user) return res.status(401).json({ error: 'Chưa đăng nhập' });
+  if (!req.session.user) return sendError(req, res, 401, 'UNAUTHENTICATED', 'Chưa đăng nhập');
   // làm tươi từ DB (tên/quyền có thể vừa đổi)
   const u = db.prepare('SELECT id, username, full_name, role, sensitive_perms FROM users WHERE id=? AND active=1').get(req.session.user.id);
   if (u) {
@@ -60,7 +61,7 @@ function resolvePrincipal(req) {
 // Bắt buộc đăng nhập
 function requireAuth(req, res, next) {
   const principal = resolvePrincipal(req);
-  if (!principal) return res.status(401).json({ error: 'Chưa đăng nhập' });
+  if (!principal) return sendError(req, res, 401, 'UNAUTHENTICATED', 'Chưa đăng nhập');
   req.principal = principal;
   next();
 }
@@ -69,10 +70,10 @@ function requireAuth(req, res, next) {
 function requirePerm(module, action) {
   return (req, res, next) => {
     const u = resolvePrincipal(req);
-    if (!u) return res.status(401).json({ error: 'Chưa đăng nhập' });
+    if (!u) return sendError(req, res, 401, 'UNAUTHENTICATED', 'Chưa đăng nhập');
     req.principal = u;
     if (!rbac.can(u.role, module, action)) {
-      return res.status(403).json({ error: `Bạn không có quyền ${action} trên ${module}.` });
+      return sendError(req, res, 403, 'FORBIDDEN_MODULE', `Bạn không có quyền ${action} trên ${module}.`);
     }
     next();
   };

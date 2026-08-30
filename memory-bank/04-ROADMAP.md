@@ -191,7 +191,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 
 | # | Task | Evidence Contract |
 |---|---|---|
-| W2.1 | Chuẩn hóa API envelope/schema/error/client dùng chung (`05-error-contract.md`: `message` canonical, `error` alias; xóa `error` khi frontend hết đọc ở Wave 3) | code+test / all / — |
+| W2.1 | Chuẩn hóa API envelope/schema/error/client dùng chung (`05-error-contract.md`: `message` canonical, `error` alias; xóa `error` khi frontend hết đọc ở Wave 3) | code+test / **XONG phần nền tảng — Claude 2026-08-30** / requestId + code ổn định cho 401/403/429/multer; DB-error→500 chưa làm (nợ kỹ thuật, xem execution update) |
 | W2.2 | Tách business/domain khỏi page layout (cần W2.1 chốt trước) | code+test / all / — |
 | W2.3 | **ACCEPTANCE gate F7:** PASS khi đạt SLO tại peak trên topology production-like. **Ngưỡng SLO + peak + topology + ngân sách instance do DevOps MISA chốt (O5→DevOps)** — Claude dựng harness đo + báo cáo, không tự đặt ngưỡng release. Nếu chưa async hóa: mitigation chỉ chấp nhận khi **đo lại vẫn PASS** + owner/DevOps + expiry + rollback. "Có async-plan" ≠ exit | test / — / **PASS bắt buộc, plan-only không đủ** |
 | W2.4 | Nếu W2.3 fail: async repository pilot theo slice; benchmark lại sau mỗi slice; xóa mitigation khi đạt SLO | code+test / — / — |
@@ -199,6 +199,44 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 | W2.6 | **Gemini eval/model migration (O6 duyệt $200):** corpus 60-100 ca tổng hợp, ≥3 repeat/candidate, **hard cap tổng chi phí $200**, threshold quality/schema-validity/latency/cost; canary+rollback; giữ pin `gemini-3.5-flash` nếu candidate không thắng rõ | test / — / cần theo dõi ngân sách $200 |
 
 **Exit gate W2:** shared layer swap được qua contract test; **W2.3 PASS thật** (đo lại, ngưỡng DevOps chốt); W2.5 contract-ready (2 fake provider); W2.6 có kết luận giữ/đổi model trong ngân sách $200.
+
+> **Execution update — 2026-08-30 (W2.1 chuẩn hóa error envelope — phần nền tảng, XONG):** module mới
+> `server/error-contract.js` — `requestIdMiddleware` gắn `req.requestId` (dạng `req_<24-hex>`) +
+> header `X-Request-Id` cho MỌI request (kể cả response thành công); `sendError(req,res,status,code,
+> message,details)` là điểm serialize DUY NHẤT cho response lỗi mới, luôn tự thêm `error=message`
+> (không để mỗi call site tự gán `error` riêng — tránh lệch giá trị giữa 2 field, đúng lỗi Codex
+> re-audit round 2 F3 đã sửa 1 lần ở tài liệu). Đã áp dụng cho **toàn bộ điểm 401/403/429/500 tập
+> trung** — nơi phủ áp đảo đa số 145 route: `server/auth.js` (`requireAuth`/`requirePerm`/`login`/
+> `me` — dùng chung bởi ~140 route qua middleware), 14 điểm `res.status(403)` rải rác trong
+> `server/routes.js` (D13 PolicyEngine pilot People Detail + attachment gate — `PolicyForbiddenError`,
+> `rbac.can()` inline, sensitive-group check). Code chuẩn: `UNAUTHENTICATED` (401), `FORBIDDEN_MODULE`
+> (403 chung), `FORBIDDEN_SENSITIVE_GROUP` (403 riêng cho giấy tờ tùy thân/nhóm mật), `RATE_LIMITED`
+> (429 login), `FILE_TOO_LARGE`/`UPLOAD_ERROR` (400 multer), `UNCAUGHT_ERROR`/`INTERNAL_ERROR` (xem
+> dưới). `server/app.js`: global error middleware viết lại dùng `sendError()`, phân biệt
+> `multer.MulterError` (400 đúng — `LIMIT_FILE_SIZE`→`FILE_TOO_LARGE`, còn lại→`UPLOAD_ERROR`) khỏi
+> lỗi khác (giữ nguyên `UNCAUGHT_ERROR`/400, KHÔNG đổi thành 500 — xem nợ kỹ thuật dưới).
+>
+> **Nợ kỹ thuật cố ý chưa làm trong batch này (đã cân nhắc, không phải bỏ sót):** roadmap gốc yêu
+> cầu middleware toàn cục phân biệt lỗi multer (400 đúng) khỏi lỗi khác (500, không lộ raw DB error
+> ra client). Khảo sát thực tế trước khi code cho thấy **phần lớn route POST/PUT hiện tại dựa vào
+> lỗi ràng buộc NOT NULL của DB bubble lên đúng middleware này để trả 400 làm cơ chế validation**
+> (đặc tả tường minh ở tên test R004/R007/R031/R045/R064/R089/R092/R047 — ít nhất 8 route xác nhận,
+> nhiều route khác cùng cơ chế nhưng không gắn nhãn "(NOT NULL)" trong tên). Đổi mặc định "lỗi khác"
+> từ 400 sang 500 sẽ phá vỡ hàng loạt characterization test đó cùng lúc — đây là việc LỚN HƠN phạm
+> vi "chuẩn hóa envelope" của batch này, đòi hỏi thêm validation tường minh trước khi chạm DB cho
+> từng route (một dạng refactor có quy mô ngang F13/F16 trước đây, không phải 1 chỗ). Ghi nhận làm
+> việc kế tiếp của W2.1 (chưa có batch contract riêng) — KHÔNG đóng exit criterion "không lộ raw DB
+> error" của `05-error-contract.md` ở batch này.
+>
+> Test mới: `server/test/unit-error-contract.test.js` (5 test thuần module — `requestIdMiddleware`
+> id ổn định/khác nhau, `sendError()` shape/details-optional/requestId-undefined an toàn),
+> `server/test/integration-error-contract.test.js` (5 test HTTP thật — 401 login-fail, 401
+> requireAuth, 403 requirePerm, 429 rate-limit, header `X-Request-Id` mọi response). Cả 10 test gắn
+> id `BR-ERR-001..010`. Full regression: security 6/6, SQLite 678/8 skip (+10), MySQL 685/1 skip
+> (+10), mapping 274 rows PASS, `verify-g0.mjs` PASS, `verify-g0-selftest` 6/6, `git diff --check`
+> sạch. Không đổi status code/`error` text của bất kỳ response nào đang tồn tại — mọi thay đổi là
+> ADDITIVE (`code`/`message`/`requestId` thêm vào, `error` giữ nguyên giá trị cũ) nên không có test
+> cũ nào cần sửa ngoài phạm vi đã liệt kê.
 
 ---
 

@@ -13,6 +13,7 @@ const { upload } = require('./uploads');
 const scheduler = require('./scheduler');
 const monitor = require('./monitor');
 const outbound = require('./safe-fetch');
+const { sendError } = require('./error-contract');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -419,7 +420,7 @@ router.get('/people/:id', (req, res) => {
     const idDocCount = allAtts.filter((a) => a.kind === 'id_doc').length;
     return res.json({ record, maskedFields: [], portraits, idDocs, idDocCount, interactions: [], gifts: [], caretakers: [], sensitiveVisible: req.principal.role === 'admin' });
   }
-  if (!rbac.can(req.principal?.role, 'partners', 'view')) return res.status(403).json({ error: 'Bạn không có quyền view trên partners.' });
+  if (!rbac.can(req.principal?.role, 'partners', 'view')) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền view trên partners.');
   const allowed = senGroups(req);
   const { record, maskedFields } = rbac.maskRecord('person', row, allowed);
   const hasSensitive = rbac.SENSITIVE_FIELDS.person.some((f) => row[f]);
@@ -456,11 +457,11 @@ router.put('/people/:id', (req, res) => {
     try {
       policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
     } catch (err) {
-      if (err instanceof PolicyForbiddenError) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
       throw err;
     }
   } else {
-    if (!rbac.can(req.principal?.role, 'partners', 'edit')) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+    if (!rbac.can(req.principal?.role, 'partners', 'edit')) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
     stripDisallowed('person', data, senGroups(req)); // không cho ghi đè trường mật ngoài quyền
   }
   buildUpdate('people', req.params.id, data);
@@ -473,11 +474,11 @@ router.delete('/people/:id', (req, res) => {
     try {
       policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'delete' });
     } catch (err) {
-      if (err instanceof PolicyForbiddenError) return res.status(403).json({ error: 'Bạn không có quyền delete trên partners.' });
+      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
       throw err;
     }
   } else if (!rbac.can(req.principal?.role, 'partners', 'delete')) {
-    return res.status(403).json({ error: 'Bạn không có quyền delete trên partners.' });
+    return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
   }
   // xóa file vật lý của nhân sự
   const atts = db.prepare(`SELECT filename FROM attachments WHERE owner_type='person' AND owner_id=?`).all(req.params.id);
@@ -499,7 +500,7 @@ function personEditGate(req, res, next) {
       policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
       return next();
     } catch (err) {
-      if (err instanceof PolicyForbiddenError) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
       return next(err);
     }
   }
@@ -512,7 +513,7 @@ router.post('/people/:id/attachments', personEditGate, upload.array('files', 5),
   const idDocAllowed = isTarget ? policy.isPrivileged(req.principal) : senGroups(req).has('iddoc');
   if (kind === 'id_doc' && !idDocAllowed) {
     (req.files || []).forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
-    return res.status(403).json({ error: 'Bạn không có quyền tải lên giấy tờ tùy thân (dữ liệu mật).' });
+    return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Bạn không có quyền tải lên giấy tờ tùy thân (dữ liệu mật).');
   }
   const files = req.files || [];
   if (!files.length) return res.status(400).json({ error: 'Không có file nào.' });
@@ -565,17 +566,17 @@ router.delete('/attachments/:aid', (req, res) => {
   const att = db.prepare('SELECT * FROM attachments WHERE id=?').get(req.params.aid);
   if (!att) return res.status(404).json({ error: 'Không tìm thấy' });
   if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
-    if (att.owner_type !== 'person') return res.status(403).json({ error: 'Bạn không có quyền delete file này.' });
+    if (att.owner_type !== 'person') return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete file này.');
     try {
       policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
     } catch (err) {
-      if (err instanceof PolicyForbiddenError) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
+      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
       throw err;
     }
-    if (att.kind === 'id_doc' && !policy.isPrivileged(req.principal)) return res.status(403).json({ error: 'Không đủ quyền' });
+    if (att.kind === 'id_doc' && !policy.isPrivileged(req.principal)) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền');
   } else {
-    if (!rbac.can(req.principal?.role, 'partners', 'edit')) return res.status(403).json({ error: 'Bạn không có quyền edit trên partners.' });
-    if (att.kind === 'id_doc' && !senGroups(req).has('iddoc')) return res.status(403).json({ error: 'Không đủ quyền' });
+    if (!rbac.can(req.principal?.role, 'partners', 'edit')) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    if (att.kind === 'id_doc' && !senGroups(req).has('iddoc')) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền');
   }
   try { fs.unlinkSync(path.join(UPLOAD_DIR, att.filename)); } catch {}
   db.prepare('DELETE FROM attachments WHERE id=?').run(req.params.aid);
@@ -594,10 +595,10 @@ router.get('/files/:id', (req, res) => {
   if (TARGET_RBAC_ROLES.has(req.principal?.role)) {
     const allowed = att.owner_type === 'person'
       && policy.canReadAttachment({ principal: req.principal, kind: att.kind, audienceVisibility: att.audience_visibility });
-    if (!allowed) return res.status(403).json({ error: 'Bạn không có quyền xem file này.' });
+    if (!allowed) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
     if (att.kind === 'id_doc') logEdit(req, 'VIEW_SENSITIVE', 'person', att.owner_id, `Tải/giấy tờ tùy thân: ${att.original_name || att.filename}`);
   } else if (att.kind === 'id_doc') {
-    if (!senGroups(req).has('iddoc')) return res.status(403).json({ error: 'Không đủ quyền xem giấy tờ tùy thân' });
+    if (!senGroups(req).has('iddoc')) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền xem giấy tờ tùy thân');
     logEdit(req, 'VIEW_SENSITIVE', 'person', att.owner_id, `Tải/giấy tờ tùy thân: ${att.original_name || att.filename}`);
   }
   const fp = path.join(UPLOAD_DIR, att.filename);
