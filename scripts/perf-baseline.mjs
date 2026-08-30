@@ -175,14 +175,22 @@ function gitSha() {
 
 async function main() {
   const dbHarness = require(path.join(root, 'server/test-support/db-harness.js'));
+  const { createResourceStack } = require(path.join(root, 'server/test-support/resource-stack.js'));
+  const resources = createResourceStack();
+
+  // Đúng pattern acquire-trước-khi-tạo (server/test/integration-ai.test.js): setupTestDataDir()
+  // PHẢI acquire trước createMysqlTestDb(), để UPLOAD_DIR (server/db.js: DATA_DIR/uploads) trỏ vào
+  // thư mục tạm thay vì data/uploads/ thật của repo — Codex phát hiện bản trước rò 4 file dummy
+  // thật vào đây vì thiếu bước này (quarantine tại data/uploads/.quarantine-perf-baseline-leak/).
+  resources.acquire(dbHarness.setupTestDataDir().teardown);
   const dbName = await dbHarness.createMysqlTestDb();
-  let close = null;
-  let closeDb = null;
+  resources.acquire(() => dbHarness.dropMysqlTestDb(dbName));
+
   try {
-    const { createApp } = require(path.join(root, 'server/app.js'));
     const dbModule = require(path.join(root, 'server/db.js'));
     const { db } = dbModule;
-    closeDb = dbModule.closeDb;
+    resources.acquire(dbModule.closeDb);
+    const { createApp } = require(path.join(root, 'server/app.js'));
     const fixtures = require(path.join(root, 'server/test-support/fixtures.js'));
     const { startTestApp } = require(path.join(root, 'server/test-support/app-harness.js'));
 
@@ -195,7 +203,7 @@ async function main() {
 
     const user = fixtures.createPrivilegedUser({ username: `perf_baseline_${Date.now()}` });
     const started = await startTestApp(createApp());
-    close = started.close;
+    resources.acquire(started.close);
     const { baseUrl } = started;
     const { cookie } = await fixtures.login(baseUrl, user);
 
@@ -285,12 +293,10 @@ async function main() {
     fs.writeFileSync(outPath, JSON.stringify(artifact, null, 2));
     console.log(`\nArtifact: ${path.relative(root, outPath)}`);
   } finally {
-    if (close) await close();
-    // Không gọi closeDb() thì worker thread MySQL (mysql-sync.js) vẫn giữ 1 connection sống,
-    // khiến process không bao giờ tự thoát dù mọi cleanup khác đã xong (phát hiện qua chạy thật:
-    // process treo vô thời hạn ở trạng thái sleep sau khi đã ghi artifact + drop DB thành công).
-    if (closeDb) await Promise.resolve(closeDb()).catch(() => {});
-    await dbHarness.dropMysqlTestDb(dbName);
+    // resources.cleanupAll() dọn đúng thứ tự LIFO (đóng HTTP -> đóng worker MySQL -> drop DB tạm
+    // -> dọn DATA_DIR) và KHÔNG nuốt lỗi (Codex re-audit): nếu bất kỳ bước dọn nào thất bại,
+    // AggregateError ném ra để script exit khác 0 thay vì báo "đã dọn sạch" giả.
+    await resources.cleanupAll();
   }
 }
 
