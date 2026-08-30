@@ -2325,3 +2325,31 @@ nhưng DELETE 403, admin (target role D13) PUT+DELETE đều 200.
 Verify: security 6/6, SQLite 733 pass/8 skip (+10), MySQL 740 pass/1 skip (+10... trừ 1 test xoá),
 mapping 145/145 route PASS, `verify-g0.mjs` PASS, `git diff --check` sạch. **Còn lại: 14 Direct
 entity + 1 Inherited (event_cost) — batch RBAC-EXP-B3..B6 tiếp theo.**
+
+## Wave 1: batch RBAC-EXP-B3 — gắn PolicyEngine cho 2 entity Direct đầu tiên (booking/interaction)
+
+Batch 3/6, khác pattern Global của B2: mỗi record có `owner_id` riêng, executor CHỈ sửa được bản
+ghi CHÍNH họ tạo, KHÔNG BAO GIỜ xoá được (kể cả chủ sở hữu). Trước khi làm, chủ đặt câu hỏi ngược
+lại nghĩa "executor sửa được bất kể ai tạo" (tưởng lầm sang cho tất cả entity) — xác nhận lại qua
+`AskUserQuestion`: Global (organization/supplier/important_date, batch B2) giữ nguyên như cũ,
+Direct (batch này) đúng là phải gate `owner_id` như thiết kế ban đầu.
+
+- `interaction` (`POST /api/interactions`): chỉ có create/view (log lịch sử, không PUT/DELETE) —
+  đổi `pick()` thô sang `policyService.prepareCreate()`, tự gán `owner_id`/`created_by` = principal
+  hiện tại (trước batch này `owner_id` luôn NULL).
+- `booking` (`GET/POST/PUT/DELETE /api/bookings`, `/api/bookings/:id`): GET dùng `projectRecord()`
+  che `amount` nếu không phải chủ sở hữu/không privileged; POST dùng `prepareCreate()`; PUT dùng
+  `assertWritable()` — chỉ qua khi `owner_id` = chính principal HOẶC Admin/Super Admin; DELETE
+  không điều kiện owner — Direct entity thì xoá CHỈ dành cho Admin/Super Admin, kể cả chủ sở hữu
+  cũng không xoá được (siết chặt hơn hành vi cũ — trước batch này DELETE chỉ gate theo role, không
+  gate theo owner).
+- `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` + `07-route-catalog.md` (R045/R047/R048/R049)
+  cập nhật mô tả auth theo đúng mẫu inline-check đã dùng ở B2.
+
+Test mới: D13-046..047 (`interaction`: viewer POST 403, executor POST 200 + owner_id/created_by
+đúng); D13-048..051 (`booking`: viewer POST 403, executor POST 200 + owner_id đúng, executor PUT
+booking của người khác 403, executor DELETE booking CỦA CHÍNH MÌNH vẫn 403, admin DELETE 200).
+
+Verify: security 6/6, SQLite 748 pass/8 skip, MySQL 747 pass/1 skip, mapping 145/145 PASS,
+`verify-g0.mjs` PASS, `git diff --check` sạch. **Còn lại: 12 Direct entity + 1 Inherited
+(event_cost) — batch RBAC-EXP-B4..B6 tiếp theo (nhóm tạm thời, chưa chốt với chủ).**

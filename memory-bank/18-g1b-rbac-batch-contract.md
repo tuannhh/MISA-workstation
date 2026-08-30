@@ -456,6 +456,52 @@ Exit criteria: full regression (test:security, sqlite 723/8, mysql 730/1, verify
 Expected commit range/count: 1 commit.
 ```
 
+## Batch RBAC-EXP-B3 (2026-08-30)
+
+```md
+Batch-ID: RBAC-EXP-B3
+Goal: batch 3/6 -- gan PolicyEngine cho 2 entity Direct dau tien (booking/interaction, D13.4a),
+      khac han pattern Global cua batch B2: moi record co owner_id rieng, executor CHI sua duoc
+      ban ghi CHINH HO tao, KHONG BAO GIO xoa duoc (ke ca chu so huu) -- diem nay da duoc chu xac
+      nhan lai qua AskUserQuestion sau khi chu dat cau hoi ve nghia Global (organization/supplier)
+      co bi nham lan voi nghia Direct hay khong; cau tra loi "Giu nhu cu" xac nhan Global giu
+      nguyen (khong doi), con Direct (batch nay) dung gate owner_id nhu thiet ke ban dau.
+In scope: (a) interaction (`POST /api/interactions`): chi co create/view (khong PUT/DELETE, la
+      log lich su tuong tac) -- POST doi `pick()` tho sang `policyService.prepareCreate()`, tu gan
+      `owner_id`/`created_by` = principal hien tai (truoc batch nay owner_id luon NULL). (b) booking
+      (`GET/POST/PUT/DELETE /api/bookings`, `/api/bookings/:id`): GET dung `projectRecord()` che
+      `amount` neu khong phai chu so huu/khong privileged; POST dung `prepareCreate()` tu gan
+      owner_id; PUT dung `assertWritable()` -- chi qua khi `owner_id` = chinh principal HOAC
+      Admin/Super Admin; DELETE dung `assertWritable()` khong dieu kien owner -- Direct entity thi
+      xoa CHI danh cho Admin/Super Admin, kể ca chu so huu cung khong xoa duoc. (c)
+      `scripts/verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` them 4 route (POST interactions, POST/PUT/
+      DELETE bookings) + `07-route-catalog.md` R045/R047/R048/R049 doi mo ta auth sang "kiem
+      INLINE" giong pattern da dung o B2.
+Out of scope: 12 Direct entity con lai (award/award_participation/event/sponsorship/agreement/
+      work_log/gift/association_fee/supplier_quote/supplier_transaction/supplier_contact/
+      benefit_usage) + 1 Inherited (event_cost) -- batch RBAC-EXP-B4..B6 (nhom tam thoi, chua chot
+      voi chu); UI-flow matrix SS B.2 (Codex lane).
+Behavior mode: TARGET-CHANGE -- lan dau ap dung gate owner_id thuc su cho Direct entity (khac Global
+      da lam o B2); truoc batch nay owner_id ton tai trong schema nhung khong duoc PolicyEngine
+      dung de gate gi ca (moi executor deu sua/xoa duoc bat ky booking nao qua legacy 2-role).
+Risk hotspots: (1) de lam nham Direct thanh Global (cho executor sua bat ky ai) -- da tranh duoc
+      nho chu chu dong hoi lai va xac nhan Direct phai gate owner_id; (2) DELETE cho booking truoc
+      batch nay CHUA TUNG gate theo owner (chi role) -- doi sang "khong bao gio cho executor, ke
+      ca chu" la THAT CHAT hon truoc, khong phai noi long -- xac nhan an toan qua D13-050b (chu so
+      huu tu DELETE chinh booking cua minh van 403); (3) test file
+      integration-bookings-budgets.test.js dung quy uoc `{cookie: ...}` (khong phai `as`) khac 2
+      file batch truoc -- giu nguyen quy uoc rieng cua file, khong doi ten tham so.
+Required tests: `integration-interactions.test.js` D13-046 (viewer POST 403), D13-047 (executor
+      POST 200, owner_id/created_by = chinh executor); `integration-bookings-budgets.test.js`
+      D13-048 (viewer POST 403), D13-049 (executor POST 200 + owner_id dung), D13-050 (executor
+      PUT booking cua NGUOI KHAC tra 403), D13-050b (executor DELETE booking CUA CHINH MINH van
+      403 -- Direct entity khong bao gio cho executor xoa), D13-051 (admin/target-role DELETE 200).
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 748/8, mysql 748/1, verify-gate1-mapping
+      145/145, verify-g0.mjs PASS, git diff --check sach) deu xanh.
+Expected commit range/count: 1 commit.
+```
+
 ## Batch RBAC-EXP-B2 (2026-08-30)
 
 ```md

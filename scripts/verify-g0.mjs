@@ -121,6 +121,12 @@ const PILOT_INLINE_PERM_ROUTES = {
   'DELETE /api/suppliers/:id': { module: 'suppliers', action: 'delete' },
   'PUT /api/reminders/:id': { module: 'reminders', action: 'edit' },
   'DELETE /api/reminders/:id': { module: 'reminders', action: 'delete' },
+  // D13 batch RBAC-EXP-B3 (1/6 entity Direct — booking/interaction, ownership-gated qua owner_id) —
+  // PolicyEngine không điều kiện, module/action giữ nguyên ý nghĩa cũ để đối chiếu Section A.
+  'POST /api/interactions': { module: 'interactions', action: 'create' },
+  'POST /api/bookings': { module: 'partners', action: 'create' },
+  'PUT /api/bookings/:id': { module: 'partners', action: 'edit' },
+  'DELETE /api/bookings/:id': { module: 'partners', action: 'delete' },
 };
 
 function sourceRoutes() {

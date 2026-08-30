@@ -3,6 +3,7 @@
 // và "Ngân sách theo tháng" (R050-R051). Xem Batch Contract trong 15-changelog.md.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const rbac = require('../rbac');
 
 const isMysql = String(process.env.DB_CLIENT || 'mysql').toLowerCase() === 'mysql';
 const dbHarness = require('../test-support/db-harness');
@@ -115,6 +116,64 @@ test('R049 not-found CHARACTERIZATION: id không tồn tại vẫn trả 200 {ok
 });
 test('R049 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('DELETE', '/api/bookings/1', { auth: false })).status, 401);
+});
+
+// ---------------------------------------------------------------------------
+// D13-048..051 — batch RBAC-EXP-B3 (1/6 entity Direct đầu tiên, CRUD đầy đủ): booking.amount là
+// Confidential — che theo classification_tier + owner-bypass; executor chỉ sửa được booking chính
+// mình sở hữu, không bao giờ xoá được (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b3)
+// ---------------------------------------------------------------------------
+test('D13-048: viewer thấy field Public (title/status) nhưng amount (Confidential) bị ẩn; total_amount bị MASK', async () => {
+  const viewer = fixtures.createUser('viewer', { username: `bookings_viewer_${Date.now()}` });
+  const viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  await createBooking({ title: 'Booking D13-048', amount: 700000 });
+  const res = await call('GET', '/api/bookings?subject_type=person&subject_id=1', { cookie: viewerCookie });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  const row = body.rows.find((r) => r.title === 'Booking D13-048');
+  assert.ok(row);
+  assert.equal('amount' in row, false);
+  assert.equal(body.total_amount, rbac.MASK);
+});
+test('D13-049: executor tạo booking trả 200, owner_id = chính executor đó; executor thấy amount trên booking mình tạo, KHÔNG thấy amount trên booking người khác tạo', async () => {
+  const executor = fixtures.createUser('executor', { username: `bookings_executor_${Date.now()}` });
+  const executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
+  const myId = (await (await call('POST', '/api/bookings', { body: { subject_type: 'person', subject_id: 1, title: 'Của executor', amount: 300000, booked_date: '2026-08-01' }, cookie: executorCookie })).json()).id;
+  const { db } = require('../db');
+  const row = db.prepare('SELECT owner_id, created_by FROM bookings WHERE id=?').get(myId);
+  assert.equal(row.owner_id, executor_id(db, executor.username));
+  assert.equal(row.created_by, executor_id(db, executor.username));
+
+  const othersId = await createBooking({ title: 'Của người khác', amount: 900000 });
+  const res = await call('GET', '/api/bookings?subject_type=person&subject_id=1', { cookie: executorCookie });
+  const rows = (await res.json()).rows;
+  assert.equal('amount' in rows.find((r) => r.id === myId), true);
+  assert.equal('amount' in rows.find((r) => r.id === othersId), false);
+});
+function executor_id(db, username) { return db.prepare('SELECT id FROM users WHERE username=?').get(username).id; }
+test('D13-050: executor PUT booking mình sở hữu trả 200; PUT booking người khác tạo trả 403; DELETE (kể cả của mình) luôn 403', async () => {
+  const executor = fixtures.createUser('executor', { username: `bookings_executor2_${Date.now()}` });
+  const executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
+  const myId = (await (await call('POST', '/api/bookings', { body: { subject_type: 'person', subject_id: 1, title: 'Trước sửa', amount: 1, booked_date: '2026-08-01' }, cookie: executorCookie })).json()).id;
+  const putOwn = await call('PUT', `/api/bookings/${myId}`, { body: { subject_type: 'person', subject_id: 1, title: 'Executor tự sửa', amount: 2 }, cookie: executorCookie });
+  assert.equal(putOwn.status, 200);
+  assert.equal((await call('DELETE', `/api/bookings/${myId}`, { cookie: executorCookie })).status, 403);
+
+  const othersId = await createBooking({ title: 'Của người khác 2' });
+  assert.equal((await call('PUT', `/api/bookings/${othersId}`, { body: { subject_type: 'person', subject_id: 1, title: 'x' }, cookie: executorCookie })).status, 403);
+});
+test('D13-050b: viewer PUT/DELETE booking đều 403', async () => {
+  const viewer = fixtures.createUser('viewer', { username: `bookings_viewer2_${Date.now()}` });
+  const viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const id = await createBooking();
+  assert.equal((await call('PUT', `/api/bookings/${id}`, { body: { title: 'x' }, cookie: viewerCookie })).status, 403);
+  assert.equal((await call('DELETE', `/api/bookings/${id}`, { cookie: viewerCookie })).status, 403);
+});
+test('D13-051: executor PUT booking id không tồn tại trả 403 (khác legacy 200 no-op — không xác định được owner trên bản ghi không tồn tại nên fail-closed)', async () => {
+  const executor = fixtures.createUser('executor', { username: `bookings_executor3_${Date.now()}` });
+  const executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
+  const res = await call('PUT', '/api/bookings/9999999', { body: { title: 'x' }, cookie: executorCookie });
+  assert.equal(res.status, 403);
 });
 
 // ---------------------------------------------------------------------------

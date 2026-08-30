@@ -681,11 +681,21 @@ router.get('/interactions', requirePerm('interactions', 'view'), (req, res) => {
   const rows = db.prepare(`SELECT * FROM interactions ${where} ORDER BY date DESC LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
   res.json({ rows, total, page, pageSize });
 });
-router.post('/interactions', requirePerm('interactions', 'create'), (req, res) => {
-  const data = pick(req.body, I_COLS);
-  if (!['person', 'org'].includes(data.partner_type)) data.partner_type = 'person';
-  if (data.partner_id == null) data.partner_id = 0;
-  data.created_by = req.session.user.id;
+// D13 (RBAC v2, batch RBAC-EXP-B3 3/6 — entity Direct dau tien): interaction khong co PUT/DELETE
+// (log lich su, chi tao/xem) nen chi can gate + gan owner_id dung luc tao qua prepareCreate() --
+// truoc day chi gan created_by thu cong, owner_id bi bo trong (luon NULL), nghia la khong ai
+// (ke ca nguoi tao) duoc coi la owner sau nay.
+router.post('/interactions', (req, res) => {
+  const raw = pick(req.body, I_COLS);
+  if (!['person', 'org'].includes(raw.partner_type)) raw.partner_type = 'person';
+  if (raw.partner_id == null) raw.partner_id = 0;
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'interaction', input: raw });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên interactions.');
+    throw err;
+  }
   const r = buildInsert('interactions', data);
   logEdit(req, 'CREATE', 'interaction', r.lastInsertRowid, req.body.summary);
   res.json({ id: r.lastInsertRowid });
@@ -709,6 +719,12 @@ function resolveOrg(data) {
   return data;
 }
 
+// D13 (RBAC v2, batch RBAC-EXP-B3 3/6 — entity Direct dau tien co CRUD day du): booking.amount la
+// Confidential (FIELD_TIER) -- che theo classification_tier + owner-bypass (nguoi tao bao gio cung
+// thay so tien cua chinh minh, khong can nhom org_fee), thay maskMoney/canMoney tho cu (chi theo
+// nhom, khong theo owner). total_amount la aggregate toan bo bang -- theo D13.4b (canh bao ro rang
+// trong 02-decisions.md): khong duoc lo qua tong hop cho nguoi khong co quyen xem TAT CA field do,
+// nen van MASK toan bo (khong chi rieng nguoi dung) khi khong privileged, giu nguyen hanh vi cu.
 router.get('/bookings', requirePerm('partners', 'view'), (req, res) => {
   const filters = [], args = [];
   if (req.query.subject_type) { filters.push('subject_type=?'); args.push(req.query.subject_type); }
@@ -716,24 +732,42 @@ router.get('/bookings', requirePerm('partners', 'view'), (req, res) => {
   if (req.query.from) { filters.push('booked_date>=?'); args.push(req.query.from); }
   if (req.query.to) { filters.push('booked_date<=?'); args.push(req.query.to); }
   const where = filters.length ? 'WHERE ' + filters.join(' AND ') : '';
-  const rows = db.prepare(`SELECT * FROM bookings ${where} ORDER BY booked_date DESC, id DESC`).all(...args);
-  const total_amount = rows.reduce((s, r) => s + (r.amount || 0), 0);
-  maskMoney(req, rows, 'amount');
-  res.json({ rows, total_amount: canMoney(req) ? total_amount : rbac.MASK });
+  const rawRows = db.prepare(`SELECT * FROM bookings ${where} ORDER BY booked_date DESC, id DESC`).all(...args);
+  const total_amount = rawRows.reduce((s, r) => s + (r.amount || 0), 0);
+  const rows = rawRows.map((r) => policyService.projectRecord({ principal: req.principal, entity: 'booking', module: 'bookings', record: r }));
+  res.json({ rows, total_amount: policy.isPrivileged(req.principal) ? total_amount : rbac.MASK });
 });
-router.post('/bookings', requirePerm('partners', 'create'), (req, res) => {
-  const data = resolveOrg(pick(req.body, B_COLS));
-  data.created_by = req.session.user.id;
+router.post('/bookings', (req, res) => {
+  let data;
+  try {
+    data = policyService.prepareCreate({ principal: req.principal, entity: 'booking', input: resolveOrg(pick(req.body, B_COLS)) });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên partners.');
+    throw err;
+  }
   const r = buildInsert('bookings', data);
   logEdit(req, 'CREATE', 'booking', r.lastInsertRowid, `${req.body.title} (${(req.body.amount || 0).toLocaleString('vi-VN')}đ)`);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/bookings/:id', requirePerm('partners', 'edit'), (req, res) => {
+router.put('/bookings/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM bookings WHERE id=?').get(req.params.id);
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'booking', action: 'edit', record: existing });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+    throw err;
+  }
   buildUpdate('bookings', req.params.id, resolveOrg(pick(req.body, B_COLS)));
   logEdit(req, 'EDIT', 'booking', req.params.id, req.body.title);
   res.json({ ok: true });
 });
-router.delete('/bookings/:id', requirePerm('partners', 'delete'), (req, res) => {
+router.delete('/bookings/:id', (req, res) => {
+  try {
+    policyService.assertWritable({ principal: req.principal, entity: 'booking', action: 'delete' });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền delete trên partners.');
+    throw err;
+  }
   db.prepare('DELETE FROM bookings WHERE id=?').run(req.params.id);
   logEdit(req, 'DELETE', 'booking', req.params.id);
   res.json({ ok: true });

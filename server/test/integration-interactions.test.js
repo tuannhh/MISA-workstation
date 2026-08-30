@@ -11,6 +11,8 @@ const { createResourceStack } = require('../test-support/resource-stack');
 
 let baseUrl;
 let cookie;
+let viewerCookie; // D13 target role
+let executorCookie; // D13 target role
 let fixtures;
 const resources = createResourceStack();
 
@@ -32,14 +34,18 @@ before(async () => {
   resources.acquire(started.close);
   const admin = fixtures.createPrivilegedUser({ username: `interactions_admin_${Date.now()}` });
   cookie = (await fixtures.login(baseUrl, { username: admin.username, password: admin.password })).cookie;
+  const viewer = fixtures.createUser('viewer', { username: `interactions_viewer_${Date.now()}` });
+  viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const executor = fixtures.createUser('executor', { username: `interactions_executor_${Date.now()}` });
+  executorCookie = (await fixtures.login(baseUrl, { username: executor.username, password: executor.password })).cookie;
 });
 
 after(async () => {
   await resources.cleanupAll();
 });
 
-async function call(method, path, { body, auth = true, headers } = {}) {
-  const opts = { method, headers: { ...(auth ? { cookie } : {}), ...(headers || {}) } };
+async function call(method, path, { body, auth = true, as = cookie, headers } = {}) {
+  const opts = { method, headers: { ...(auth ? { cookie: as } : {}), ...(headers || {}) } };
   if (body !== undefined) { opts.headers['content-type'] = 'application/json'; opts.body = JSON.stringify(body); }
   return fetch(`${baseUrl}${path}`, opts);
 }
@@ -109,4 +115,24 @@ test('R045 CHARACTERIZATION: partner_type lạ tự về "person", partner_id th
 });
 test('R045 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/interactions', { auth: false, body: { date: '2026-08-01' } })).status, 401);
+});
+
+// ---------------------------------------------------------------------------
+// D13-046..047 — batch RBAC-EXP-B3 (1/6 entity Direct đầu tiên): interaction chỉ có create/view
+// (log lịch sử, không có PUT/DELETE) nên chỉ cần gate quyền tạo + gán đúng owner_id lúc tạo qua
+// prepareCreate() (memory-bank/18-g1b-rbac-batch-contract.md#batch-rbac-exp-b3-2026-08-30)
+// ---------------------------------------------------------------------------
+test('D13-046: viewer tạo interaction trả 403 (Direct entity, viewer không bao giờ ghi được)', async () => {
+  const res = await call('POST', '/api/interactions', { body: { partner_type: 'org', partner_id: 1, date: '2026-08-04', summary: 'x' }, as: viewerCookie });
+  assert.equal(res.status, 403);
+});
+test('D13-047: executor tạo interaction trả 200, owner_id = chính executor đó (trước batch này owner_id luôn NULL)', async () => {
+  const res = await call('POST', '/api/interactions', { body: { partner_type: 'org', partner_id: 1, date: '2026-08-05', summary: 'Executor tạo' }, as: executorCookie });
+  assert.equal(res.status, 200);
+  const id = (await res.json()).id;
+  const { db } = require('../db');
+  const row = db.prepare('SELECT owner_id, created_by FROM interactions WHERE id=?').get(id);
+  const me = db.prepare("SELECT id FROM users WHERE username LIKE 'interactions_executor_%' ORDER BY id DESC LIMIT 1").get();
+  assert.equal(row.owner_id, me.id);
+  assert.equal(row.created_by, me.id);
 });
