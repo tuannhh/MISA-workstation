@@ -2496,3 +2496,13 @@ hiện Backlog Codex đã liệt kê không chặn bundle (`prepareUpdate()` ch�
 Verify: security 6/6, SQLite 770 pass/8 skip (+4), MySQL 777 pass/1 skip (+4), mapping 145/145
 route PASS (route đã tồn tại từ trước, không route mới), `verify-g0.mjs` PASS, `git diff --check`
 sạch. Không đổi UI, không đụng route/entity nào ngoài `GET /api/files/:id` và `migrate()`.
+
+**Codex ACCEPTED WITH BACKLOG (2026-08-31, re-audit commit `051a9f9`) — đóng chính thức bundle
+`F15 → RBAC-EXP-B6`:** không còn P0/P1 trong phạm vi re-audit. Verify độc lập: tái hiện restart
+thật (`pr_staff`→`executor`, có lại `partners:view`); focused SQLite 101/101, focused MySQL 101/101;
+full security/SQLite/MySQL/mapping/G0 verifier/diff-check đều exit 0; F15 xác nhận lại vẫn đúng (24
+FK thật trên MySQL tạm). Backlog hợp lệ không chặn (đã có owner+wave sẵn trong roadmap, không phải
+finding mới): **P2/P3 W1.FILE** (upload chưa gate owner_id của Direct entity; metadata file chưa
+lọc theo visibility — xem `01-audit-findings.md` §F21, `04-ROADMAP.md` hàng `W1.FILE`); **W1.ADMIN**
+(UI/API gán lại owner) đã có sẵn trong roadmap, không phải việc mới phát sinh. Chuyển sang batch
+riêng (W1.FILE) khi owner quyết định ưu tiên tiếp theo.

@@ -153,7 +153,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 | W1.POLICY.2 | Service command = choke point mọi sensitive write; wrapper `authorizedInsert/Update` bắt buộc `principal+resource+operation`; CI static rule cấm raw SQL ghi field ngoài policy (dọn 10 nhóm write-bypass F1 + 3 cách mask song song — `16-coding-rules.md` §8) | W1.POLICY | code+test / — / fail-closed |
 | W1.OWN | Logic ownership: quyền sửa = `user.id===owner_id` HOẶC Admin/Super Admin bypass; delete chỉ Admin/Super Admin (D13.4b); Nhân viên thực thi tự xem đầy đủ bản ghi mình `owner`; Admin gán/gán lại `owner_id` (giải quyết cả dữ liệu cũ owner=NULL + nhân viên nghỉ việc). **Không self-claim — owner APPROVED 2026-08-25** (D13.4c, C0.1, không còn là mặc định chờ xác nhận). Bao gồm resource-policy nhóm global/inherited/module-admin-only (D13.4a) cho organizations/people/suppliers/important_dates/budgets/event_costs/monitoring | W1.POLICY | code+test / — / fail-closed |
 | W1.ADMIN | Màn hình Admin (Desktop MDS): (a) cấu hình field public/private theo module; (b) gán/gán lại owner cho bản ghi; (c) quản vai trò 4 cấp. Super Admin thêm: cấu hình API key, xem `audit_log` | W1.OWN | code+test / — / — |
-| W1.FILE | Attachment: visibility per-file lúc upload (D13.3), classification server-derived cho gate `/files/:id` theo owner+action+visibility (D3, F9). File cũ default `private`. **Không cần R1 dual-write/reconcile — dữ liệu bỏ được, seed sạch** | W1.POLICY | code+test / — / fail-closed |
+| W1.FILE | Attachment: visibility per-file lúc upload (D13.3), classification server-derived cho gate `/files/:id` theo owner+action+visibility (D3, F9). File cũ default `private`. **Không cần R1 dual-write/reconcile — dữ liệu bỏ được, seed sạch**. `GET /files/:id` nay gate ĐỦ 6 owner_type thật (F21, Codex ACCEPTED WITH BACKLOG 2026-08-31) — còn lại 2 backlog P2/P3 (upload chưa gate owner_id; metadata file chưa lọc theo visibility), xem `01-audit-findings.md` §F21 | W1.POLICY | code+test / P2+P3 backlog (owner=Claude, wave=W1.FILE tiếp theo) / fail-closed |
 
 > **R1.0–R1.7 cũ (dual-write/backfill/reconcile/shadow/canary/rollback) BỎ, có điều kiện (Codex C0.5/R3-06, không phải bỏ vô điều kiện).** Chỉ được bỏ khi W1.RBAC.0 (preflight) xác nhận không có dữ liệu thật cần giữ. Nếu bất kỳ bước preflight nào phát hiện dữ liệu cần giữ, **khôi phục toàn bộ quy trình R1** (ghi lại ở đây để không mất kiến thức: bản v2 §R1 trong git history commit trước `04-ROADMAP.md` v3). **Lưu ý (Codex C0.5 mục cuối):** dữ liệu test bỏ được KHÔNG có nghĩa các rủi ro khác (F2 session, F3 SSRF, F4 AI-egress, F7 Atomics) cũng bỏ được — môi trường test công khai vẫn mang credential Cloud/session/SSRF exposure thật, vẫn phải sửa theo đúng lộ trình W1.7/W1.8/W1.AI-POLICY/W2.3, không được coi nhẹ vì "chỉ là test".
 
@@ -635,6 +635,15 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > award/supplier/event/agreement/work_log chưa gate owner_id của Direct entity (P2); metadata
 > attachment (tên file, không phải nội dung) chưa lọc theo owner (P3). **Sẵn sàng Codex re-audit
 > tập trung đúng 2 điểm F21/F22.**
+>
+> **Codex ACCEPTED WITH BACKLOG — 2026-08-31 (re-audit commit `051a9f9`):** "Không còn P0/P1 trong
+> phạm vi re-audit." Evidence Codex tự xác nhận: `routes.js:685`/`policy-engine.js:65` (F21),
+> `db.js:709` (F22, tái hiện restart thật `pr_staff`→`executor` có lại `partners:view`). Verify độc
+> lập: focused SQLite 101/101, focused MySQL 101/101; full security/SQLite/MySQL/mapping/G0
+> verifier/diff-check đều exit 0; F15 xác nhận lại vẫn đúng (24 FK thật). Backlog hợp lệ không chặn,
+> đã có sẵn owner+wave trong roadmap (không phải finding mới): **P2/P3 → hàng `W1.FILE`** ở trên;
+> **W1.ADMIN** (UI/API gán lại owner) đã có sẵn hàng riêng. **Bundle `F15 → RBAC-EXP-B6` chính thức
+> CLOSED — chuyển ưu tiên tiếp theo sang batch `W1.FILE` khi owner quyết định.**
 
 ---
 

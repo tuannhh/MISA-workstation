@@ -1,5 +1,13 @@
 # Evidence Bundle tổng hợp — F15 → RBAC-EXP-B6 (gửi Codex audit)
 
+> **KẾT QUẢ CUỐI CÙNG: CLOSED — Codex ACCEPTED WITH BACKLOG (2026-08-31).** Audit lần 1 (trên bundle
+> gốc dưới đây) trả BLOCKED với 2 finding P0/P1 tái hiện được (F21, F22 — xem
+> `01-audit-findings.md`). Remediation commit `051a9f9` sửa cả 2, Codex re-audit tập trung đúng 2
+> điểm đó và trả **ACCEPTED WITH BACKLOG**, không còn P0/P1 trong phạm vi. Backlog còn lại (P2/P3
+> `W1.FILE`, `W1.ADMIN`) đã có owner+wave sẵn trong `04-ROADMAP.md`, không chặn việc đóng bundle này.
+> Chi tiết đầy đủ: `15-changelog.md` mục "Wave 1: remediation F21/F22" + `04-ROADMAP.md` 2 execution
+> update ngày 2026-08-31.
+
 Tài liệu này gộp 9 batch liên tiếp thành **1 audit-closure bundle** duy nhất theo đúng cơ chế đã
 dùng trước đây cho "monitor phần 2 + ai" (§12/17-fast-track-collaboration.md): tất cả đã full
 regression xanh một lần ở HEAD của batch cuối, không có batch nào bị BLOCKED giữa chừng, và không
