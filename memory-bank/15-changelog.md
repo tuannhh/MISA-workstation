@@ -2506,3 +2506,51 @@ finding mới): **P2/P3 W1.FILE** (upload chưa gate owner_id của Direct entit
 lọc theo visibility — xem `01-audit-findings.md` §F21, `04-ROADMAP.md` hàng `W1.FILE`); **W1.ADMIN**
 (UI/API gán lại owner) đã có sẵn trong roadmap, không phải việc mới phát sinh. Chuyển sang batch
 riêng (W1.FILE) khi owner quyết định ưu tiên tiếp theo.
+
+## Wave 1: batch W1.POLICY.2 — dọn choke point mask read cho list route + CI guard chống tái phát
+
+Theo `/goal` "làm hết các vấn đề của W1" — batch contract đầy đủ ở
+`18-g1b-rbac-batch-contract.md#batch-w1policy2-2026-08-31`. Rà soát CÓ HỆ THỐNG (không đợi phát
+hiện tình cờ) toàn bộ route GET dùng entity có `FIELD_TIER` Confidential/Restricted, tìm nốt chỗ
+còn dùng cơ chế mask cũ (`rbac.maskList`/`senGroups`, SUPERSEDED bởi D13 — `02-decisions.md` hàng
+O7) hoặc KHÔNG mask gì cả — mục W1.POLICY.2 đã có sẵn trong `04-ROADMAP.md` từ trước batch F21/F22,
+chỉ chưa làm vì ưu tiên P0/P1 trước.
+
+- `GET /api/partners` (list) + nested `people` trong `GET /api/partners/:id`: đổi từ
+  `rbac.maskList('organization'|'person', rows, senGroups(req))` sang `projectRecord()` — khớp
+  đúng hành vi detail route đã dùng từ RBAC-EXP-B2/B6, tránh lộ field Confidential qua
+  `sensitive_perms` cũ mà PolicyEngine không công nhận.
+- `GET /api/people` (list): tương tự.
+- `GET /api/suppliers` (list): trước đây **KHÔNG mask gì cả** (khác hẳn `GET /suppliers/:id` đã
+  dùng `projectRecord()` từ RBAC-EXP-B2, D13-039) — thêm `projectRecord()`.
+- `GET /api/budgets`: trước đây **KHÔNG mask gì cả** — `budget.amount` là Confidential nhưng
+  `viewer` có `reports:view` (MATRIX) nên thấy hết số tiền. Quyết định thiết kế: Confidential =
+  Module-admin-only (chỉ Admin/Super Admin), KHÔNG phụ thuộc quyền `view` module — nhất quán với
+  `supplier.service_fee_pct`/`deposit_pct` đã làm ở RBAC-EXP-B2, không phải ngoại lệ riêng của
+  budget.
+- Dọn rác: xoá hẳn `senGroups/senVisible/canMoney/maskMoney` khỏi `server/routes.js` (hết call
+  site thật sau các thay đổi trên) + khỏi `router.testables` + xoá 2 unit test đã mồ côi
+  (`BR-VAL-018`/`BR-VAL-019` trong `unit-validation-formatter.test.js`).
+- CI guard mới: `scripts/verify-g0.mjs#verifyNoLegacyMasking()` — cấm literal 6 tên hàm
+  (`rbac.maskList(`/`rbac.maskRecord(`/`maskMoney(`/`canMoney(`/`senGroups(`/`senVisible(`) xuất
+  hiện bất kỳ đâu trong `server/routes.js`, ngăn tái phát pattern này ở route mới về sau.
+- `07-route-catalog.md`: cập nhật mô tả mask cho R002/R003/R029/R050/R051/R072 + sửa 1 ghi chú sai
+  đã cũ (R051 từng ghi "KHÔNG gate — F1", thực tế RBAC-EXP-B1 đã gắn `moduleAdminOnlyGate` từ
+  trước — xác nhận qua `verify-g0.mjs#PILOT_INLINE_PERM_ROUTES` trước khi sửa).
+- Test mới: `integration-partners.test.js` D13-081 (list che `membership_fee`), D13-082 (nested
+  `people` che `bank_name`/`phone_personal`); `integration-people.test.js` D13-083 (list che
+  `bank_name`/`phone_personal`); `integration-suppliers.test.js` D13-084 (list che
+  `service_fee_pct`/`deposit_pct`); `integration-bookings-budgets.test.js` D13-085
+  (`budget.amount` ẩn với viewer dù có `reports:view`, đầy đủ với admin).
+- **Out-of-scope xác định là WON'T-FIX, không phải bug bỏ sót:** P3 backlog của F21 (metadata
+  attachment — `id/original_name/mime`, không phải nội dung — chưa lọc theo
+  `audience_visibility` khi list file đính kèm trên các entity). Xem lại theo đúng nguyên tắc D13
+  "existence vs content" (`02-decisions.md` dòng 96: mọi role ≥ Viewer thấy SỰ TỒN TẠI bản ghi +
+  field public; chỉ NỘI DUNG/tải file mới gate) — filename/id của một attachment là "sự tồn tại",
+  không phải "nội dung", nên việc mọi role thấy được filename trong khi chỉ owner/Admin tải được
+  nội dung là **đúng thiết kế D13**, không phải lỗ hổng. Ghi nhận rõ ở `01-audit-findings.md` §F21
+  để không bị hiểu nhầm là backlog treo mãi.
+- Verify: `test:security` 6/6, SQLite 781 total/773 pass/8 skip (+5 test mới so với baseline
+  F21/F22), MySQL 781 total/780 pass/1 skip (+5), `test:verify-gate1-mapping` 145/145,
+  `verify-g0.mjs` PASS (bao gồm `verifyNoLegacyMasking` mới), `verify-g0-selftest` 6/6, `git diff
+  --check` sạch. Không đổi route path/method nào, không đổi UI.

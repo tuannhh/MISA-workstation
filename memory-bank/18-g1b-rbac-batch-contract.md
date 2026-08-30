@@ -713,3 +713,63 @@ Exit criteria: full regression (test:security, sqlite 733/8, mysql 740/1, verify
       tren organization/supplier (khong con bug RBAC-FIELDVIS-FIX).
 Expected commit range/count: 1 commit.
 ```
+
+## Batch W1.POLICY.2 (2026-08-31) -- dong nhat choke point mask read cho list route + CI guard
+
+```md
+Batch-ID: W1.POLICY.2
+Goal: sau khi bundle F15->RBAC-EXP-B6 duoc Codex dong (ACCEPTED WITH BACKLOG, remediation F21/F22
+      commit `051a9f9`), ray soat CO HE THONG (khong doi phat hien tung cai) toan bo route GET
+      dung entity co FIELD_TIER Confidential/Restricted, tim CHO nao con dung co che mask cu
+      (rbac.maskList/senGroups, SUPERSEDED boi D13 -- 02-decisions.md hang O7) hoac KHONG mask gi
+      ca -- dong nhat het qua `policyService.projectRecord()`, roadmap item co san (04-ROADMAP.md
+      W1.POLICY.2) tu truoc batch F21/F22, chua lam vi uu tien P0/P1 truoc.
+In scope: (a) `GET /api/partners` (list to chuc) + nested `people` trong `GET /api/partners/:id`:
+      doi tu `rbac.maskList('organization'|'person', rows, senGroups(req))` sang
+      `projectRecord()` -- truoc day list che membership_fee/bank_name theo `sensitive_perms`
+      per-user (co che SUPERSEDED), khac han detail da dung projectRecord tu RBAC-EXP-B2, co the
+      lo field Confidential qua sensitive_perms cu ma PolicyEngine khong cong nhan. (b) `GET
+      /api/people` (list nhan su): tuong tu (a). (c) `GET /api/suppliers` (list NCC): truoc day
+      KHONG mask GI CA (khac han GET /suppliers/:id da dung projectRecord tu RBAC-EXP-B2, D13-039)
+      -- them projectRecord(). (d) `GET /api/budgets`: truoc day KHONG mask gi (viewer co
+      reports:view nen thay het so tien budget.amount la Confidential) -- them projectRecord(),
+      quyet dinh thiet ke: Confidential = Module-admin-only (chi Admin/Super Admin), KHONG phu
+      thuoc quyen 'view' module -- nhat quan voi supplier.service_fee_pct/deposit_pct da lam o
+      RBAC-EXP-B2, khong phai bug rieng cua budget. (e) Don rac: xoa han
+      `senGroups/senVisible/canMoney/maskMoney` khoi `server/routes.js` (het call site that su sau
+      (a)-(d)) + khoi `router.testables` export + xoa 2 unit test da mo coi (BR-VAL-018/019 trong
+      `unit-validation-formatter.test.js`, khong con ham nao de test). (f) CI guard moi:
+      `scripts/verify-g0.mjs#verifyNoLegacyMasking()` -- ban literal-substring 6 ten ham
+      (rbac.maskList(/rbac.maskRecord(/maskMoney(/canMoney(/senGroups(/senVisible() bat ky dau
+      trong `server/routes.js`, ngan tai phat sinh pattern nay ve sau (route moi lo qua neu ai dung
+      lai co che cu). (g) `07-route-catalog.md` cap nhat mo ta mask cho R002/R003/R029/R050/R051/
+      R072 + sua 1 ghi chu sai da cu (R051 tung ghi "KHONG gate -- F1", thuc te RBAC-EXP-B1 da gan
+      moduleAdminOnlyGate tu truoc, xac nhan qua verify-g0.mjs#PILOT_INLINE_PERM_ROUTES truoc khi
+      sua).
+Out of scope: (1) P3 backlog cua F21 (attachment metadata/filename khong loc theo
+      audience_visibility khi list file dinh kem) -- xem xet lai va XAC DINH day la THIET KE CO CHU
+      DICH, khong phai bug, theo dung nguyen tac D13 "existence vs content" (02-decisions.md dong
+      96: moi role >= Viewer thay SU TON TAI ban ghi + field public; rieng NOI DUNG/tai file moi
+      gate) -- ghi WON'T-FIX vao 01-audit-findings.md, khong sua code. (2) W1.FILE P2 (upload chua
+      gate owner_id) va toan bo W1.ADMIN -- batch rieng tiep theo, ngoai pham vi batch nay. (3)
+      UI-flow matrix SS B.2 (Codex lane).
+Behavior mode: TARGET-CHANGE cho (a)-(d) (viewer/executor tu "thay du field qua sensitive_perms cu"
+      hoac "thay het khong mask" sang "chi thay field Public + field minh la owner", giong hanh vi
+      detail route da co tu RBAC-EXP-B2/B6) -- day la SIET quyen xem, khong phai noi rong; (e)-(g)
+      la don rac/tai lieu, khong doi hanh vi.
+Risk hotspots: (1) nested `people` trong GET /partners/:id la collection long, de bo sot neu chi
+      sua route top-level -- xac nhan rieng qua D13-082; (2) budget.amount: viewer CO
+      reports:view (MATRIX) nhung VAN bi an vi Confidential la Module-admin-only doc lap voi
+      quyen module -- co the gay nham lan "sao co quyen view ma van khong thay amount", ghi ro
+      trong comment code + batch contract nay de tra loi neu Codex/nguoi sau hoi lai.
+Required tests: `integration-partners.test.js` D13-081 (list che membership_fee), D13-082 (nested
+      people che bank_name/phone_personal); `integration-people.test.js` D13-083 (list che
+      bank_name/phone_personal); `integration-suppliers.test.js` D13-084 (list che
+      service_fee_pct/deposit_pct); `integration-bookings-budgets.test.js` D13-085 (budget.amount
+      an voi viewer du co reports:view, day du voi admin).
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 781 total/773 pass/8 skip, mysql 781
+      total/780 pass/1 skip, verify-gate1-mapping 145/145, verify-g0.mjs PASS bao gom
+      verifyNoLegacyMasking, verify-g0-selftest 6/6, git diff --check sach) deu xanh.
+Expected commit range/count: 1 commit.
+```

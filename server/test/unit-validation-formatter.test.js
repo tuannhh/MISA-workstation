@@ -172,32 +172,6 @@ test('BR-VAL-017: jsonField() stringify giá trị non-string, bỏ qua khi thi�
   const d4 = { x: 'already' }; t.jsonField(d4, 'x'); assert.equal(d4.x, 'already');
 });
 
-test('BR-VAL-018: senGroups()/senVisible() bọc đúng rbac.allowedGroups + so ALL_GROUPS.length', () => {
-  const req = { session: { user: { role: 'super_admin', sensitive_perms: null } } };
-  assert.equal(t.senVisible(t.senGroups(req)), true);
-  assert.equal(t.senVisible(new Set(['contact'])), false);
-});
-
-test('BR-VAL-019: canMoney()/maskMoney() che field tiền khi thiếu nhóm org_fee, giữ nguyên khi đủ quyền', () => {
-  const noMoney = { session: { user: { role: 'executor', sensitive_perms: null } } };
-  const hasMoney = { session: { user: { role: 'executor', sensitive_perms: JSON.stringify(['org_fee']) } } };
-  assert.equal(t.canMoney(noMoney), false);
-  assert.equal(t.canMoney(hasMoney), true);
-
-  const single = { cost: 5000 };
-  t.maskMoney(noMoney, single, 'cost');
-  assert.equal(single.cost, rbac.MASK);
-
-  const rows = [{ cost: 5000 }, { cost: null }];
-  t.maskMoney(noMoney, rows, 'cost');
-  assert.equal(rows[0].cost, rbac.MASK);
-  assert.equal(rows[1].cost, null); // giá trị null -> không đụng
-
-  const untouched = [{ cost: 5000 }];
-  t.maskMoney(hasMoney, untouched, 'cost');
-  assert.equal(untouched[0].cost, 5000);
-});
-
 test('BR-VAL-021: isValidBudgetPeriod() chỉ nhận đúng dạng YYYY-MM', () => {
   assert.equal(t.isValidBudgetPeriod('2026-08'), true);
   assert.equal(t.isValidBudgetPeriod('2026-8'), false);

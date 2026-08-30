@@ -194,6 +194,22 @@ test('R050 forbidden: executor (reports rỗng trong MATRIX) trả 403', async (
   const res = await call('GET', '/api/budgets', { cookie: staffCookie });
   assert.equal(res.status, 403);
 });
+// D13-085 — batch W1.POLICY.2 (dọn thiếu mask): GET /budgets trước đây KHÔNG che amount
+// (Confidential) dù viewer có reports:view — nay đồng nhất Module-admin-only qua projectRecord()
+// giống các entity Confidential khác (vd supplier.service_fee_pct).
+test('D13-085: GET /budgets viewer (có reports:view) vẫn KHÔNG thấy amount (Confidential); admin thấy đủ', async () => {
+  const period = `2027-0${Math.floor(Math.random() * 8) + 1}`;
+  await call('POST', '/api/budgets', { body: { period, amount: 8888888 } });
+  const viewer = fixtures.createUser('viewer', { username: `budgets_viewer_${Date.now()}` });
+  const viewerCookie = (await fixtures.login(baseUrl, { username: viewer.username, password: viewer.password })).cookie;
+  const viewerRes = await call('GET', '/api/budgets', { cookie: viewerCookie });
+  assert.equal(viewerRes.status, 200);
+  const viewerRow = (await viewerRes.json()).rows.find((r) => r.period === period);
+  assert.ok(viewerRow);
+  assert.equal('amount' in viewerRow, false);
+  const adminRow = (await (await call('GET', '/api/budgets')).json()).rows.find((r) => r.period === period);
+  assert.equal(adminRow.amount, 8888888);
+});
 
 // ---------------------------------------------------------------------------
 // R051 — POST /api/budgets (upsert theo period, dùng requirePerm(reports,view) — CHARACTERIZATION: route ghi dữ liệu nhưng chỉ đòi quyền 'view')

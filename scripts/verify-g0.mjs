@@ -322,6 +322,18 @@ function verifyMarkdownLinks() {
   pass(`Markdown internal links: 0 broken across ${docs.length} memory-bank files`);
 }
 
+// W1.POLICY.2: PolicyEngine (policyService.projectRecord/canReadField) la choke point DUY NHAT cho
+// moi field mat (D1) -- chan tai su dung co che mask legacy da bi thay the (rbac.maskList/maskRecord,
+// senGroups/senVisible, canMoney/maskMoney SUPERSEDED boi D13, xem 02-decisions.md O7). rbac.js van
+// giu dinh nghia + unit test thuan cho lich su, chi cam CALL SITE that trong routes.js.
+function verifyNoLegacyMasking() {
+  const source = read('server/routes.js');
+  const banned = ['rbac.maskList(', 'rbac.maskRecord(', 'maskMoney(', 'canMoney(', 'senGroups(', 'senVisible('];
+  const found = banned.filter((needle) => source.includes(needle));
+  ok(!found.length, `legacy masking con trong routes.js (phai qua policyService.projectRecord): ${found.join(', ')}`);
+  pass('routes.js: 0 legacy masking call (rbac.maskList/maskRecord/maskMoney/senGroups/senVisible/canMoney) -- PolicyEngine la choke point duy nhat');
+}
+
 function verifyRemediationScope() {
   const baseArg = process.argv.find((arg) => arg.startsWith('--base='));
   if (!baseArg) return;
@@ -348,6 +360,7 @@ function main() {
     verifyGemini();
     verifySchema();
     verifyErrorExample();
+    verifyNoLegacyMasking();
     verifyMarkdownLinks();
     verifyRemediationScope();
     console.log('\nG0 verification checks passed.');

@@ -212,6 +212,37 @@ test('D13-038: admin (target role D13) PUT + DELETE org đều 200 (full CRUD)',
 });
 
 // ---------------------------------------------------------------------------
+// D13-081..082 — batch W1.POLICY.2 (dọn cơ chế mask cũ list/nested): GET /partners (list) và
+// nested people trong GET /partners/:id nay qua projectRecord() giống detail (D13-035..038),
+// trước đây dùng rbac.maskList/senGroups (SUPERSEDED bởi D13, 02-decisions.md O7)
+// ---------------------------------------------------------------------------
+test('D13-081: GET /partners (list) viewer thấy field Public nhưng membership_fee (Confidential) vẫn ẩn, admin thấy đủ', async () => {
+  const name = `Org D13-081 ${Date.now()}`;
+  await createOrg({ name, membership_fee: 3000000 });
+  const viewerRes = await call('GET', `/api/partners?search=${encodeURIComponent(name)}`, { as: viewerCookie });
+  assert.equal(viewerRes.status, 200);
+  const viewerRow = (await viewerRes.json()).rows.find((r) => r.name === name);
+  assert.ok(viewerRow);
+  assert.equal('membership_fee' in viewerRow, false);
+  const adminRes = await call('GET', `/api/partners?search=${encodeURIComponent(name)}`, { as: targetAdminCookie });
+  const adminRow = (await adminRes.json()).rows.find((r) => r.name === name);
+  assert.equal(adminRow.membership_fee, 3000000);
+});
+test('D13-082: GET /partners/:id nested people che field Confidential (bank_name/phone_personal) cho viewer, admin thấy đủ', async () => {
+  const orgId = await createOrg({ name: `Org D13-082 ${Date.now()}` });
+  const personRes = await call('POST', '/api/people', { body: { full_name: 'Nhân sự D13-082', org_id: orgId, bank_name: 'Ngân hàng mật', phone_personal: '0900999888' } });
+  assert.equal(personRes.status, 200);
+  const viewerDetail = await (await call('GET', `/api/partners/${orgId}`, { as: viewerCookie })).json();
+  const viewerPerson = viewerDetail.people.find((p) => p.full_name === 'Nhân sự D13-082');
+  assert.ok(viewerPerson);
+  assert.equal('bank_name' in viewerPerson, false);
+  assert.equal('phone_personal' in viewerPerson, false);
+  const adminDetail = await (await call('GET', `/api/partners/${orgId}`, { as: targetAdminCookie })).json();
+  const adminPerson = adminDetail.people.find((p) => p.full_name === 'Nhân sự D13-082');
+  assert.equal(adminPerson.bank_name, 'Ngân hàng mật');
+});
+
+// ---------------------------------------------------------------------------
 // R007/R008/R009 — sponsorships
 // ---------------------------------------------------------------------------
 test('R007 happy: tạo sponsorship cho org trả 200 + id', async () => {

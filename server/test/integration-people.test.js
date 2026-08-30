@@ -183,6 +183,25 @@ test('D13-015 People Detail pilot write: admin (target role) PUT + DELETE đều
 });
 
 // ---------------------------------------------------------------------------
+// D13-083 — batch W1.POLICY.2 (dọn cơ chế mask cũ list): GET /people (list) nay qua
+// projectRecord() giống detail (D13-011), trước đây dùng rbac.maskList/senGroups
+// (SUPERSEDED bởi D13, 02-decisions.md O7)
+// ---------------------------------------------------------------------------
+test('D13-083: GET /people (list) viewer thấy field Public nhưng bank_name/phone_personal (Confidential/Restricted) vẫn ẩn, admin thấy đủ', async () => {
+  const full_name = `Người D13-083 ${Date.now()}`;
+  await createPerson({ full_name, bank_name: 'Ngân hàng mật D13-083', phone_personal: '0900111222' });
+  const viewerRes = await call('GET', `/api/people?search=${encodeURIComponent(full_name)}`, { as: viewerCookie });
+  assert.equal(viewerRes.status, 200);
+  const viewerRow = (await viewerRes.json()).rows.find((r) => r.full_name === full_name);
+  assert.ok(viewerRow);
+  assert.equal('bank_name' in viewerRow, false);
+  assert.equal('phone_personal' in viewerRow, false);
+  const adminRes = await call('GET', `/api/people?search=${encodeURIComponent(full_name)}`, { as: targetAdminCookie });
+  const adminRow = (await adminRes.json()).rows.find((r) => r.full_name === full_name);
+  assert.equal(adminRow.bank_name, 'Ngân hàng mật D13-083');
+});
+
+// ---------------------------------------------------------------------------
 // R031 — POST /api/people
 // ---------------------------------------------------------------------------
 test('R031 happy: tạo người mới trả 200 + id', async () => {

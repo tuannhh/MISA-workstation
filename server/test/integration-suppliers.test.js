@@ -325,6 +325,25 @@ test('D13-042: admin (target role D13) PUT + DELETE supplier đều 200 (full CR
 });
 
 // ---------------------------------------------------------------------------
+// D13-084 — batch W1.POLICY.2 (dọn cơ chế mask thiếu): GET /suppliers (list) trước đây KHÔNG che
+// gì cả (khác GET /suppliers/:id đã dùng projectRecord từ RBAC-EXP-B2, D13-039), nay đồng nhất qua
+// projectRecord()
+// ---------------------------------------------------------------------------
+test('D13-084: GET /suppliers (list) viewer thấy field Public nhưng service_fee_pct/deposit_pct (Confidential) vẫn ẩn, admin thấy đủ', async () => {
+  const name = `NCC D13-084 ${Date.now()}`;
+  await createSupplier({ name, service_fee_pct: 15, deposit_pct: 25 });
+  const viewerRes = await call('GET', `/api/suppliers?search=${encodeURIComponent(name)}`, { as: viewerCookie });
+  assert.equal(viewerRes.status, 200);
+  const viewerRow = (await viewerRes.json()).rows.find((r) => r.name === name);
+  assert.ok(viewerRow);
+  assert.equal('service_fee_pct' in viewerRow, false);
+  assert.equal('deposit_pct' in viewerRow, false);
+  const adminRes = await call('GET', `/api/suppliers?search=${encodeURIComponent(name)}`, { as: targetAdminCookie });
+  const adminRow = (await adminRes.json()).rows.find((r) => r.name === name);
+  assert.equal(adminRow.service_fee_pct, 15);
+});
+
+// ---------------------------------------------------------------------------
 // R084 — POST /api/suppliers/:id/quotes
 // ---------------------------------------------------------------------------
 test('R084 happy: tạo báo giá trả 200 + id', async () => {

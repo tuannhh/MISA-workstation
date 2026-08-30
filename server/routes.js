@@ -51,16 +51,6 @@ function logEdit(req, action, entity, id, detail) {
   const u = req.session.user;
   audit({ user_id: u.id, username: u.username, action, entity, entity_id: id, detail });
 }
-function senGroups(req) { return rbac.allowedGroups(req.session.user); }
-function senVisible(set) { return set.size === rbac.ALL_GROUPS.length; }
-// Có được xem số tiền/chi phí không (nhóm 'org_fee' = Chi phí & Ngân sách)
-function canMoney(req) { return senGroups(req).has('org_fee'); }
-function maskMoney(req, rows, ...fields) {
-  if (canMoney(req)) return rows;
-  const arr = Array.isArray(rows) ? rows : [rows];
-  arr.forEach((r) => { if (r) fields.forEach((f) => { if (r[f] != null) r[f] = rbac.MASK; }); });
-  return rows;
-}
 // Kỳ ngân sách phải dạng YYYY-MM (POST /budgets)
 function isValidBudgetPeriod(period) { return /^\d{4}-\d{2}$/.test(period || ''); }
 // Thông tin tối thiểu để tạo tài khoản mới (POST /admin/users)
@@ -153,27 +143,29 @@ router.get('/partners', requirePerm('partners', 'view'), (req, res) => {
     SELECT o.*, (SELECT COUNT(*) FROM people p WHERE p.org_id = o.id) AS people_count,
       ${OVERDUE} AS fee_overdue
     FROM organizations o ${where} ORDER BY o.name LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
-  const allowed = senGroups(req);
-  res.json({ rows: rbac.maskList('organization', rows, allowed), total, page, pageSize, sensitiveVisible: senVisible(allowed) });
+  // D13 (W1.POLICY.2, dọn cơ chế mask cũ): PolicyEngine là choke point duy nhất, thay
+  // rbac.maskList/senGroups legacy (SUPERSEDED bởi D13 — 02-decisions.md O7) — trước đây list che
+  // membership_fee khác cách detail đã làm từ RBAC-EXP-B2, có thể lộ field Confidential qua
+  // sensitive_perms cũ mà PolicyEngine không công nhận.
+  const projected = rows.map((r) => policyService.projectRecord({ principal: req.principal, entity: 'organization', module: 'partners', record: r }));
+  res.json({ rows: projected, total, page, pageSize, sensitiveVisible: policy.isPrivileged(req.principal) });
 });
 
 router.get('/partners/:id', requirePerm('partners', 'view'), (req, res) => {
   const row = db.prepare('SELECT * FROM organizations WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Không tìm thấy' });
-  const allowed = senGroups(req);
   // D13 (RBAC v2, batch RBAC-EXP-B2 2/6 Global): record chinh chay PolicyEngine (che membership_fee
-  // theo classification_tier); cac collection long ben duoi (people/sponsorships/gifts/fees/agreements/
-  // workLogs) chua co policy slice rieng cho entity cua no (organization moi la entity duoc gan lan
-  // nay, sponsorship/gift/association_fee/agreement/work_log la Direct entity khac, batch sau) nen
-  // van dung rbac.maskList/legacy masking nhu cu, khong doi.
+  // theo classification_tier). W1.POLICY.2: people long ben duoi nay cung qua projectRecord() thay
+  // rbac.maskList/senGroups legacy (SUPERSEDED boi D13) — dong 1 diem quyet duy nhat cho ca list
+  // rieng GET /people lan collection long o day.
   const record = policyService.projectRecord({ principal: req.principal, entity: 'organization', module: 'partners', record: row });
   if (policy.isPrivileged(req.principal) && row.membership_fee) logEdit(req, 'VIEW_SENSITIVE', 'organization', row.id, `Xem hội phí: ${row.name}`);
 
   // Nhân sự thuộc cơ quan (kèm ảnh chính), che trường mật
-  let people = db.prepare(`
+  const people = db.prepare(`
     SELECT p.*, (SELECT a.id FROM attachments a WHERE a.owner_type='person' AND a.owner_id=p.id AND a.kind='portrait' AND a.is_primary=1 LIMIT 1) AS primary_photo_id
-    FROM people p WHERE p.org_id=? ORDER BY p.relationship_score DESC, p.full_name`).all(row.id);
-  people = rbac.maskList('person', people, allowed);
+    FROM people p WHERE p.org_id=? ORDER BY p.relationship_score DESC, p.full_name`).all(row.id)
+    .map((p) => policyService.projectRecord({ principal: req.principal, entity: 'person', module: 'partners', record: p }));
 
   // D13 (RBAC v2, batch RBAC-EXP-B6 6/6 — batch cuối cùng): sponsorship/association_fee/gift che
   // amount/value qua projectRecord() (Direct entity, owner-bypass) thay rbac.maskList/org_fee cũ;
@@ -195,7 +187,7 @@ router.get('/partners/:id', requirePerm('partners', 'view'), (req, res) => {
   const gifts = db.prepare(`SELECT * FROM gifts WHERE owner_type='org' AND owner_id=? ORDER BY event_date DESC`).all(row.id)
     .map((g) => policyService.projectRecord({ principal: req.principal, entity: 'gift', module: 'gifts', record: g }));
   const benefitUsages = db.prepare('SELECT * FROM benefit_usages WHERE org_id=? ORDER BY used_date DESC').all(row.id);
-  res.json({ record, people, sponsorships, interactions, dates, fees, agreements, workLogs, gifts, benefitUsages, caretakers: getCaretakers('org', row.id), sensitiveVisible: senVisible(allowed) });
+  res.json({ record, people, sponsorships, interactions, dates, fees, agreements, workLogs, gifts, benefitUsages, caretakers: getCaretakers('org', row.id), sensitiveVisible: policy.isPrivileged(req.principal) });
 });
 
 router.post('/partners', requirePerm('partners', 'create'), (req, res) => {
@@ -538,8 +530,11 @@ router.get('/people', requirePerm('partners', 'view'), (req, res) => {
       (SELECT a.id FROM attachments a WHERE a.owner_type='person' AND a.owner_id=p.id AND a.kind='portrait' AND a.is_primary=1 LIMIT 1) AS primary_photo_id
     FROM people p LEFT JOIN organizations o ON o.id = p.org_id
     ${where} ORDER BY p.relationship_score DESC, p.full_name LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
-  const allowed = senGroups(req);
-  res.json({ rows: rbac.maskList('person', rows, allowed), total, page, pageSize, sensitiveVisible: senVisible(allowed) });
+  // D13 (W1.POLICY.2, dọn cơ chế mask cũ): PolicyEngine choke point duy nhất, thay
+  // rbac.maskList/senGroups legacy (SUPERSEDED bởi D13) — khớp đúng hành vi GET /people/:id đã dùng
+  // từ RBAC-PILOT (projectRecord), tránh sensitive_perms cũ mở field mà PolicyEngine không công nhận.
+  const projected = rows.map((r) => policyService.projectRecord({ principal: req.principal, entity: 'person', module: 'partners', record: r }));
+  res.json({ rows: projected, total, page, pageSize, sensitiveVisible: policy.isPrivileged(req.principal) });
 });
 
 router.get('/people/:id', (req, res) => {
@@ -940,7 +935,13 @@ function moduleAdminOnlyGate(entity, legacyModule, action) {
 }
 
 router.get('/budgets', requirePerm('reports', 'view'), (req, res) => {
-  res.json({ rows: db.prepare('SELECT * FROM budgets ORDER BY period').all() });
+  // D13 (W1.POLICY.2): budget.amount la Confidential (policy-engine.js FIELD_TIER) — truoc day route
+  // nay tra amount hoan toan khong che (viewer co reports:view nen thay het so tien), khac dung
+  // thiet ke Module-admin-only da ap dung nhat quan cho cac entity khac (Confidential = chi Admin/
+  // Super Admin, khong phu thuoc quyen 'view' module).
+  const rows = db.prepare('SELECT * FROM budgets ORDER BY period').all()
+    .map((r) => policyService.projectRecord({ principal: req.principal, entity: 'budget', module: 'budgets', record: r }));
+  res.json({ rows });
 });
 router.post('/budgets', moduleAdminOnlyGate('budget', 'reports', 'view'), (req, res) => {
   const { period, amount, note } = req.body || {};
@@ -1335,7 +1336,11 @@ router.get('/suppliers', requirePerm('suppliers', 'view'), (req, res) => {
   if (req.query.industry) { extra = ' AND industry LIKE ?'; args.push(`%${req.query.industry}%`); }
   const where = `WHERE (name LIKE ? OR services LIKE ? OR tax_code LIKE ? OR address LIKE ? OR industry LIKE ? OR contact_phone LIKE ? OR contact_email LIKE ?)${extra}`;
   const total = db.prepare(`SELECT COUNT(*) c FROM suppliers ${where}`).get(...args).c;
-  const rows = db.prepare(`SELECT * FROM suppliers ${where} ORDER BY name LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
+  // D13 (W1.POLICY.2): service_fee_pct/deposit_pct la Confidential nhung route nay truoc day khong
+  // che gi ca (khong qua rbac.maskList cu, khong qua projectRecord moi) — khac han GET /suppliers/:id
+  // (da dung projectRecord tu RBAC-EXP-B2). Dong nhat qua PolicyEngine, khop dung D13-039 da test.
+  const rows = db.prepare(`SELECT * FROM suppliers ${where} ORDER BY name LIMIT ? OFFSET ?`).all(...args, pageSize, offset)
+    .map((r) => policyService.projectRecord({ principal: req.principal, entity: 'supplier', module: 'suppliers', record: r }));
   res.json({ rows, total, page, pageSize });
 });
 router.get('/suppliers/list', requirePerm('suppliers', 'view'), (req, res) => {
@@ -2114,7 +2119,7 @@ router.get('/monitor/campaigns/:id/evaluate', requirePerm('monitoring', 'view'),
 // KHÔNG đổi hành vi router, chỉ thêm 1 property lên object router (Express Router bỏ qua property
 // lạ, chỉ quan tâm .get/.post/.use/stack nội bộ).
 router.testables = {
-  pageParams, pick, jsonField, senGroups, senVisible, canMoney, maskMoney,
+  pageParams, pick, jsonField,
   isValidBudgetPeriod, isValidNewUserPayload, sanitizeSensitivePerms,
   nextOccurrence, decorateDates, deadlineInfo, jarr, periodOf, campOut,
   nsrOf, careRiskLevel, bucketOf, crisisOf, sentimentScore, awardCostOf,
