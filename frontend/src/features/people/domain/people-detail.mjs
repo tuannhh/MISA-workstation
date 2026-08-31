@@ -29,6 +29,7 @@ export function peopleDetailViewModel(payload) {
     ['Email công việc', record.email_work], ['Điện thoại công việc', record.phone_work],
   ].filter(([, value]) => value !== null && value !== undefined && value !== '');
   const portraits = Array.isArray(payload?.portraits) ? payload.portraits : [];
+  const idDocs = Array.isArray(payload?.idDocs) ? payload.idDocs : [];
   return Object.freeze({
     id: record.id,
     name: text(record.full_name),
@@ -39,7 +40,9 @@ export function peopleDetailViewModel(payload) {
     publicFields,
     primaryPortrait: portraits.find((portrait) => portrait.is_primary) || portraits[0] || null,
     portraitCount: portraits.length,
+    portraits: Object.freeze(portraits.map((file) => Object.freeze({ ...file }))),
     idDocCount: Number(payload?.idDocCount || 0),
+    idDocs: Object.freeze(idDocs.map((file) => Object.freeze({ ...file }))),
     interactions: Array.isArray(payload?.interactions) ? payload.interactions : [],
     gifts: Array.isArray(payload?.gifts) ? payload.gifts : [],
   });

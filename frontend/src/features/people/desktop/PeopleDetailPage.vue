@@ -4,10 +4,11 @@ import MButton from '../../../components/mds/MButton.vue';
 import MEmptyState from '../../../components/mds/MEmptyState.vue';
 import MTag from '../../../components/mds/MTag.vue';
 import MTabs from '../../../components/mds/MTabs.vue';
+import PeopleAttachmentsPanel from '../PeopleAttachmentsPanel.vue';
 import { fileUrl } from '../domain/people-detail.mjs';
 
-defineProps({ detail: { type: Object, required: true }, canEdit: { type: Boolean, default: false } });
-const emit = defineEmits(['back', 'edit']);
+defineProps({ detail: { type: Object, required: true }, canEdit: { type: Boolean, default: false }, canManageIdDocs: { type: Boolean, default: false }, attachmentWorking: { type: Boolean, default: false }, attachmentError: { type: String, default: '' } });
+const emit = defineEmits(['back', 'edit', 'upload', 'set-primary', 'delete-attachment']);
 const activeTab = ref('overview');
 const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachments', label: 'Tệp đính kèm' }, { key: 'history', label: 'Tương tác' }];
 </script>
@@ -31,7 +32,7 @@ const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachment
           <section class="min-w-0"><h2 class="text-[16px] font-semibold leading-[22px]">Thông tin công khai</h2><dl class="mt-3 grid gap-x-8 sm:grid-cols-2"><div v-for="field in detail.publicFields" :key="field[0]" class="grid grid-cols-[120px_minmax(0,1fr)] gap-3 border-b border-[var(--mds-border-light)] py-2.5"><dt class="text-[12px] leading-4 text-[var(--mds-text-secondary)]">{{ field[0] }}</dt><dd class="min-w-0 break-words text-[13px] font-medium leading-[18px] text-[var(--mds-text)]">{{ field[1] }}</dd></div></dl></section>
           <aside class="rounded-lg bg-[var(--mds-bg-page)] p-4"><h2 class="text-[14px] font-semibold leading-5">Dữ liệu được phép xem</h2><p class="mt-2 text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">Thông tin nhạy cảm và giấy tờ chỉ hiển thị khi API đã chiếu dữ liệu theo PolicyEngine.</p><dl class="mt-4 space-y-3 text-[13px]"><div class="flex justify-between gap-3"><dt class="text-[var(--mds-text-secondary)]">Ảnh chân dung</dt><dd class="font-medium">{{ detail.portraitCount }}</dd></div><div class="flex justify-between gap-3"><dt class="text-[var(--mds-text-secondary)]">Giấy tờ đã ẩn/hiện</dt><dd class="font-medium">{{ detail.idDocCount }}</dd></div></dl></aside>
         </div>
-        <MEmptyState v-else-if="activeTab === 'attachments'" title="Tệp đính kèm sẽ được hiển thị theo quyền" description="Batch đọc chỉ hiển thị dữ liệu mà máy chủ đã cấp; thao tác tệp tiếp tục dùng luồng legacy cho đến slice write/file." />
+        <PeopleAttachmentsPanel v-else-if="activeTab === 'attachments'" :portraits="detail.portraits" :id-docs="detail.idDocs" :id-doc-count="detail.idDocCount" :can-edit="canEdit" :can-manage-id-docs="canManageIdDocs" :working="attachmentWorking" :error="attachmentError" @upload="emit('upload', $event)" @set-primary="emit('set-primary', $event)" @delete="emit('delete-attachment', $event)" />
         <MEmptyState v-else title="Chưa có tương tác được hiển thị" description="Tương tác và biểu mẫu sẽ được chuyển trong slice People List/Forms/Interactions." />
       </MTabs>
     </div>

@@ -15,6 +15,7 @@ const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleDetai
 const mobileEditForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleEditFormMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
 const editForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleEditFormDesktop.vue'), 'utf8');
+const attachmentPanel = fs.readFileSync(path.join(featureRoot, 'PeopleAttachmentsPanel.vue'), 'utf8');
 
 async function domain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'people-detail.mjs')).href);
@@ -89,4 +90,16 @@ test('UI-PPL-007: Native edit là composition riêng, có footer safe-area và x
   assert.match(mobileEditForm, /--mds-mobile-safe-bottom/, 'footer phải tôn trọng safe area host');
   assert.doesNotMatch(mobileEditForm, /platform-header|sidebar|MHeaderBar|MSidebar/, 'native edit không tái sử dụng shell desktop');
   assert.match(feature, /state\.mode === 'read'/, 'foreground không được tự reload làm mất draft đang sửa');
+});
+
+test('UI-PPL-008: Tệp People Detail dùng MDS upload, chỉ nhận projection và luôn quay về API protected', async () => {
+  const { peopleDetailViewModel } = await domain();
+  const model = peopleDetailViewModel({ record: { id: 8, full_name: 'Nguyễn Thu Hà' }, portraits: [{ id: 12, kind: 'portrait' }], idDocs: [{ id: 13, kind: 'id_doc' }], idDocCount: 1 });
+  assert.equal(model.portraits[0].id, 12);
+  assert.equal(model.idDocs[0].id, 13);
+  assert.match(attachmentPanel, /<MUpload/, 'file picker phải dùng MDS upload');
+  assert.match(attachmentPanel, /<MDialog/, 'xóa file phải xác nhận');
+  assert.match(attachmentPanel, /fileUrl\(file\.id\)/, 'mở file luôn qua /api/files/:id có bảo vệ');
+  assert.match(feature, /api\.upload\(props\.personId/, 'upload phải đi qua API server-enforced');
+  assert.match(feature, /api\.deleteAttachment\(attachmentId\)/, 'xóa phải đi qua API server-enforced');
 });

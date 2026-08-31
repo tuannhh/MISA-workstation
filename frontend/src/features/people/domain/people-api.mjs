@@ -53,5 +53,17 @@ export function createPeopleApi({ fetchFn = globalThis.fetch, basePath = '/api' 
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async setPrimary(personId, attachmentId) {
+      const response = await fetchFn(`${basePath}/people/${Number(personId)}/attachments/${Number(attachmentId)}/primary`, { method: 'PUT', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
+    async deleteAttachment(attachmentId) {
+      const response = await fetchFn(`${basePath}/attachments/${Number(attachmentId)}`, { method: 'DELETE', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
   });
 }
