@@ -1,11 +1,14 @@
 # Evidence Bundle — W3.VOICE.SECURE-COMMAND + W3.VOICE.1 (backend/API-only) — gửi Codex audit
 
-> **Trạng thái: BLOCKED hẹp (Codex audit) → ĐÃ FIX F25/F26/P2 (Claude 2026-08-31), chờ re-audit.**
+> **Trạng thái: BLOCKED hẹp (Codex audit) → F25/F26/P2 ACCEPTED (Codex re-audit) → F27 phát hiện
+> trong chính vòng re-audit đó → ĐÃ FIX F27 (Claude 2026-08-31), chờ re-audit lần cuối.**
 > Codex audit trên bundle gốc dưới đây xác nhận phần lớn thiết kế đúng hướng (10/10 test cũ xanh,
 > principal binding/tampering guard/quyền re-check tại confirm/score-clamp/confirm lặp tuần tự đều
 > đúng) nhưng trả **BLOCKED** với 2 MUST-FIX P1 tái hiện được bằng HTTP thật + 1 P2 gộp chung: xem
-> mục "Remediation F25/F26/P2" ở cuối tài liệu. Nội dung bundle gốc bên dưới **giữ nguyên không sửa**
-> (đúng nguyên tắc audit trail); phần fix + evidence ghi ở mục cuối.
+> mục "Remediation F25/F26/P2" — **Codex re-audit ACCEPTED cả 3** (chạy lại 12/12 test độc lập, tự
+> xác nhận transaction/rollback thật) nhưng phát hiện thêm **F27** (P1 mới, parent entity TOCTOU) —
+> xem mục "Remediation F27" ở cuối tài liệu. Nội dung bundle gốc bên dưới **giữ nguyên không sửa**
+> (đúng nguyên tắc audit trail); phần fix + evidence ghi ở 2 mục cuối.
 
 Batch độc lập (không gộp với bundle W1 đã đóng). Backend/API thuần theo lane Claude
 (`17-fast-track-collaboration.md` §1, `CLAUDE.md` mục 6); UI cho R149/R150 CHƯA làm — lane Codex,
@@ -173,8 +176,12 @@ hết, `misa/main` @ `ba81e43`); không có file unrelated pre-existing nào l�
 
 ## Remediation F25/F26/P2 (2026-08-31) — phạm vi hẹp, chỉ sửa đúng 2 MUST-FIX + 1 P2 Codex chỉ ra
 
-**Status:** ĐÃ FIX (commit `05826b4`, đã push `misa/main`) — chờ Codex re-audit đúng 5 hành vi đã
-yêu cầu (theo `17-fast-track-collaboration.md` §8, không mở lại phần đã pass trong bundle gốc).
+**Status: ĐÃ FIX, Codex re-audit ACCEPTED (2026-08-31).** Codex chạy lại độc lập 12/12 test voice
+trên cả SQLite/MySQL; failure-path DB thật rollback đúng, không còn proposal `confirmed` mồ côi;
+transaction bọc claim→interaction→audit→result pointer→CAS đúng như mô tả (`server/ai.js`); score
+stale trả `409 PROPOSAL_STALE`, không tạo interaction; `idempotencyKey` bắt buộc + validate đúng;
+`verify-g0`/route mapping/`git diff --check` đều xanh. **Không mở lại 3 finding này** — vòng
+re-audit phát hiện thêm 1 P1 mới ngoài phạm vi 3 finding trên, xem mục "Remediation F27" bên dưới.
 
 **Evidence Codex đưa ra (audit lần 1):** tạo trigger tạm ép `INSERT INTO interactions` lỗi, tái
 hiện HTTP thật trên SQLite:
@@ -257,6 +264,98 @@ scope sang UI Voice/MDS trong vòng backend này"). Không đổi route `/intera
 
 **Rollback path:** 1 commit độc lập (`05826b4`), `git revert` an toàn — chỉ đổi logic nội bộ route
 confirm + thêm 1 helper dùng chung, không route/entity khác phụ thuộc `withTransaction()`.
+
+**Worktree status:** `git status --short` sạch tại thời điểm chuẩn bị remediation này; không có file
+unrelated pre-existing nào lẫn vào commit.
+
+---
+
+## Remediation F27 (2026-08-31) — parent entity (person/organization) TOCTOU, phát hiện trong vòng re-audit F25/F26/P2
+
+**Status:** ĐÃ FIX (commit `340e4a8`, đã push `misa/main`) — chờ Codex re-audit đúng 3 case đã yêu
+cầu: person bị xoá, organization bị xoá, revision stale (theo `17-fast-track-collaboration.md` §8,
+không mở lại F25/F26/P2 đã ACCEPTED).
+
+**Evidence Codex đưa ra:** phát hiện ngay trong lúc re-audit F25/F26/P2, không phải finding mới độc
+lập — Codex tái hiện HTTP thật:
+1. Propose 1 interaction với person hợp lệ, KHÔNG có score delta.
+2. Xoá person trước khi confirm.
+3. Confirm vẫn trả `200`, proposal thành `confirmed`, interaction mới giữ `partner_id` trỏ tới
+   person đã bị xoá.
+
+Root cause: proposal chỉ snapshot `id/name/relationship_score` — dùng làm cơ sở CAS cho
+`relationship_score` — nhưng CAS đó chỉ chạy khi `scoreDelta !== 0`. Khi không sửa điểm, không có cơ
+chế nào đọc lại/so sánh person hoặc organization đã chọn còn tồn tại/còn đúng như lúc người dùng xác
+nhận — trái D14.4 ("server phải đọc lại bản ghi hiện tại và so snapshot/revision trước khi ghi").
+
+**Fix áp dụng theo hướng "bắt buộc tối thiểu" + phần "trạng thái terminal" Codex đề xuất (không thêm
+cột `revision` schema-wide theo phương án "đầy đủ" #2 — xem lý do dưới):**
+1. 2 hàm mới `fetchPersonSnapshot(id)`/`fetchOrgSnapshot(id)` (`server/ai.js`) — đọc lại ĐÚNG các
+   field đã có sẵn trong snapshot candidate lúc propose (`name`/`org_name`/`relationship_score` cho
+   person qua JOIN với `organizations`; `name`/`org_type` cho org).
+2. Trong CÙNG transaction với claim (sau khi claim thành công, TRƯỚC khi insert interaction): với
+   MỖI parent đã chọn (`selectedPerson`/`selectedOrg`, không chỉ khi có score delta), đọc lại và so
+   sánh (`snapshotDrifted()`) — row không tồn tại HOẶC bất kỳ field nào khác snapshot → đánh dấu
+   stale.
+3. Khi stale: `UPDATE voice_proposals SET status='stale' WHERE id=?` rồi **COMMIT** (khác với lỗi
+   thật — vẫn `ROLLBACK` về `pending`) — không bao giờ insert interaction. Trạng thái `stale` là
+   **terminal**: route confirm nay có nhánh riêng chặn sớm `if (proposal.status === 'stale')` →
+   `409 PROPOSAL_STALE` ngay từ đầu, không cho "sống lại" dù dữ liệu vô tình quay về đúng snapshot cũ
+   — đúng đề xuất #3 của Codex.
+4. **Quyết định về phương án #2 (thêm cột `revision` cho `people`/`organizations` + tăng ở mọi
+   đường ghi):** không làm — so sánh trực tiếp TOÀN BỘ field đã snapshot với bản ghi hiện tại (bước
+   2 ở trên) bao phủ được MỌI thay đổi thật (kể cả những field ngoài dự kiến), không phụ thuộc việc
+   nhớ tăng `revision` đúng ở mọi đường ghi mới trong tương lai (rủi ro bỏ sót cao hơn), và không mở
+   rộng phạm vi remediation sang toàn bộ write-path của 2 bảng dùng chung nhiều module khác ngoài
+   Voice. Coi phương án so sánh trực tiếp là tương đương ngữ nghĩa với "revision" theo đúng tinh
+   thần D14.4 (snapshot khác hiện tại → từ chối), không phải cắt góc.
+5. CAS `relationship_score` (khi có score delta) giữ nguyên làm lưới an toàn thứ 2: vì bước 2 đã xác
+   nhận fresh NGAY TRONG CÙNG transaction, CAS ở đây về lý thuyết không thể fail — nếu fail thật, coi
+   là vi phạm giả định đồng bộ của `withTransaction()` (lỗi hệ thống thật), `throw` lỗi thường để
+   ROLLBACK toàn bộ + `502`, KHÔNG coi là stale bình thường.
+
+**Test mới/sửa (`server/test/integration-voice-secure-command.test.js`, 12→15 test):**
+- "person bị XOÁ giữa propose và confirm (không có score delta)" → `409 PROPOSAL_STALE`, không tạo
+  interaction, proposal `status='stale'`.
+- "organization bị XOÁ giữa propose và confirm" → tương tự.
+- "person ĐỔI TÊN (không phải điểm) giữa propose và confirm" → `409 PROPOSAL_STALE` — xác nhận
+  drift-check không chỉ theo dõi điểm, đúng ý nghĩa "revision" toàn diện.
+- Sửa test stale-score cũ: assert `getProposal().status === 'stale'` (không còn `'pending'`), thêm
+  bước retry cùng proposal vẫn `409 PROPOSAL_STALE` (xác nhận không "sống lại").
+- 15/15 test xanh cả SQLite/MySQL.
+
+**Commands and exact results:**
+
+| Suite | Kết quả |
+|---|---|
+| Security | 6/6 pass |
+| SQLite integration | 826 total / 818 pass / 8 skip (+3 so với remediation F25/F26/P2) |
+| MySQL integration | 826 total / 825 pass / 1 skip (+3) |
+| Route mapping | 150/150 PASS (không đổi) |
+| `scripts/verify-g0.mjs` | PASS toàn bộ check |
+| `git diff --check` | sạch |
+
+**Changed files:** `server/ai.js` (2 hàm snapshot mới, nhánh stale-check trong transaction, nhánh
+chặn sớm `status==='stale'`, xoá `StaleScoreError` không còn dùng); `server/test/integration-voice-
+secure-command.test.js` (3 test mới, sửa 1 test, thêm helper `insertOrg`/`getOrg`).
+`01-audit-findings.md` (§F27 mới, cập nhật trạng thái F25/F26/P2 → ACCEPTED), `04-ROADMAP.md`/
+`15-changelog.md` (execution update) — docs only.
+
+**Behavior changes:**
+1. Confirm với person/org đã bị xoá (kể cả KHÔNG có score delta) nay `409 PROPOSAL_STALE`, KHÔNG
+   tạo interaction (trước đây `200`, tạo interaction trỏ tới bản ghi đã mất).
+2. Confirm với person đã đổi tên/đổi tổ chức (hoặc org đổi loại) giữa propose/confirm nay cũng
+   `409 PROPOSAL_STALE` (trước đây không được kiểm tra ngoài điểm).
+3. Proposal stale (điểm/parent) nay chuyển trạng thái **terminal `stale`** thay vì quay lại
+   `pending` — không còn khả năng "sống lại" nếu dữ liệu vô tình trùng khớp snapshot cũ lần nữa.
+4. Happy-path và các case đã ACCEPTED (F25 rollback lỗi thật, F26 score stale ban đầu, P2
+   idempotencyKey, principal binding, tampering guard, TTL) giữ nguyên hành vi, không regression.
+
+**Out-of-scope:** không thêm cột `revision` cho `people`/`organizations` (xem lý do ở mục 4 phần
+Fix); không mở rộng sang UI Voice/MDS; không đổi route `/interaction-voice` cũ.
+
+**Rollback path:** 1 commit độc lập (`340e4a8`), `git revert` an toàn — chỉ đổi logic nội bộ route
+confirm + 2 hàm helper cục bộ trong `ai.js`, không entity/route khác phụ thuộc.
 
 **Worktree status:** `git status --short` sạch tại thời điểm chuẩn bị remediation này; không có file
 unrelated pre-existing nào lẫn vào commit.

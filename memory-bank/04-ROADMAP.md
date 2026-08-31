@@ -880,6 +880,26 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > F25/F26/P2". **Chờ Codex re-audit đúng 5 hành vi đã yêu cầu**, không mở lại phần đã ACCEPTED
 > (không có phần nào), không mở rộng sang UI Voice/MDS.
 >
+> **Execution update — 2026-08-31 (F25/F26/P2 ACCEPTED, remediation F27 sau re-audit, ĐÃ FIX, chờ
+> re-audit lần cuối):** Codex re-audit xác nhận **ACCEPTED F25/F26/P2** (chạy lại 12/12 test voice
+> cả 2 driver, tự xác nhận transaction/rollback thật, `PROPOSAL_STALE` không tạo interaction,
+> `idempotencyKey` validate đúng) nhưng phát hiện thêm **F27 (P1 mới)**: proposal chỉ snapshot
+> `id/name/relationship_score` cho CAS điểm, KHÔNG đọc lại person/org lúc confirm khi KHÔNG có score
+> delta — Codex tái hiện: propose person hợp lệ (không score delta) → xoá person → confirm vẫn `200`,
+> interaction trỏ tới person đã mất — trái D14.4 (phải đọc lại + so snapshot trước khi ghi). Fix: đọc
+> lại ĐÚNG field đã snapshot (`name`/`org_name`/`relationship_score` cho person; `name`/`org_type`
+> cho org) TRƯỚC khi ghi, cho MỌI parent đã chọn (không chỉ khi có score delta) — coi toàn bộ
+> snapshot candidate là "revision" thực tế thay vì thêm cột `revision` riêng + instrument mọi đường
+> ghi `people`/`organizations` (phạm vi hẹp hơn, rủi ro bỏ sót đường ghi thấp hơn). Khi stale (row bị
+> xoá HOẶC field khác), proposal chuyển **terminal `stale`** + COMMIT (không rollback về `pending`) —
+> tránh "sống lại" nếu dữ liệu vô tình quay về đúng snapshot cũ, đúng đề xuất #3 Codex. Test tăng
+> 12→15 (person xoá, org xoá, person đổi tên đều 409 `PROPOSAL_STALE`; test stale-score cũ cập nhật
+> assert `status='stale'`). Full regression: security 6/6, SQLite 826/818/8 skip (+3), MySQL
+> 826/825/1 skip (+3), `verify-g0.mjs` PASS, `verify-gate1-mapping` 150/150 PASS, `git diff --check`
+> sạch. Commit `340e4a8`. Chi tiết: `01-audit-findings.md` §F27, bundle mục "Remediation F27". **Chờ
+> Codex re-audit đúng 3 case đã yêu cầu** (person xoá, org xoá, revision stale), không mở lại
+> F25/F26/P2 đã ACCEPTED.
+>
 > **Rà soát Wave 2-4 sau batch này (đóng vòng `/goal`):** hỏi lại owner riêng về W2.5 (host-adapter
 > interface) vì tự thấy ranh giới server/client mơ hồ — **owner xác nhận (2026-08-31): W2.5 là lane
 > Codex** (interface sống ở `frontend/`), để lại chưa làm, xem hàng W2.5 ở bảng Wave 2. Sau khi trừ

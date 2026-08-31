@@ -2809,3 +2809,39 @@ skip (+2), `verify-g0.mjs` PASS, `verify-gate1-mapping` 150/150 PASS, `git diff 
 tiết: `01-audit-findings.md` §F25/§F26/P2, `24-audit-bundle-w3voice-securecommand.md` mục
 "Remediation F25/F26/P2". **Chờ Codex re-audit đúng 5 hành vi đã yêu cầu**, không mở rộng sang UI
 Voice/MDS trong vòng backend này (đúng phạm vi Codex đã giới hạn).
+
+## F25/F26/P2 ACCEPTED — remediation F27 (parent entity TOCTOU) sau re-audit Codex
+
+Codex re-audit xác nhận **ACCEPTED F25/F26/P2**: chạy lại độc lập 12/12 test voice cả SQLite/MySQL,
+tự xác nhận transaction bọc claim→interaction→audit→result pointer→CAS đúng (`server/ai.js`),
+`PROPOSAL_STALE` không tạo interaction, `idempotencyKey` bắt buộc + validate đúng, `verify-g0`/route
+mapping/`git diff --check` đều xanh — không mở lại phần này.
+
+Cùng lúc phát hiện **F27 (P1 mới)**: cơ chế snapshot batch gốc chỉ bảo vệ `relationship_score` (dùng
+cho CAS) và chỉ chạy khi có score delta — KHÔNG có cơ chế nào đọc lại/so sánh person hoặc
+organization đã chọn khi KHÔNG sửa điểm. Codex tái hiện HTTP thật: propose 1 interaction với person
+hợp lệ (không score delta) → xoá person trước confirm → confirm vẫn trả `200`, proposal `confirmed`,
+interaction mới giữ `partner_id` trỏ tới person đã bị xoá — trái D14.4 (server phải đọc lại bản ghi
+hiện tại và so snapshot/revision trước khi ghi).
+
+Fix (commit `340e4a8`): đọc lại ĐÚNG các field đã snapshot cho person (`name`/`org_name`/
+`relationship_score`) và org (`name`/`org_type`) TRƯỚC khi ghi bất kỳ gì, cho MỌI parent đã chọn —
+không chỉ khi có score delta. Coi toàn bộ snapshot candidate (đã trả cho người dùng lúc propose) là
+"revision" thực tế, thay vì thêm cột `revision` riêng cho `people`/`organizations` + instrument mọi
+đường ghi 2 bảng đó trong toàn bộ code base — phạm vi hẹp hơn nhiều, và so sánh trực tiếp bản ghi
+hiện tại đã bao phủ hết mọi đường ghi có thể (không phụ thuộc việc có nhớ tăng `revision` đúng chỗ
+hay không). Khi phát hiện stale (row bị xoá HOẶC bất kỳ field snapshot nào khác đi), proposal chuyển
+sang trạng thái **terminal `stale`** và `COMMIT` (khác với lỗi thật — vẫn `ROLLBACK` về `pending`,
+retry được) — không bao giờ insert interaction, và không thể "sống lại" nếu dữ liệu vô tình quay về
+đúng snapshot cũ (vd điểm đổi rồi đổi lại) — đúng đề xuất #3 của Codex.
+
+Test: 3 test mới (person bị xoá không score delta, organization bị xoá, person đổi tên — cả 3 đều
+`409 PROPOSAL_STALE`, không tạo interaction, proposal chuyển `stale`); sửa test stale-score cũ (assert
+`status='stale'` thay vì `'pending'`, thêm bước retry vẫn `409`). 15/15 test xanh cả 2 driver (tăng
+từ 12).
+
+Full regression: security 6/6, SQLite 826 total/818 pass/8 skip (+3), MySQL 826 total/825 pass/1
+skip (+3), `verify-g0.mjs` PASS, `verify-gate1-mapping` 150/150 PASS, `git diff --check` sạch. Chi
+tiết: `01-audit-findings.md` §F27, `24-audit-bundle-w3voice-securecommand.md` mục "Remediation F27".
+**Chờ Codex re-audit đúng 3 case đã yêu cầu** (person xoá, org xoá, revision stale), không mở lại
+F25/F26/P2 đã ACCEPTED.
