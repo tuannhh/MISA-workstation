@@ -275,6 +275,14 @@ function setActive(key) {
 const VIEWS = {};
 async function route() {
   const key = (location.hash.replace('#', '') || 'dashboard');
+  // W3 strangler seam: a Vue island may claim a narrow, feature-flagged route.
+  // It must run before legacy DOM rendering; false means legacy behavior stays
+  // exactly as it was (including all current write/file operations).
+  if (window.__misaUiFeatureRouter?.resolve?.(key)) {
+    setActive('people');
+    $('#crumb').textContent = 'Nhân sự';
+    return;
+  }
   const base = key.split('/')[0];
   const navItem = NAV.find((n) => n.key === base);
   if (navItem && navItem.mod && !can(navItem.mod, 'view')) return (location.hash = 'dashboard');

@@ -804,6 +804,13 @@ Thứ tự: 1) **People Detail (pilot)** → 2) Partner Detail → 3) Supplier/B
 
 Mỗi slice: characterization/spec → mechanical extraction (commit riêng) → policy/service (RBAC v2) → Desktop MDS token/component → Native composition (W2.5 contract) → role/device test. **Exit mỗi slice:** không còn SQL/business-rule trong controller slice; desktop MDS pass token/a11y/visual; native composition pass contract test; regression xanh; rollback độc lập.
 
+> **Execution update — 2026-09-01 (W3.PEOPLE.READ):** bắt đầu strangler People Detail bằng batch
+> đọc hẹp, feature-flagged, không cutover write/file legacy. Vue island chia domain/API, Desktop
+> MDS và Native composition độc lập; route `#person/:id` chỉ được claim khi host bật
+> `peopleDetailRead`. Native thiếu provider fail-closed trong native shell, không về desktop.
+> Contract/matrix/giới hạn runtime ở `26-w3-people-detail-read-batch-contract.md`. Exit còn chờ
+> visual review + build/regression; O3/W4 vẫn chặn mọi tuyên bố Native production pass.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

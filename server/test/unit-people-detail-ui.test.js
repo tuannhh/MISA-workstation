@@ -1,0 +1,57 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+
+const root = path.resolve(__dirname, '..', '..');
+const featureRoot = path.join(root, 'frontend', 'src', 'features', 'people');
+const appVue = fs.readFileSync(path.join(root, 'frontend', 'src', 'App.vue'), 'utf8');
+const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+const desktopPage = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleDetailPage.vue'), 'utf8');
+const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleDetailPageMobile.vue'), 'utf8');
+const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
+
+async function domain() {
+  return import(pathToFileURL(path.join(featureRoot, 'domain', 'people-detail.mjs')).href);
+}
+
+test('UI-PPL-001: People Detail có hai composition MDS độc lập, Native không chứa desktop shell', () => {
+  assert.match(desktopPage, /shadow-\[var\(--mds-shadow-card\)\]/, 'desktop card phải dùng token shadow MDS');
+  assert.match(desktopPage, /<MButton/, 'desktop action phải dùng MDS control');
+  assert.match(mobilePage, /class="mds-mobile-app/, 'native phải có root mini-app riêng');
+  assert.match(mobilePage, /<MMobileTopBar/, 'native phải dùng top bar mini-app');
+  assert.doesNotMatch(mobilePage, /platform-header|sidebar|MHeaderBar|MSidebar/, 'native không được tái sử dụng desktop shell');
+  assert.doesNotMatch(mobilePage, /<button\b/, 'page native không được tự chế raw button');
+});
+
+test('UI-PPL-002: route chỉ được strangler claim qua cờ host, trước legacy renderer', () => {
+  assert.match(appVue, /__MISA_UI_FEATURE_FLAGS__\?\.peopleDetailRead === true/, 'pilot phải opt-in qua cờ host, mặc định không cướp write/file legacy');
+  assert.doesNotMatch(appVue, /userAgent|innerWidth|matchMedia|role.*HostSurface|HostSurface.*role/, 'surface không được suy diễn từ UA, viewport hay role');
+  assert.match(appVue, /surface !== HostSurface\.NATIVE[\s\S]*hostUnavailable: true/, 'Native thiếu adapter phải fail-closed, không fallback desktop');
+  const seam = appJs.indexOf('window.__misaUiFeatureRouter?.resolve?.(key)');
+  const legacyRender = appJs.indexOf("$('#view').innerHTML");
+  assert.ok(seam >= 0 && seam < legacyRender, 'feature seam phải chạy trước legacy DOM render');
+});
+
+test('UI-PPL-003: lifecycle, deep link và Back đều đi qua host adapter contract', () => {
+  for (const token of ['HostEvent.VIEWPORT', 'HostEvent.LIFECYCLE', 'HostEvent.DEEP_LINK', "adapter.goBack({ reason: 'people-detail' })"]) {
+    assert.match(feature, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${token} phải đi qua adapter`);
+  }
+  assert.doesNotMatch(feature, /navigator\.mediaDevices|window\.addEventListener\(['"](resize|popstate)/, 'feature không tự gọi device/browser bridge ngoài contract');
+});
+
+test('UI-PPL-004: view model chỉ hiển thị field API đã chiếu, không dựng field nhạy cảm', async () => {
+  const { peopleDetailViewModel, fileUrl, initials } = await domain();
+  const model = peopleDetailViewModel({
+    record: { id: 8, full_name: 'Nguyễn Thu Hà', position: 'Phóng viên', org_name: 'Báo MISA', phone_personal: '0900000000', bank_account_number: '123' },
+    portraits: [{ id: 12, is_primary: 1 }], idDocCount: 2,
+  });
+  assert.equal(model.initials, 'TH');
+  assert.equal(fileUrl(model.primaryPortrait.id), '/api/files/12');
+  assert.ok(model.publicFields.every(([label]) => !/cá nhân|ngân hàng|địa chỉ/i.test(label)), 'UI read không được tự đưa sensitive field vào view model');
+  assert.equal(initials(''), '?');
+  assert.equal(fileUrl('not-an-id'), null);
+});

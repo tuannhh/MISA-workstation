@@ -70,3 +70,10 @@ host của MDS.
 4. Khi một slice thêm native UI, thay UI-CHAR-004 bằng contract + runtime test **dương tính**
    (native root, host adapter, role/403, viewport và capability evidence), không xóa finding F5
    chỉ vì CSS responsive được cải thiện.
+
+## 5. W3.PEOPLE.READ pilot — 2026-09-01
+
+`UI-CHAR-004` tiếp tục mô tả **legacy shell**; nó không được dùng để phủ định composition mới ở
+`frontend/src/features/people/mobile/`. Pilot chi tiết People dùng feature flag host và có test
+`UI-PPL-001..004`; evidence/giới hạn đầy đủ ở `26-w3-people-detail-read-batch-contract.md`.
+Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/W4; F5 không thay đổi.

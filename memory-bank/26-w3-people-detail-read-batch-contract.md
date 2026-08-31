@@ -1,0 +1,48 @@
+# 26 — Batch Contract: W3.PEOPLE.READ (People Detail strangler pilot)
+
+> **Status:** IMPLEMENTED / automated regression PASS; chờ authenticated visual review — 2026-09-01.
+> Đây là batch đọc hẹp, không phải tuyên bố đã thay toàn bộ hồ sơ nhân sự.
+
+## 1. Mục tiêu và phạm vi
+
+Thay thế có kiểm soát **phần trình bày đọc** của hash `#person/:id` bằng Vue island dùng MDS, với hai composition độc lập:
+
+- Desktop: page detail trong shell desktop hiện hữu.
+- Native-Mobile: mini-app `.mds-mobile-app` là sibling của desktop shell; dùng `MMobileTopBar`, tab cuộn ngang, safe-area token và host adapter.
+
+Nguồn dữ liệu duy nhất là `GET /api/people/:id` (R030). API đã chiếu field/file qua PolicyEngine nên UI không tự tính quyền hoặc khôi phục field bị server ẩn.
+
+## 2. Rollout và giữ hành vi cũ
+
+- Cờ host/staging `window.__MISA_UI_FEATURE_FLAGS__ = { peopleDetailRead: true }` mới kích hoạt island. Mặc định `false`.
+- Khi cờ tắt, hash tiếp tục chạy `VIEWS.person` legacy, gồm mọi thao tác R032–R037, gifts, interactions và bookings như trước.
+- Khi host khai báo Native nhưng provider không hợp lệ/chưa có O3, UI hiển thị native error shell và **không** fallback sang desktop.
+- Không dùng role, user-agent hoặc viewport để chọn surface. Server session/RBAC vẫn quyết định dữ liệu và 403.
+
+## 3. Route × surface × role
+
+| Route/flow | Desktop | Native-Mobile fake provider | Native AMIS thật | super_admin/admin | executor | viewer |
+|---|---|---|---|---|---|---|
+| R030/F005 People Detail — read | Vue MDS pilot, feature flag | Vue native composition, contract test | **UNVERIFIED — O3/W4.1** | projection server | projection server | projection server/403 native shell |
+| R032–R037 write/file | Legacy giữ nguyên trong batch này | Chưa chuyển slice | **UNVERIFIED** | backend đã PolicyEngine | backend đã PolicyEngine | backend 403 |
+
+`viewer` không bị route UI điều hướng sang desktop; nếu API trả 403 thì native composition hiển thị error state. Quyền đọc chi tiết cuối cùng vẫn do backend trả về.
+
+## 4. Runtime contract và giới hạn trung thực
+
+- Back: Native gọi `adapter.goBack()`. Desktop quay về `#people`.
+- Lifecycle foreground: reload qua adapter; viewport cập nhật safe area; deep link `people/:id` chỉ yêu cầu navigation rồi phải fetch/RBAC lại.
+- Camera/file picker/mic: **N/A cho read-only batch**; UI không request capability.
+- Accessibility device (Dynamic Type/Display Zoom, Font/Display size), notification/deep link và gesture trên AMIS thật: **UNVERIFIED**, phải thực hiện W4.1–W4.3 sau O3. Fake provider chỉ chứng minh contract code.
+
+## 5. Exit criteria batch
+
+1. Desktop và Native là hai cây page riêng, không co desktop bằng CSS.
+2. Không làm mất chức năng write/file legacy khi pilot chưa bật.
+3. UI hiển thị loading / 403 / 404 / lỗi kết nối trong đúng shell đã chọn.
+4. Có unit/source contract `UI-PPL-001..004`, build UI và regression liên quan xanh.
+5. Không đóng F5 hoặc tuyên bố Native production pass trước W4/O3.
+
+## 6. Rollback
+
+Tắt `peopleDetailRead` là rollback tức thời, không migration/schema/data. Có thể revert độc lập các file dưới `frontend/src/features/people/`, `frontend/src/components/mds/` và seam nhỏ trong `App.vue`/`public/app.js`.

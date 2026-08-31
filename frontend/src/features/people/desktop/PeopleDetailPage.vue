@@ -1,0 +1,39 @@
+<script setup>
+import { ref } from 'vue';
+import MButton from '../../../components/mds/MButton.vue';
+import MEmptyState from '../../../components/mds/MEmptyState.vue';
+import MTag from '../../../components/mds/MTag.vue';
+import MTabs from '../../../components/mds/MTabs.vue';
+import { fileUrl } from '../domain/people-detail.mjs';
+
+defineProps({ detail: { type: Object, required: true } });
+const emit = defineEmits(['back']);
+const activeTab = ref('overview');
+const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachments', label: 'Tệp đính kèm' }, { key: 'history', label: 'Tương tác' }];
+</script>
+
+<template>
+  <section class="min-h-0 bg-[var(--mds-bg-page)] p-4">
+    <header class="mb-4 flex min-w-0 items-center justify-between gap-4 rounded-lg bg-[var(--mds-bg)] px-4 py-3 shadow-[var(--mds-shadow-card)]">
+      <div class="flex min-w-0 items-center gap-3">
+        <div class="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--mds-brand-50)] text-[16px] font-semibold text-[var(--mds-brand-700)]">
+          <img v-if="fileUrl(detail.primaryPortrait?.id)" class="h-full w-full object-cover" :src="fileUrl(detail.primaryPortrait.id)" :alt="`Ảnh của ${detail.name}`" />
+          <span v-else>{{ detail.initials }}</span>
+        </div>
+        <div class="min-w-0"><h1 class="truncate text-[20px] font-semibold leading-7 text-[var(--mds-text)]">{{ detail.name }}</h1><p class="truncate text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">{{ detail.subtitle }}</p></div>
+        <MTag :color="detail.statusColor" class="hidden lg:inline-flex">{{ detail.status }}</MTag>
+      </div>
+      <div class="flex shrink-0 items-center gap-2"><MButton variant="neutral" @click="emit('back')">Danh bạ</MButton></div>
+    </header>
+    <div class="rounded-lg bg-[var(--mds-bg)] shadow-[var(--mds-shadow-card)]">
+      <MTabs v-model="activeTab" :tabs="tabs" class="[&>[role=tablist]]:px-4">
+        <div v-if="activeTab === 'overview'" class="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <section class="min-w-0"><h2 class="text-[16px] font-semibold leading-[22px]">Thông tin công khai</h2><dl class="mt-3 grid gap-x-8 sm:grid-cols-2"><div v-for="field in detail.publicFields" :key="field[0]" class="grid grid-cols-[120px_minmax(0,1fr)] gap-3 border-b border-[var(--mds-border-light)] py-2.5"><dt class="text-[12px] leading-4 text-[var(--mds-text-secondary)]">{{ field[0] }}</dt><dd class="min-w-0 break-words text-[13px] font-medium leading-[18px] text-[var(--mds-text)]">{{ field[1] }}</dd></div></dl></section>
+          <aside class="rounded-lg bg-[var(--mds-bg-page)] p-4"><h2 class="text-[14px] font-semibold leading-5">Dữ liệu được phép xem</h2><p class="mt-2 text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">Thông tin nhạy cảm và giấy tờ chỉ hiển thị khi API đã chiếu dữ liệu theo PolicyEngine.</p><dl class="mt-4 space-y-3 text-[13px]"><div class="flex justify-between gap-3"><dt class="text-[var(--mds-text-secondary)]">Ảnh chân dung</dt><dd class="font-medium">{{ detail.portraitCount }}</dd></div><div class="flex justify-between gap-3"><dt class="text-[var(--mds-text-secondary)]">Giấy tờ đã ẩn/hiện</dt><dd class="font-medium">{{ detail.idDocCount }}</dd></div></dl></aside>
+        </div>
+        <MEmptyState v-else-if="activeTab === 'attachments'" title="Tệp đính kèm sẽ được hiển thị theo quyền" description="Batch đọc chỉ hiển thị dữ liệu mà máy chủ đã cấp; thao tác tệp tiếp tục dùng luồng legacy cho đến slice write/file." />
+        <MEmptyState v-else title="Chưa có tương tác được hiển thị" description="Tương tác và biểu mẫu sẽ được chuyển trong slice People List/Forms/Interactions." />
+      </MTabs>
+    </div>
+  </section>
+</template>

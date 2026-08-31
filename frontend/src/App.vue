@@ -1,8 +1,15 @@
 <script setup>
-import { nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import MIcon from './components/MIcon.vue';
 import MHeaderIconAva from './components/MHeaderIconAva.vue';
 import MHeaderIconChat from './components/MHeaderIconChat.vue';
+import PeopleDetailFeature from './features/people/PeopleDetailFeature.vue';
+import {
+  HostSurface,
+  assertHostAdapter,
+  createFakeBrowserHostAdapter,
+  createHostAdapterRegistry,
+} from './platform/host-adapter.mjs';
 
 const settingsOpen = ref(false);
 const sideOpen = ref(false);
@@ -10,6 +17,56 @@ const sideCollapsed = ref(localStorage.getItem('mds-sidebar-expanded') === '0');
 const theme = ref(localStorage.getItem('mds-theme') || 'blue');
 const density = ref(localStorage.getItem('mds-density') || 'medium');
 const headerMode = ref(localStorage.getItem('mds-header-mode') || 'brand');
+const peopleFeatureRoute = ref(null);
+const desktopAdapter = createFakeBrowserHostAdapter();
+
+// W3.PEOPLE.READ chỉ là strangler pilot. Host/staging bật cờ này sau khi
+// kiểm chứng; mặc định false để không làm mất các thao tác write/file legacy.
+function isPeoplePilotEnabled() {
+  return window.__MISA_UI_FEATURE_FLAGS__?.peopleDetailRead === true;
+}
+
+function requestedSurface() {
+  return window.__MISA_UI_HOST_BOOTSTRAP__?.surface === HostSurface.NATIVE
+    ? HostSurface.NATIVE
+    : HostSurface.DESKTOP;
+}
+
+function selectPeopleAdapter(surface) {
+  const nativeCandidate = window.__MISA_UI_HOST_ADAPTER__;
+  const native = nativeCandidate ? assertHostAdapter(nativeCandidate) : null;
+  return createHostAdapterRegistry({ browser: desktopAdapter, native }).select(surface);
+}
+
+function resolvePeopleDetailRoute(key) {
+  const match = /^person\/(\d+)$/.exec(key);
+  if (!isPeoplePilotEnabled() || !match) {
+    peopleFeatureRoute.value = null;
+    return false;
+  }
+  const surface = requestedSurface();
+  try {
+    peopleFeatureRoute.value = { personId: Number(match[1]), surface, adapter: selectPeopleAdapter(surface), hostUnavailable: false };
+  } catch (error) {
+    if (surface !== HostSurface.NATIVE) throw error;
+    // Native never falls back to the desktop composition when its provider is
+    // missing or invalid.  The native page shows an explicit recovery state instead.
+    peopleFeatureRoute.value = { personId: Number(match[1]), surface, adapter: null, hostUnavailable: true };
+  }
+  return true;
+}
+
+function leavePeopleDetail() {
+  peopleFeatureRoute.value = null;
+  location.hash = 'people';
+}
+
+function navigatePeopleDetail(personId) {
+  location.hash = `person/${personId}`;
+}
+
+const desktopPeopleFeature = computed(() => peopleFeatureRoute.value?.surface === HostSurface.DESKTOP ? peopleFeatureRoute.value : null);
+const nativePeopleFeature = computed(() => peopleFeatureRoute.value?.surface === HostSurface.NATIVE ? peopleFeatureRoute.value : null);
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [
@@ -46,11 +103,16 @@ function savePreferences() {
 
 onMounted(async () => {
   applyPreferences();
+  window.__misaUiFeatureRouter = { resolve: resolvePeopleDetailRoute };
   await nextTick();
   const legacy = document.createElement('script');
   legacy.src = '/app.js';
   legacy.defer = true;
   document.body.appendChild(legacy);
+});
+
+onBeforeUnmount(() => {
+  if (window.__misaUiFeatureRouter?.resolve === resolvePeopleDetailRoute) delete window.__misaUiFeatureRouter;
 });
 </script>
 
@@ -77,7 +139,19 @@ onMounted(async () => {
     </div>
   </div>
 
-  <div id="app" class="hidden mds-app">
+  <!-- Native composition is a sibling of the desktop legacy shell. The shell
+       remains mounted only for its legacy router contract, never as mobile UI. -->
+  <PeopleDetailFeature
+    v-if="nativePeopleFeature"
+    :person-id="nativePeopleFeature.personId"
+    :surface="nativePeopleFeature.surface"
+    :adapter="nativePeopleFeature.adapter"
+    :host-unavailable="nativePeopleFeature.hostUnavailable"
+    @back="leavePeopleDetail"
+    @navigate="navigatePeopleDetail"
+  />
+
+  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature }">
     <header class="platform-header">
       <button class="header-action" type="button" title="Mở điều hướng" aria-label="Mở điều hướng" @click="sideOpen = !sideOpen"><MIcon name="grid-dots" :size="20" /></button>
       <img class="app-logo-img" :src="headerMode === 'light' ? '/assets/misa-logo.png' : '/assets/misa-logo-white.png'" alt="MISA" />
@@ -102,7 +176,17 @@ onMounted(async () => {
           <MIcon :name="sideCollapsed ? 'chevron-right' : 'chevron-left'" :size="20" />
         </button>
       </aside>
-      <main class="main"><div class="content" id="view"></div></main>
+      <main class="main">
+        <div v-show="!desktopPeopleFeature" class="content" id="view"></div>
+        <PeopleDetailFeature
+          v-if="desktopPeopleFeature"
+          :person-id="desktopPeopleFeature.personId"
+          :surface="desktopPeopleFeature.surface"
+          :adapter="desktopPeopleFeature.adapter"
+          @back="leavePeopleDetail"
+          @navigate="navigatePeopleDetail"
+        />
+      </main>
     </div>
   </div>
 
