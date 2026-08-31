@@ -2881,3 +2881,16 @@ Full regression: SQLite 826 total/818 pass/8 skip (không đổi — 2 test mớ
 828 total/827 pass/1 skip (+2), `verify-g0.mjs` + `verify-gate1-mapping` 150/150 PASS, `git diff
 --check` sạch. Chi tiết: `01-audit-findings.md` §F28, `24-audit-bundle-w3voice-securecommand.md` mục
 "Remediation F28". **Chờ Codex re-audit F28**, không mở lại F25/F26/P2/F27 đã ACCEPTED.
+
+## F28 ACCEPTED — W3.VOICE.SECURE-COMMAND backend CLOSED
+
+Codex re-audit xác nhận **ACCEPTED F28**: tự chạy lại độc lập SQLite 15/15 và MySQL 17/17 (bao gồm
+2 test 2-connection chứng minh `SELECT ... FOR UPDATE` chặn `UPDATE` từ connection khác tới khi
+`COMMIT`, và chặn `DELETE` tới khi `ROLLBACK`), `verify-g0`/route mapping/`git diff --check` đều pass.
+
+Quyết định của Codex: **`W3.VOICE.SECURE-COMMAND` backend đủ điều kiện CLOSED** — toàn bộ chuỗi
+remediation của batch này đã có bằng chứng: transaction rollback lỗi giữa chừng (F25), TTL claim
+atomic + CAS điểm đúng D14.4 (F26), `idempotencyKey` bắt buộc (P2), parent person/organization
+re-check trước khi ghi + trạng thái terminal `stale` (F27), row lock MySQL nhiều instance (F28).
+Không còn P1/MUST-FIX nào mở trên batch W3.VOICE.SECURE-COMMAND + W3.VOICE.1. Chi tiết:
+`01-audit-findings.md` §F28, `24-audit-bundle-w3voice-securecommand.md`.

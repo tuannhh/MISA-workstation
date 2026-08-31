@@ -2,7 +2,8 @@
 
 > **Trạng thái: BLOCKED hẹp (Codex audit) → F25/F26/P2 ACCEPTED (Codex re-audit) → F27 phát hiện
 > trong chính vòng re-audit đó → F27 ACCEPTED cả 3 case (Codex re-audit) → F28 phát hiện trong chính
-> vòng re-audit đó → ĐÃ FIX F28 (Claude 2026-08-31), chờ re-audit.**
+> vòng re-audit đó → F28 ACCEPTED (Codex re-audit 2026-08-31) → CLOSED. W3.VOICE.SECURE-COMMAND
+> backend đủ điều kiện đóng batch, không còn P1/MUST-FIX nào mở.**
 > Codex audit trên bundle gốc dưới đây xác nhận phần lớn thiết kế đúng hướng (10/10 test cũ xanh,
 > principal binding/tampering guard/quyền re-check tại confirm/score-clamp/confirm lặp tuần tự đều
 > đúng) nhưng trả **BLOCKED** với 2 MUST-FIX P1 tái hiện được bằng HTTP thật + 1 P2 gộp chung: xem
@@ -10,7 +11,9 @@
 > xác nhận transaction/rollback thật) nhưng phát hiện thêm **F27** (P1 mới, parent entity TOCTOU) —
 > xem mục "Remediation F27" — **Codex re-audit ACCEPTED cả 3 case bắt buộc** (person xoá, org xoá,
 > revision drift; chạy lại độc lập 15/15 test cả 2 driver) nhưng phát hiện thêm **F28** (P1 release
-> blocker, row lock MySQL nhiều instance) — xem mục "Remediation F28" ở cuối tài liệu. Nội dung bundle
+> blocker, row lock MySQL nhiều instance) — xem mục "Remediation F28" ở cuối tài liệu — **Codex
+> re-audit ACCEPTED F28** (chạy lại độc lập SQLite 15/15, MySQL 17/17, `verify-g0`/route mapping/
+> `git diff --check` pass) và tuyên bố **W3.VOICE.SECURE-COMMAND backend CLOSED**. Nội dung bundle
 > gốc bên dưới **giữ nguyên không sửa** (đúng nguyên tắc audit trail); phần fix + evidence ghi ở các
 > mục cuối.
 
@@ -276,7 +279,12 @@ unrelated pre-existing nào lẫn vào commit.
 
 ## Remediation F28 (2026-08-31) — row lock MySQL nhiều instance, phát hiện trong vòng re-audit F27
 
-**Status:** ĐÃ FIX (commit `d8ff14b`, đã push `misa/main`) — chờ Codex re-audit.
+**Status:** CLOSED (commit `d8ff14b`, đã push `misa/main`) — **Codex re-audit ACCEPTED (2026-08-31)**:
+tự chạy lại độc lập SQLite 15/15, MySQL 17/17 (bao gồm 2 test 2-connection chứng minh `FOR UPDATE`
+chặn `UPDATE` tới `COMMIT` và chặn `DELETE` tới `ROLLBACK`), `verify-g0`/route mapping/
+`git diff --check` đều pass. Quyết định của Codex: **W3.VOICE.SECURE-COMMAND backend CLOSED** —
+transaction rollback (F25), TTL atomic, idempotency (P2), stale terminal (F26), parent re-check
+(F27) và multi-instance lock (F28) đều đã có bằng chứng.
 
 **Evidence Codex đưa ra:** phát hiện ngay trong lúc re-audit ACCEPTED F27, không phải finding mới
 độc lập. Codex chỉ ra: freshness re-check F27 vừa thêm (`fetchPersonSnapshot`/`fetchOrgSnapshot`)

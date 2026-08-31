@@ -808,8 +808,8 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
 | W3.VOICE.0 | **D14.2 đã chốt (human-in-the-loop, owner 2026-08-24).** Còn 1 việc BA: định nghĩa quy tắc AI **đề xuất** mức đổi `relationship_score` (không chặn thiết kế vì đã có bước xác nhận) | BA | doc / — / — |
-| W3.VOICE.1 | Route AI voice mở rộng: giữ "trích-xuất-chờ-duyệt", thành **hành động đa bước chờ-xác-nhận-1-lần** (AI chuẩn bị: match entity + soạn bản ghi + đề xuất đổi điểm → người dùng xác nhận rồi mới ghi). Rào chắn: confidence thấp/nhiều khớp → **bắt người dùng chọn**; log mọi lần ghi | W3.VOICE.SECURE-COMMAND | code+test / **XONG — Claude 2026-08-31 (backend/API-only, chờ Codex audit)** / R150 `POST /ai/interaction-voice-confirm`, xem execution update |
-| W3.VOICE.SECURE-COMMAND | **Mới (Codex round-3 re-audit R3-08, D14.4):** proposal opaque/có định danh/gắn 1 principal/hết hạn + snapshot revision; xác nhận chỉ gửi `proposal_id`+chỉnh sửa+idempotency key (không gửi lại toàn payload); server đọc lại bản ghi + check optimistic concurrency + chạy lại PolicyEngine trước khi ghi 1 lần; chống replay/tampering/TOCTOU | W1.AI-POLICY | code+test / **XONG — Claude 2026-08-31 (backend/API-only, chờ Codex audit)** / R149 `POST /ai/interaction-voice-propose` + bảng `voice_proposals`, xem execution update |
+| W3.VOICE.1 | Route AI voice mở rộng: giữ "trích-xuất-chờ-duyệt", thành **hành động đa bước chờ-xác-nhận-1-lần** (AI chuẩn bị: match entity + soạn bản ghi + đề xuất đổi điểm → người dùng xác nhận rồi mới ghi). Rào chắn: confidence thấp/nhiều khớp → **bắt người dùng chọn**; log mọi lần ghi | W3.VOICE.SECURE-COMMAND | code+test / **CLOSED — backend/API-only, Codex ACCEPTED (2026-08-31)** / R150 `POST /ai/interaction-voice-confirm`, xem execution update |
+| W3.VOICE.SECURE-COMMAND | **Mới (Codex round-3 re-audit R3-08, D14.4):** proposal opaque/có định danh/gắn 1 principal/hết hạn + snapshot revision; xác nhận chỉ gửi `proposal_id`+chỉnh sửa+idempotency key (không gửi lại toàn payload); server đọc lại bản ghi + check optimistic concurrency + chạy lại PolicyEngine trước khi ghi 1 lần; chống replay/tampering/TOCTOU | W1.AI-POLICY | code+test / **CLOSED — backend/API-only, Codex ACCEPTED (2026-08-31)** / R149 `POST /ai/interaction-voice-propose` + bảng `voice_proposals`, xem execution update |
 | W3.VOICE.2 | "Gọi từ mọi màn hình" — trigger toàn cục (nút nổi/mic) ở tầng **web app trong WebView host** (D15); có thể cần bridge host cấp quyền mic OS — **gắn O3 (bridge contract, DevOps)** | O3(DevOps), W2.5 | code+device-test / WebView-host / `UNVERIFIED` tới bridge contract |
 
 > **Execution update — 2026-08-31 (W3.VOICE.SECURE-COMMAND + W3.VOICE.1, backend/API-only, XONG —
@@ -926,6 +926,15 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > MySQL 827/827 pass (1 skip), `verify-g0.mjs` + `verify-gate1-mapping` PASS, `git diff --check`
 > sạch. Commit `d8ff14b`. Chi tiết: `01-audit-findings.md` §F28, bundle mục "Remediation F28". **Chờ
 > Codex re-audit F28**, không mở lại F25/F26/P2/F27 đã ACCEPTED.
+>
+> **Execution update — 2026-08-31 (F28 ACCEPTED, W3.VOICE.SECURE-COMMAND backend CLOSED):** Codex
+> re-audit xác nhận **ACCEPTED F28** — tự chạy lại độc lập SQLite 15/15, MySQL 17/17 (bao gồm 2 test
+> 2-connection chứng minh `FOR UPDATE` chặn `UPDATE` tới `COMMIT` và chặn `DELETE` tới `ROLLBACK`),
+> `verify-g0`/route mapping/`git diff --check` đều pass. Quyết định của Codex: **`W3.VOICE.SECURE-
+> COMMAND` backend đủ điều kiện CLOSED** — transaction rollback (F25), TTL atomic, idempotency (P2),
+> stale terminal (F26), parent re-check (F27) và multi-instance lock (F28) đều đã có bằng chứng.
+> Không còn P1/MUST-FIX nào mở trên batch này. Chi tiết: `01-audit-findings.md` §F28,
+> `24-audit-bundle-w3voice-securecommand.md`.
 
 ---
 
