@@ -750,6 +750,14 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > `verify-g0-selftest` 6/6, `git diff --check` sạch. **Chờ Codex re-audit tập trung đúng F24** (theo
 > `17-fast-track-collaboration.md` §8 — không mở lại toàn bộ 4 batch trong bundle) — tuyên bố "W1
 > đóng hoàn toàn" vẫn CHỈ là tự đánh giá phía Claude cho tới khi có kết quả re-audit.
+>
+> **Codex ACCEPTED — F24 re-audit (2026-08-31):** xác nhận độc lập `requireFileWrite()` chạy
+> authorization TRƯỚC Multer ở đủ 4 route (`routes.js:365,391,1333,1657`); chạy lại độc lập 8 test
+> F24 trên cả SQLite/MySQL — mọi upload trái quyền đều 403, không tăng `attachments`/`UPLOAD_DIR`,
+> upload đúng quyền tăng đúng 1 ở cả 2 nơi; G0 verifier, mapping 148/148, `git diff --check` đều
+> xanh. **Quyết định: chấp nhận remediation `0e0c2d6`/docs `707cc45`.** UI Native-MDS cho
+> `W1.ADMIN` vẫn là lane UI riêng (chưa giao lại Claude), không ảnh hưởng kết luận đóng phần
+> backend/security. **→ W1 (backend/security) CHÍNH THỨC CLOSED (2026-08-31, Codex xác nhận).**
 
 ---
 

@@ -1,13 +1,17 @@
 # Evidence Bundle tổng hợp — đóng W1 (W1.POLICY.2 read+write, W1.FILE-P2, W1.ADMIN) — gửi Codex audit
 
-> **Trạng thái: BLOCKED HẸP → ĐÃ FIX, CHỜ RE-AUDIT (cập nhật 2026-08-31).** Audit lần 1 (trên bundle
-> gốc dưới đây, commit range `2805020..70e5ed4`) trả **BLOCKED hẹp** với 1 finding P1 tái hiện được:
-> **F24** — 4 route upload file (award/event/agreement/work_log) chạy `assertWritable()` SAU khi
-> Multer đã ghi file thật vào `UPLOAD_DIR`, deny vẫn để lại file mồ côi trên đĩa. Remediation batch
-> `F24-remediation` (commit mới, xem mục "Remediation F24" cuối tài liệu) đã sửa đúng root cause
-> (authorization chạy TRƯỚC Multer) — theo `17-fast-track-collaboration.md` §8, Codex chỉ cần
-> re-audit tập trung đúng finding này, không mở lại toàn bộ 4 batch gốc. Nội dung bundle gốc bên
-> dưới **giữ nguyên không sửa** (đúng nguyên tắc audit trail); phần fix được ghi thêm ở cuối.
+> **KẾT QUẢ CUỐI CÙNG: W1 (backend/security) CLOSED — Codex ACCEPTED (2026-08-31).** Audit lần 1
+> (trên bundle gốc dưới đây, commit range `2805020..70e5ed4`) trả **BLOCKED hẹp** với 1 finding P1
+> tái hiện được: **F24** — 4 route upload file (award/event/agreement/work_log) chạy
+> `assertWritable()` SAU khi Multer đã ghi file thật vào `UPLOAD_DIR`, deny vẫn để lại file mồ côi
+> trên đĩa. Remediation batch `F24-remediation` (commit `0e0c2d6`/`707cc45`, xem mục "Remediation
+> F24" cuối tài liệu) sửa đúng root cause (authorization chạy TRƯỚC Multer). Codex re-audit tập
+> trung đúng finding này (không mở lại 4 batch gốc, theo `17-fast-track-collaboration.md` §8): xác
+> nhận độc lập `requireFileWrite()` chạy trước Multer ở đủ 4 route (`routes.js:365,391,1333,1657`),
+> chạy lại độc lập 8 test F24 trên cả 2 driver, G0 verifier/mapping/diff-check đều xanh — **ACCEPTED,
+> không còn P0/P1**. UI Native-MDS cho `W1.ADMIN` vẫn là lane UI riêng (chưa giao lại Claude), không
+> ảnh hưởng kết luận đóng phần backend/security. Nội dung bundle gốc bên dưới **giữ nguyên không
+> sửa** (đúng nguyên tắc audit trail); phần fix + kết quả re-audit ghi ở mục "Remediation F24" cuối.
 >
 > Bundle này gộp 4 batch liên tiếp thành 1 audit-closure bundle theo đúng cơ chế §12/§14
 > `17-fast-track-collaboration.md` (điều kiện: không batch nào BLOCKED giữa chừng, không batch nào
@@ -16,9 +20,8 @@
 > 2026-08-31, backlog P2/P3 chính là 4 batch trong bundle này: `W1.FILE` P2/P3, `W1.POLICY.2` phần
 > còn lại, `W1.ADMIN`).
 >
-> Sau bundle này (và sau khi F24 được re-audit xác nhận), theo `04-ROADMAP.md`, roadmap item **W1
-> được Claude tự tuyên bố đóng hoàn toàn** (không còn sub-item nào mở phía Claude ở cả 2 nhánh RBAC
-> v2 và security) — chỉ chính thức CLOSED sau khi Codex xác nhận cả bundle gốc lẫn fix F24.
+> **W1 (nhánh RBAC v2 D13 + nhánh security F1-F4/F8/F9/F11) nay CHÍNH THỨC CLOSED phía backend** —
+> xem `04-ROADMAP.md` execution update cuối cùng cho tuyên bố đầy đủ. Chuyển ưu tiên sang Wave 2.
 
 ## Batch-ID / commit range / HEAD
 
@@ -276,8 +279,8 @@ CLOSED** chính thức thay vì chỉ là tự tuyên bố của Claude.
 
 ## Remediation F24 (2026-08-31) — phạm vi hẹp, chỉ sửa đúng blocker Codex chỉ ra
 
-**Status:** ĐÃ FIX (commit `0e0c2d6`, đã push `misa/main`), gửi Codex re-audit tập trung đúng finding
-này (không mở lại 4 batch gốc ở trên, theo `17-fast-track-collaboration.md` §8).
+**Status:** ĐÃ FIX (commit `0e0c2d6`/docs `707cc45`, đã push `misa/main`) — **Codex re-audit ACCEPTED
+(2026-08-31)**, không mở lại 4 batch gốc ở trên (theo `17-fast-track-collaboration.md` §8).
 
 **Evidence Codex đưa ra (audit lần 1):** HTTP thật trên SQLite tạm — executor upload vào `award`
 của admin nhận đúng `403`, nhưng số file trong `UPLOAD_DIR` tăng `0 → 1`. Root cause: 4 route
@@ -335,3 +338,18 @@ middleware, không entity/route nào khác phụ thuộc vào `requireFileWrite(
 
 **Worktree status:** `git status --short` sạch tại thời điểm gửi remediation này; không có file
 unrelated pre-existing nào lẫn vào commit.
+
+### Kết quả re-audit — Codex ACCEPTED (2026-08-31)
+
+- **Evidence Codex tự xác nhận:** `requireFileWrite()` thực hiện owner authorization TRƯỚC Multer ở
+  đủ 4 route: `routes.js:365` (định nghĩa middleware), `routes.js:391` (agreement/work-log),
+  `routes.js:1333` (award), `routes.js:1657` (event).
+- **Experiment Codex chạy độc lập:** 8 test F24 (`integration-file-write-authz.test.js:122`) trên cả
+  SQLite và MySQL — mọi upload trái quyền đều `403`, không tăng row `attachments`, không tăng file
+  trong `UPLOAD_DIR`; upload đúng quyền tăng chính xác 1 ở cả hai nơi.
+  Verification: G0 verifier, mapping 148/148, `git diff --check` đều xanh, workspace sạch.
+- **Risk còn lại (không chặn):** không còn side-effect filesystem khi authorization từ chối. Toàn bộ
+  route Multer còn lại cũng đều có middleware quyền đứng trước (Codex xác nhận qua rà soát chung).
+- **Decision:** Chấp nhận remediation `0e0c2d6`/docs `707cc45`. **W1 backend/security chính thức
+  CLOSED.** Phần UI Native-MDS cho `W1.ADMIN` vẫn là lane UI riêng, không làm thay đổi kết luận
+  đóng W1 backend.

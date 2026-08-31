@@ -2689,3 +2689,19 @@ mồ côi không có row `attachments` quản lý, vi phạm nguyên tắc "deny
   `verify-g0-selftest` 6/6, `git diff --check` sạch.
 - **Đã fix, chờ Codex re-audit tập trung đúng F24** — chưa tự tuyên bố W1 CLOSED chính thức trong
   tài liệu cho tới khi có kết quả re-audit (bundle `22-audit-bundle-w1-close.md` cập nhật kèm fix).
+
+## Wave 1: Codex ACCEPTED re-audit F24 — W1 (backend/security) CHÍNH THỨC CLOSED
+
+Codex re-audit tập trung đúng F24 (không mở lại 4 batch gốc trong `22-audit-bundle-w1-close.md`,
+theo `17-fast-track-collaboration.md` §8): xác nhận độc lập `requireFileWrite()` chạy authorization
+TRƯỚC Multer ở đủ 4 route (`routes.js:365,391,1333,1657`); chạy lại độc lập 8 test F24 trên cả
+SQLite/MySQL — mọi upload trái quyền đều 403 không tăng `attachments`/`UPLOAD_DIR`, upload đúng
+quyền tăng đúng 1 ở cả hai nơi; G0 verifier, mapping 148/148, `git diff --check` đều xanh.
+**Decision: ACCEPTED — chấp nhận remediation `0e0c2d6`/docs `707cc45`.** UI Native-MDS cho
+`W1.ADMIN` vẫn là lane UI riêng (chưa giao lại Claude), không ảnh hưởng kết luận đóng W1 backend.
+
+**→ W1 (D13 RBAC v2 + security F1/F2/F3/F4/F8/F9/F11) nay CHÍNH THỨC CLOSED phía backend/security,
+Codex xác nhận (2026-08-31).** Toàn bộ khối việc lớn nhất của roadmap (Gate 0 → Gate 1 → Wave 1) đã
+đóng qua 2 bundle audit (`21-audit-bundle-f15-rbac-exp-b1-b6.md`, `22-audit-bundle-w1-close.md`) +
+1 vòng remediation P0/P1 mỗi bundle (F21/F22, rồi F24) — không còn P0/P1 nào mở. Chuyển ưu tiên
+sang **Wave 2** (`04-ROADMAP.md`).
