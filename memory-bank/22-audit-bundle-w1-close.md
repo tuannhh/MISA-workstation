@@ -276,8 +276,8 @@ CLOSED** chính thức thay vì chỉ là tự tuyên bố của Claude.
 
 ## Remediation F24 (2026-08-31) — phạm vi hẹp, chỉ sửa đúng blocker Codex chỉ ra
 
-**Status:** ĐÃ FIX, gửi Codex re-audit tập trung đúng finding này (không mở lại 4 batch gốc ở trên,
-theo `17-fast-track-collaboration.md` §8).
+**Status:** ĐÃ FIX (commit `0e0c2d6`, đã push `misa/main`), gửi Codex re-audit tập trung đúng finding
+này (không mở lại 4 batch gốc ở trên, theo `17-fast-track-collaboration.md` §8).
 
 **Evidence Codex đưa ra (audit lần 1):** HTTP thật trên SQLite tạm — executor upload vào `award`
 của admin nhận đúng `403`, nhưng số file trong `UPLOAD_DIR` tăng `0 → 1`. Root cause: 4 route
@@ -330,8 +330,8 @@ nguyên vẹn không sửa assertion nào. Message lỗi 403 giữ nguyên từn
 **Out-of-scope:** không mở rộng sang finding nào khác ngoài F24 — 4 batch gốc (W1.POLICY.2 read+
 write, W1.FILE-P2, W1.ADMIN) giữ nguyên nội dung không sửa lại.
 
-**Rollback path:** 1 commit độc lập, `git revert` an toàn — chỉ hoàn tác thứ tự middleware, không
-entity/route nào khác phụ thuộc vào `requireFileWrite()`.
+**Rollback path:** 1 commit độc lập (`0e0c2d6`), `git revert` an toàn — chỉ hoàn tác thứ tự
+middleware, không entity/route nào khác phụ thuộc vào `requireFileWrite()`.
 
 **Worktree status:** `git status --short` sạch tại thời điểm gửi remediation này; không có file
 unrelated pre-existing nào lẫn vào commit.
