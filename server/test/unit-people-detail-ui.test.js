@@ -17,6 +17,9 @@ const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'
 async function domain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'people-detail.mjs')).href);
 }
+async function writeDomain() {
+  return import(pathToFileURL(path.join(featureRoot, 'domain', 'people-write.mjs')).href);
+}
 
 test('UI-PPL-001: People Detail có hai composition MDS độc lập, Native không chứa desktop shell', () => {
   assert.match(desktopPage, /shadow-\[var\(--mds-shadow-card\)\]/, 'desktop card phải dùng token shadow MDS');
@@ -54,4 +57,14 @@ test('UI-PPL-004: view model chỉ hiển thị field API đã chiếu, không d
   assert.ok(model.publicFields.every(([label]) => !/cá nhân|ngân hàng|địa chỉ/i.test(label)), 'UI read không được tự đưa sensitive field vào view model');
   assert.equal(initials(''), '?');
   assert.equal(fileUrl('not-an-id'), null);
+});
+
+test('UI-PPL-005: write domain allowlist payload, validate tên và không tự gắn owner/quyền', async () => {
+  const { PEOPLE_EDIT_FIELDS, toPeopleEditDraft, toPeopleUpdatePayload, validatePeopleEditDraft } = await writeDomain();
+  const draft = toPeopleEditDraft({ full_name: 'Nguyễn Thu Hà', relationship_score: '7', owner_id: 999 });
+  const payload = toPeopleUpdatePayload(draft);
+  assert.equal(payload.relationship_score, 7);
+  assert.equal('owner_id' in payload, false);
+  assert.ok(PEOPLE_EDIT_FIELDS.includes('phone_personal'), 'field có thể được request nhưng server vẫn quyết định quyền ghi');
+  assert.equal(validatePeopleEditDraft({ full_name: '', relationship_score: 'x' }).full_name, 'Họ và tên không được để trống.');
 });

@@ -46,3 +46,10 @@ Nguồn dữ liệu duy nhất là `GET /api/people/:id` (R030). API đã chiế
 ## 6. Rollback
 
 Tắt `peopleDetailRead` là rollback tức thời, không migration/schema/data. Có thể revert độc lập các file dưới `frontend/src/features/people/`, `frontend/src/components/mds/` và seam nhỏ trong `App.vue`/`public/app.js`.
+
+## 7. Handoff write/file
+
+Batch kế tiếp `W3.PEOPLE.WRITE-FILE` dùng `domain/people-write.mjs`: compact form chỉ có
+allowlist UX; không có `owner_id`, role hoặc policy quyết định ở client. `createPeopleApi()` có
+seam `getCurrentUser`/`update`/`upload`, nhưng UI gọi write/upload chỉ sau khi có composition
+form MDS đầy đủ và test action/403 tương ứng. API server vẫn là nguồn quyền duy nhất.
