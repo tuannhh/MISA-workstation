@@ -1,6 +1,6 @@
 # 26 — Batch Contract: W3.PEOPLE (People Detail strangler pilot)
 
-> **Status:** READ IMPLEMENTED; WRITE.1 Desktop IMPLEMENTED / automated regression PASS; chờ authenticated visual review — 2026-09-01.
+> **Status:** READ + WRITE + FILE + DELETE UI IMPLEMENTED / automated regression PASS; chờ authenticated visual review — 2026-09-01.
 > Đây là strangler hẹp, không phải tuyên bố đã thay toàn bộ hồ sơ nhân sự.
 
 ## 1. Mục tiêu và phạm vi
@@ -24,8 +24,9 @@ Nguồn dữ liệu duy nhất là `GET /api/people/:id` (R030). API đã chiế
 | Route/flow | Desktop | Native-Mobile fake provider | Native AMIS thật | super_admin/admin | executor | viewer |
 |---|---|---|---|---|---|---|
 | R030/F005 People Detail — read | Vue MDS pilot, feature flag | Vue native composition, contract test | **UNVERIFIED — O3/W4.1** | projection server | projection server | projection server/403 native shell |
-| R032 People Detail — update | Vue MDS compact form, feature flag | Chưa chuyển slice | **UNVERIFIED** | server PolicyEngine khi submit | server PolicyEngine khi submit | nút ẩn theo UX + server 403 |
-| R033–R037 delete/file | Legacy giữ nguyên | Chưa chuyển slice | **UNVERIFIED** | backend đã PolicyEngine | backend đã PolicyEngine | backend 403 |
+| R032 People Detail — update | Vue MDS compact form, feature flag | Vue native form riêng, contract test | **UNVERIFIED** | server PolicyEngine khi submit | server PolicyEngine khi submit | nút ẩn theo UX + server 403 |
+| R033 delete | MDS confirm, feature flag | MDS confirm trong Native page | **UNVERIFIED** | server PolicyEngine khi submit | server PolicyEngine khi submit | không có UX action + server 403 |
+| R034–R037 file | MDS attachment panel, feature flag | mount trong Native page riêng | **UNVERIFIED** | server PolicyEngine/file projection | server PolicyEngine/file projection | upload action ẩn + server 403 |
 
 `viewer` không bị route UI điều hướng sang desktop; nếu API trả 403 thì native composition hiển thị error state. Quyền đọc chi tiết cuối cùng vẫn do backend trả về.
 
