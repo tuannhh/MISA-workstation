@@ -54,6 +54,23 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 
 Đường tới hạn (cập nhật 2026-08-25): **O3, O4, O5 → giao DevOps MISA**, liệt kê tường minh là 3 phụ thuộc song song (không gộp 1 câu — xem ghi chú dưới bảng W1). **O8 → PROVISIONAL** → `W1.AI-POLICY` xây ngay dạng gateway cấu hình được, không chờ. **O6 duyệt $200.** Phụ thuộc ngoài: **O3/bridge contract AMIS Mobile** (DevOps + team AMIS) chặn W2.5/W4.1 phần adapter thật + W3.VOICE.2; **O4** chặn phần chọn backend thật của W1.7 (seam vẫn dựng được); **O5** chặn kết luận PASS/FAIL của W2.3 (harness vẫn dựng được) — KHÔNG cái nào chặn G0/G1/W1.RBAC/W1.8/W1.9/phần contract-ready W2.5.
 
+> **Ghi chú ngữ cảnh owner (2026-08-31, không đổi gate, chỉ làm rõ mức rủi ro thật):**
+> - **O3:** owner xác nhận trực tiếp mô hình D15 đúng như đã viết — AMIS Mobile là icon mở web app
+>   trong WebView, và **có auto-login qua host (SSO)**, không phải người dùng tự đăng nhập lại. Xác
+>   nhận này KHÔNG giảm phạm vi W4.1 (bridge session/token vẫn phải thiết kế thật, đúng
+>   `02-decisions.md` §F: origin allowlist, token audience/TTL/chống replay, fail-closed) — chỉ xoá
+>   nhánh giả định còn lại ("có thể không cần bridge nếu user tự login"), cơ chế cụ thể vẫn
+>   `UNVERIFIED` tới khi DevOps+AMIS chốt bridge contract.
+> - **O5:** quy mô người dùng thật rất nhỏ — toàn ngành dọc PR MISA cả nước chỉ **~30 người**, không
+>   phải quy mô enterprise. Baseline G1.8 đo throughput không tăng theo tải + latency p50 tăng tuyến
+>   tính 4.4ms→889ms (1→50 concurrent) — với peak thực tế nhiều khả năng thấp hơn hẳn 50, W2.3 gần
+>   như chắc PASS mà không cần W2.4 (async pilot). Vẫn KHÔNG tự đặt ngưỡng thay DevOps (nguyên tắc
+>   W2.3 không đổi) — chỉ là dữ liệu để DevOps chốt ngưỡng SLO sát thực tế hơn thay vì mặc định theo
+>   quy mô lớn.
+> - **O8:** owner xác nhận môi trường production MISA có quy trình pentest + chuẩn bảo mật nội bộ
+>   riêng (không public) khi go-live — coi như phần "Security/Legal duyệt lại dữ liệu thật" đã có
+>   kênh xử lý sẵn trong quy trình chuẩn của MISA, không phải backlog phát sinh thêm ngoài roadmap.
+
 ## Quy ước CI (không đổi từ v2)
 - Job **`regression`**: mọi test GREEN mới merge, không exception.
 - Job **`security-gap`**: exploit/contract test mô tả hành vi ĐÍCH; mỗi failure kỳ vọng nằm trong allowlist `{F-id hoặc target, owner, expiry}`. **Unexpected failure = build đỏ.**
