@@ -6,8 +6,8 @@ import MTag from '../../../components/mds/MTag.vue';
 import MTabs from '../../../components/mds/MTabs.vue';
 import { fileUrl } from '../domain/people-detail.mjs';
 
-defineProps({ detail: { type: Object, required: true } });
-const emit = defineEmits(['back']);
+defineProps({ detail: { type: Object, required: true }, canEdit: { type: Boolean, default: false } });
+const emit = defineEmits(['back', 'edit']);
 const activeTab = ref('overview');
 const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachments', label: 'Tệp đính kèm' }, { key: 'history', label: 'Tương tác' }];
 </script>
@@ -23,7 +23,7 @@ const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachment
         <div class="min-w-0"><h1 class="truncate text-[20px] font-semibold leading-7 text-[var(--mds-text)]">{{ detail.name }}</h1><p class="truncate text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">{{ detail.subtitle }}</p></div>
         <MTag :color="detail.statusColor" class="hidden lg:inline-flex">{{ detail.status }}</MTag>
       </div>
-      <div class="flex shrink-0 items-center gap-2"><MButton variant="neutral" @click="emit('back')">Danh bạ</MButton></div>
+      <div class="flex shrink-0 items-center gap-2"><MButton variant="neutral" @click="emit('back')">Danh bạ</MButton><MButton v-if="canEdit" variant="primary" @click="emit('edit')">Chỉnh sửa</MButton></div>
     </header>
     <div class="rounded-lg bg-[var(--mds-bg)] shadow-[var(--mds-shadow-card)]">
       <MTabs v-model="activeTab" :tabs="tabs" class="[&>[role=tablist]]:px-4">

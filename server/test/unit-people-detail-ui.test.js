@@ -13,6 +13,7 @@ const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const desktopPage = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleDetailPage.vue'), 'utf8');
 const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleDetailPageMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
+const editForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleEditFormDesktop.vue'), 'utf8');
 
 async function domain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'people-detail.mjs')).href);
@@ -59,12 +60,23 @@ test('UI-PPL-004: view model chỉ hiển thị field API đã chiếu, không d
   assert.equal(fileUrl('not-an-id'), null);
 });
 
-test('UI-PPL-005: write domain allowlist payload, validate tên và không tự gắn owner/quyền', async () => {
-  const { PEOPLE_EDIT_FIELDS, toPeopleEditDraft, toPeopleUpdatePayload, validatePeopleEditDraft } = await writeDomain();
+test('UI-PPL-005: write domain chỉ gửi nhóm field đã chọn, validate tên và không tự gắn owner/quyền', async () => {
+  const { PEOPLE_EDIT_FIELDS, PEOPLE_COMPACT_EDIT_FIELDS, toPeopleEditDraft, toPeopleUpdatePayload, validatePeopleEditDraft } = await writeDomain();
   const draft = toPeopleEditDraft({ full_name: 'Nguyễn Thu Hà', relationship_score: '7', owner_id: 999 });
   const payload = toPeopleUpdatePayload(draft);
   assert.equal(payload.relationship_score, 7);
   assert.equal('owner_id' in payload, false);
   assert.ok(PEOPLE_EDIT_FIELDS.includes('phone_personal'), 'field có thể được request nhưng server vẫn quyết định quyền ghi');
+  assert.equal('phone_personal' in payload, false, 'form compact không được ghi đè field nhạy cảm chưa được chiếu');
+  assert.ok(PEOPLE_COMPACT_EDIT_FIELDS.every((field) => field in payload));
   assert.equal(validatePeopleEditDraft({ full_name: '', relationship_score: 'x' }).full_name, 'Họ và tên không được để trống.');
+});
+
+test('UI-PPL-006: Desktop edit dùng control MDS, payload tối thiểu và lỗi server hiển thị rõ', () => {
+  assert.match(editForm, /<MInput/, 'form phải dùng MInput MDS');
+  assert.match(editForm, /<MButton variant="primary"/, 'submit phải dùng MButton MDS');
+  assert.match(editForm, /serverError/, 'lỗi quyền/validation từ server không được nuốt');
+  assert.doesNotMatch(editForm, /owner_id|phone_personal|home_address|personal_notes/, 'form public không được đưa field nhạy cảm hoặc owner vào payload');
+  assert.match(feature, /api\.update\(props\.personId, payload\)/, 'feature phải gọi API server-enforced khi lưu');
+  assert.match(feature, /permissions\?\.modules\?\.partners\?\.includes\('edit'\)/, 'chỉ dùng permission để gợi ý UX; server vẫn là source of truth');
 });

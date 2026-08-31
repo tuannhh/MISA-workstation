@@ -8,8 +8,16 @@ export const PEOPLE_EDIT_FIELDS = Object.freeze([
   'home_address', 'personal_notes',
 ]);
 
-export function toPeopleEditDraft(record = {}) {
-  return Object.freeze(Object.fromEntries(PEOPLE_EDIT_FIELDS.map((field) => [field, record[field] ?? ''])));
+// Form People Detail đầu tiên chỉ sửa nhóm thông tin công khai. Đừng đưa
+// field nhạy cảm không nằm trong projection vào payload vì giá trị rỗng ở
+// client có thể vô tình ghi đè dữ liệu mà người dùng không được xem.
+export const PEOPLE_COMPACT_EDIT_FIELDS = Object.freeze([
+  'full_name', 'level', 'position', 'beat', 'category', 'relationship_score',
+  'status', 'email_work', 'phone_work',
+]);
+
+export function toPeopleEditDraft(record = {}, fields = PEOPLE_COMPACT_EDIT_FIELDS) {
+  return Object.freeze(Object.fromEntries(fields.map((field) => [field, record[field] ?? ''])));
 }
 
 export function validatePeopleEditDraft(draft) {
@@ -22,10 +30,11 @@ export function validatePeopleEditDraft(draft) {
   return Object.freeze(errors);
 }
 
-export function toPeopleUpdatePayload(draft) {
+export function toPeopleUpdatePayload(draft, fields = Object.keys(draft || {})) {
   const errors = validatePeopleEditDraft(draft);
   if (Object.keys(errors).length) throw new PeopleApiError({ status: 400, code: 'PEOPLE_EDIT_INVALID', message: Object.values(errors)[0] });
-  return Object.freeze(Object.fromEntries(PEOPLE_EDIT_FIELDS.map((field) => {
+  const allowedFields = fields.filter((field) => PEOPLE_EDIT_FIELDS.includes(field));
+  return Object.freeze(Object.fromEntries(allowedFields.map((field) => {
     const value = draft[field];
     return [field, field === 'relationship_score' && value !== '' ? Number(value) : (value === '' ? null : value)];
   })));
