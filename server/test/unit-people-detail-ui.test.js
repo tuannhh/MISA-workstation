@@ -103,3 +103,12 @@ test('UI-PPL-008: Tệp People Detail dùng MDS upload, chỉ nhận projection 
   assert.match(feature, /api\.upload\(props\.personId/, 'upload phải đi qua API server-enforced');
   assert.match(feature, /api\.deleteAttachment\(attachmentId\)/, 'xóa phải đi qua API server-enforced');
 });
+
+test('UI-PPL-009: Xóa hồ sơ có UX confirm nhưng luôn thực thi lại qua API PolicyEngine', () => {
+  assert.match(desktopPage, /Xóa hồ sơ nhân sự\?/);
+  assert.match(mobilePage, /Xóa hồ sơ nhân sự\?/);
+  assert.match(desktopPage, /<MDialog/);
+  assert.match(mobilePage, /<MDialog/);
+  assert.match(feature, /api\.deletePerson\(props\.personId\)/);
+  assert.match(feature, /\['admin', 'super_admin'\]/, 'UI chỉ gợi ý delete cho role phù hợp, không thay thế policy server');
+});

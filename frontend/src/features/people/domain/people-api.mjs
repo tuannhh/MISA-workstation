@@ -44,6 +44,12 @@ export function createPeopleApi({ fetchFn = globalThis.fetch, basePath = '/api' 
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async deletePerson(personId) {
+      const response = await fetchFn(`${basePath}/people/${Number(personId)}`, { method: 'DELETE', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
     async upload(personId, files, { kind = 'portrait', visibility = 'private' } = {}) {
       const id = Number(personId);
       const form = new FormData();

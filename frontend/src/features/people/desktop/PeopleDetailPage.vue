@@ -1,15 +1,17 @@
 <script setup>
 import { ref } from 'vue';
 import MButton from '../../../components/mds/MButton.vue';
+import MDialog from '../../../components/mds/MDialog.vue';
 import MEmptyState from '../../../components/mds/MEmptyState.vue';
 import MTag from '../../../components/mds/MTag.vue';
 import MTabs from '../../../components/mds/MTabs.vue';
 import PeopleAttachmentsPanel from '../PeopleAttachmentsPanel.vue';
 import { fileUrl } from '../domain/people-detail.mjs';
 
-defineProps({ detail: { type: Object, required: true }, canEdit: { type: Boolean, default: false }, canManageIdDocs: { type: Boolean, default: false }, attachmentWorking: { type: Boolean, default: false }, attachmentError: { type: String, default: '' } });
-const emit = defineEmits(['back', 'edit', 'upload', 'set-primary', 'delete-attachment']);
+defineProps({ detail: { type: Object, required: true }, canEdit: { type: Boolean, default: false }, canDelete: { type: Boolean, default: false }, deleteWorking: { type: Boolean, default: false }, deleteError: { type: String, default: '' }, canManageIdDocs: { type: Boolean, default: false }, attachmentWorking: { type: Boolean, default: false }, attachmentError: { type: String, default: '' } });
+const emit = defineEmits(['back', 'edit', 'delete-person', 'upload', 'set-primary', 'delete-attachment']);
 const activeTab = ref('overview');
+const deleteOpen = ref(false);
 const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachments', label: 'Tệp đính kèm' }, { key: 'history', label: 'Tương tác' }];
 </script>
 
@@ -24,7 +26,7 @@ const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachment
         <div class="min-w-0"><h1 class="truncate text-[20px] font-semibold leading-7 text-[var(--mds-text)]">{{ detail.name }}</h1><p class="truncate text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">{{ detail.subtitle }}</p></div>
         <MTag :color="detail.statusColor" class="hidden lg:inline-flex">{{ detail.status }}</MTag>
       </div>
-      <div class="flex shrink-0 items-center gap-2"><MButton variant="neutral" @click="emit('back')">Danh bạ</MButton><MButton v-if="canEdit" variant="primary" @click="emit('edit')">Chỉnh sửa</MButton></div>
+      <div class="flex shrink-0 items-center gap-2"><MButton variant="neutral" @click="emit('back')">Danh bạ</MButton><MButton v-if="canDelete" variant="danger" :disabled="deleteWorking" @click="deleteOpen = true">Xóa</MButton><MButton v-if="canEdit" variant="primary" @click="emit('edit')">Chỉnh sửa</MButton></div>
     </header>
     <div class="rounded-lg bg-[var(--mds-bg)] shadow-[var(--mds-shadow-card)]">
       <MTabs v-model="activeTab" :tabs="tabs" class="[&>[role=tablist]]:px-4">
@@ -36,5 +38,7 @@ const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachment
         <MEmptyState v-else title="Chưa có tương tác được hiển thị" description="Tương tác và biểu mẫu sẽ được chuyển trong slice People List/Forms/Interactions." />
       </MTabs>
     </div>
+    <p v-if="deleteError" role="alert" class="mx-auto mt-3 max-w-[960px] rounded-lg bg-[var(--mds-danger-bg)] px-3 py-2 text-[13px] leading-[18px] text-[var(--mds-danger)]">{{ deleteError }}</p>
+    <MDialog v-model="deleteOpen" title="Xóa hồ sơ nhân sự?" type="danger" confirm-text="Xóa hồ sơ" @confirm="emit('delete-person')"><p>Hồ sơ và các tệp đính kèm sẽ bị xóa. Thao tác này không thể hoàn tác.</p></MDialog>
   </section>
 </template>

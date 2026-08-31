@@ -55,6 +55,7 @@ Tắt `peopleDetailRead` là rollback tức thời, không migration/schema/data
 - Form compact **chỉ** gửi 9 field công khai đã hiện trong form. Trường nhạy cảm không được API projection trả về không được dựng thành chuỗi rỗng rồi gửi ngược lại, tránh ghi đè dữ liệu ẩn.
 - Native write dùng cây `PeopleEditFormMobile` riêng: top bar MDS, vùng form cuộn, footer Lưu ghim và safe-area bottom; Back/Hủy có draft phải xác nhận bỏ thay đổi. Khi app chuyển foreground trong lúc sửa, feature không reload tự động để không mất draft.
 - File detail/upload/đặt ảnh chính/xóa (R034–R037) hiện dùng `PeopleAttachmentsPanel` chung dữ liệu nhưng được mount trong hai page composition riêng. Mọi preview/tải file dùng `/api/files/:id`; UI chỉ hiển thị mảng portraits/idDocs đã được server projection. Xóa bắt buộc dialog xác nhận. Khi cờ tắt, toàn bộ R032–R037 vẫn đi qua legacy không thay đổi.
+- R033 xóa hồ sơ có dialog xác nhận ở cả Desktop và Native. UI chỉ gợi ý nút này cho admin/super_admin theo permission summary, nhưng request `DELETE /api/people/:id` vẫn bị PolicyEngine kiểm tra lại và lỗi 403 hiển thị tại chỗ.
 
 ## 8. Handoff write/file
 
