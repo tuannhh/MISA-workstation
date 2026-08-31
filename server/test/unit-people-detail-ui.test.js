@@ -12,6 +12,7 @@ const appVue = fs.readFileSync(path.join(root, 'frontend', 'src', 'App.vue'), 'u
 const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const desktopPage = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleDetailPage.vue'), 'utf8');
 const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleDetailPageMobile.vue'), 'utf8');
+const mobileEditForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleEditFormMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
 const editForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleEditFormDesktop.vue'), 'utf8');
 
@@ -79,4 +80,13 @@ test('UI-PPL-006: Desktop edit dùng control MDS, payload tối thiểu và lỗ
   assert.doesNotMatch(editForm, /owner_id|phone_personal|home_address|personal_notes/, 'form public không được đưa field nhạy cảm hoặc owner vào payload');
   assert.match(feature, /api\.update\(props\.personId, payload\)/, 'feature phải gọi API server-enforced khi lưu');
   assert.match(feature, /permissions\?\.modules\?\.partners\?\.includes\('edit'\)/, 'chỉ dùng permission để gợi ý UX; server vẫn là source of truth');
+});
+
+test('UI-PPL-007: Native edit là composition riêng, có footer safe-area và xác nhận bỏ draft', () => {
+  assert.match(mobileEditForm, /class="mds-mobile-app/, 'native edit phải là mini-app riêng');
+  assert.match(mobileEditForm, /MMobileTopBar/, 'native edit phải có top bar MDS');
+  assert.match(mobileEditForm, /MDialog/, 'Back/Hủy có draft phải xác nhận theo MDS');
+  assert.match(mobileEditForm, /--mds-mobile-safe-bottom/, 'footer phải tôn trọng safe area host');
+  assert.doesNotMatch(mobileEditForm, /platform-header|sidebar|MHeaderBar|MSidebar/, 'native edit không tái sử dụng shell desktop');
+  assert.match(feature, /state\.mode === 'read'/, 'foreground không được tự reload làm mất draft đang sửa');
 });

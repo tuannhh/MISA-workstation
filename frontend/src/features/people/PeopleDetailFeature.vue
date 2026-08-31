@@ -8,6 +8,7 @@ import { createPeopleApi, PeopleApiError } from './domain/people-api.mjs';
 import { peopleDetailViewModel } from './domain/people-detail.mjs';
 import PeopleDetailPage from './desktop/PeopleDetailPage.vue';
 import PeopleEditFormDesktop from './desktop/PeopleEditFormDesktop.vue';
+import PeopleEditFormMobile from './mobile/PeopleEditFormMobile.vue';
 import PeopleDetailPageMobile from './mobile/PeopleDetailPageMobile.vue';
 
 const props = defineProps({ personId: { type: Number, required: true }, surface: { type: String, required: true }, adapter: { type: Object, default: null }, hostUnavailable: { type: Boolean, default: false } });
@@ -39,7 +40,7 @@ async function goBack() { if (isNative.value) { if (props.adapter) await props.a
 function listenToHost() {
   if (!props.adapter || props.hostUnavailable) return;
   unsubscribers.push(props.adapter.subscribe(HostEvent.VIEWPORT, (payload) => { if (payload?.safeArea) safeArea.value = { ...safeArea.value, ...payload.safeArea }; }));
-  unsubscribers.push(props.adapter.subscribe(HostEvent.LIFECYCLE, (payload) => { if (payload?.state === 'foreground') load(); }));
+  unsubscribers.push(props.adapter.subscribe(HostEvent.LIFECYCLE, (payload) => { if (payload?.state === 'foreground' && state.mode === 'read') load(); }));
   unsubscribers.push(props.adapter.subscribe(HostEvent.DEEP_LINK, (payload) => { const match = /^\/?people\/(\d+)$/.exec(String(payload?.path || '').replace(/^#/, '')); if (match) emit('navigate', Number(match[1])); }));
 }
 watch(() => props.personId, load);
@@ -50,7 +51,8 @@ onBeforeUnmount(() => { while (unsubscribers.length) unsubscribers.pop()(); });
 <template>
   <div v-if="state.phase === 'loading'" :class="isNative ? 'mds-mobile-app grid h-[100dvh] place-items-center bg-[var(--mds-bg)]' : 'grid min-h-[360px] place-items-center bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MSpinner :size="28" class="text-[var(--mds-brand-600)]" /></div>
   <section v-else-if="state.phase === 'error'" :class="isNative ? 'mds-mobile-app min-h-[100dvh] bg-[var(--mds-bg)]' : 'min-h-[360px] bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MMobileTopBar v-if="isNative" title="Hồ sơ nhân sự" @back="goBack" /><MEmptyState :title="state.error.status === 404 ? 'Không tìm thấy hồ sơ' : state.error.status === 403 ? 'Bạn không có quyền xem hồ sơ này' : 'Không thể mở hồ sơ'" :description="state.error.message" /></section>
-  <PeopleDetailPageMobile v-else-if="isNative" :detail="state.detail" :safe-area-style="safeAreaStyle" @back="goBack" />
+  <PeopleEditFormMobile v-else-if="isNative && state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveEdit" />
+  <PeopleDetailPageMobile v-else-if="isNative" :detail="state.detail" :can-edit="canEdit" :safe-area-style="safeAreaStyle" @back="goBack" @edit="state.mode = 'edit'" />
   <PeopleEditFormDesktop v-else-if="state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" @cancel="state.mode = 'read'" @save="saveEdit" />
   <PeopleDetailPage v-else :detail="state.detail" :can-edit="canEdit" @back="goBack" @edit="state.mode = 'edit'" />
 </template>
