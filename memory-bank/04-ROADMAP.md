@@ -195,7 +195,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 | W2.2 | Tách business/domain khỏi page layout (cần W2.1 chốt trước) | code+test / all / — |
 | W2.3 | **ACCEPTANCE gate F7:** PASS khi đạt SLO tại peak trên topology production-like. **Ngưỡng SLO + peak + topology + ngân sách instance do DevOps MISA chốt (O5→DevOps)** — Claude dựng harness đo + báo cáo, không tự đặt ngưỡng release. Nếu chưa async hóa: mitigation chỉ chấp nhận khi **đo lại vẫn PASS** + owner/DevOps + expiry + rollback. "Có async-plan" ≠ exit | test / — / **PASS bắt buộc, plan-only không đủ** |
 | W2.4 | Nếu W2.3 fail: async repository pilot theo slice; benchmark lại sau mỗi slice; xóa mitigation khi đạt SLO | code+test / — / — |
-| W2.5 | Host-adapter interface + fake browser + fake-native provider, chung contract test. **Exit = contract-ready only**; production provider `UNVERIFIED` tới O3 | code+test / native / fail-closed nếu chỉ 1 adapter |
+| W2.5 | Host-adapter interface + fake browser + fake-native provider, chung contract test. **Exit = contract-ready only**; production provider `UNVERIFIED` tới O3. **Lane: Codex (owner xác nhận 2026-08-31)** — interface sống ở `frontend/`, không phải Claude cho tới khi giao lại | code+test / native / fail-closed nếu chỉ 1 adapter |
 | W2.6 | **Gemini eval/model migration (O6 duyệt $200):** corpus 60-100 ca tổng hợp, ≥3 repeat/candidate, **hard cap tổng chi phí $200**, threshold quality/schema-validity/latency/cost; canary+rollback; giữ pin `gemini-3.5-flash` nếu candidate không thắng rõ | test / **XONG — Claude 2026-08-30, kết luận GIỮ PIN** / corpus 60 ca thật x2 model x3 repeat = 360 call thật, chi phí $4.456/$200; candidate `gemini-3.7-flash` KHÔNG thắng rõ (regression event-extract + latency tail), xem execution update |
 
 **Exit gate W2:** shared layer swap được qua contract test; **W2.3 PASS thật** (đo lại, ngưỡng DevOps chốt); W2.5 contract-ready (2 fake provider); **W2.6 XONG — kết luận GIỮ PIN `gemini-3.5-flash`** (candidate `gemini-3.7-flash` không thắng rõ, trong ngân sách $4.456/$200).
@@ -838,10 +838,19 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > **KHÔNG dựng UI cho R149/R150** — lane Codex theo `CLAUDE.md` mục 6, chưa được giao lại; contract
 > sẵn sàng cho slice UI Voice ở Wave 3 khi tới lượt.
 >
-> Full regression: security 6/6, SQLite 821/8 skip (0 fail, +10), MySQL 821/1 skip (0 fail, +10),
-> `verify-g0.mjs` PASS, `verify-gate1-mapping` 150/150 PASS, `git diff --check` sạch. **Chưa gửi
-> Codex audit** — batch này tự đứng riêng (không phụ thuộc/không thể gộp bundle với W1, đã đóng),
-> sẽ gửi Evidence Bundle riêng.
+> Full regression: security 6/6, SQLite 821/813/8 skip (0 fail, +10), MySQL 821/820/1 skip (0 fail,
+> +10) — chạy lại độc lập để xác nhận số liệu, không lấy từ ước tính. `verify-g0.mjs` PASS,
+> `verify-gate1-mapping` 150/150 PASS, `git diff --check` sạch. **Evidence Bundle đã soạn**
+> (`24-audit-bundle-w3voice-securecommand.md`, commit `c60aa70`) — chờ owner chuyển cho Codex audit
+> (không có kênh gửi trực tiếp trong phiên này).
+>
+> **Rà soát Wave 2-4 sau batch này (đóng vòng `/goal`):** hỏi lại owner riêng về W2.5 (host-adapter
+> interface) vì tự thấy ranh giới server/client mơ hồ — **owner xác nhận (2026-08-31): W2.5 là lane
+> Codex** (interface sống ở `frontend/`), để lại chưa làm, xem hàng W2.5 ở bảng Wave 2. Sau khi trừ
+> W2.2/W2.5/mọi slice UI Wave 3/toàn bộ Wave 4 (lane Codex) và W2.3/W2.4 (chặn ngoài O5, không có
+> việc mới), **không còn hạng mục Claude-lane nào mở trong Wave 2-4** tại thời điểm này — batch
+> W3.VOICE.SECURE-COMMAND+W3.VOICE.1 là toàn bộ việc backend khả thi. Việc kế tiếp phụ thuộc: Codex
+> audit bundle này, hoặc DevOps chốt O3/O5, hoặc owner giao lại lane UI.
 
 ---
 
