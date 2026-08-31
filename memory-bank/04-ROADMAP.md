@@ -730,6 +730,11 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > session STORE chờ DevOps chọn implementation (O4), không chặn đóng W1 theo đúng ghi chú "O3/O4/O5
 > không chặn G0/G1/W1.RBAC/W1.8/W1.9" đã có sẵn ở trên. **Không còn sub-item W1 nào ở trạng thái mở
 > phía Claude** — thoả mãn `/goal` "làm hết các vấn đề của W1".
+>
+> **Evidence Bundle đã gửi Codex audit (2026-08-31):** `22-audit-bundle-w1-close.md` — gộp 4 batch
+> `W1.POLICY.2` (read+write-side)/`W1.FILE-P2`/`W1.ADMIN` thành 1 audit-closure bundle theo §12/§14
+> `17-fast-track-collaboration.md`. Tuyên bố "W1 đóng hoàn toàn" ở trên là tự đánh giá phía Claude;
+> chỉ chính thức CLOSED sau khi Codex trả ACCEPTED/ACCEPTED WITH BACKLOG trên bundle này.
 
 ---
 
