@@ -907,6 +907,25 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > việc mới), **không còn hạng mục Claude-lane nào mở trong Wave 2-4** tại thời điểm này — batch
 > W3.VOICE.SECURE-COMMAND+W3.VOICE.1 là toàn bộ việc backend khả thi. Việc kế tiếp phụ thuộc: Codex
 > audit bundle này, hoặc DevOps chốt O3/O5, hoặc owner giao lại lane UI.
+>
+> **Execution update — 2026-08-31 (F27 ACCEPTED cả 3 case, remediation F28 sau chính vòng re-audit
+> đó, ĐÃ FIX, chờ re-audit):** Codex re-audit xác nhận **ACCEPTED F27** (3 case bắt buộc: person xoá,
+> org xoá, revision/snapshot drift — chạy lại độc lập 15/15 test cả 2 driver) nhưng phát hiện thêm
+> **F28 (P1 release blocker)**: freshness re-check F27 vừa thêm (`fetchPersonSnapshot`/
+> `fetchOrgSnapshot`) chỉ dùng plain `SELECT`, không giữ row lock — trong 1 process không sao
+> (`withTransaction` đảm bảo không handler nào của CHÍNH process chen vào giữa) nhưng trên MySQL khi
+> chạy **nhiều Cloud Run instance** (mỗi instance 1 connection MySQL riêng), 1 instance khác vẫn
+> UPDATE/DELETE được đúng row parent giữa lúc đọc snapshot và lúc ghi interaction — TOCTOU liên-
+> process thật, khác hẳn F27 (chỉ trong 1 process). Fix theo đúng đề xuất Codex: `SELECT ... FOR
+> UPDATE` cho MySQL (export `isMysql` từ `db.js`), SQLite giữ plain query (claim `UPDATE` đã lấy
+> write lock toàn DB + không hỗ trợ `FOR UPDATE`). Test tăng 15→17 (2 test MySQL-only): 2 connection
+> `mysql2/promise` độc lập với app, connA giữ `FOR UPDATE`, connB `UPDATE`/`DELETE` cùng row phải bị
+> CHẶN cho tới khi connA COMMIT/ROLLBACK — không đi qua HTTP route thật được vì
+> `MySQLSyncDatabase` chặn đồng bộ main thread bằng `Atomics.wait` (giữ lock trước rồi gọi HTTP trên
+> cùng process sẽ tự deadlock chính test process). Full regression: SQLite 818/818 pass (8 skip),
+> MySQL 827/827 pass (1 skip), `verify-g0.mjs` + `verify-gate1-mapping` PASS, `git diff --check`
+> sạch. Commit `d8ff14b`. Chi tiết: `01-audit-findings.md` §F28, bundle mục "Remediation F28". **Chờ
+> Codex re-audit F28**, không mở lại F25/F26/P2/F27 đã ACCEPTED.
 
 ---
 

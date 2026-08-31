@@ -2845,3 +2845,39 @@ skip (+3), `verify-g0.mjs` PASS, `verify-gate1-mapping` 150/150 PASS, `git diff 
 tiết: `01-audit-findings.md` §F27, `24-audit-bundle-w3voice-securecommand.md` mục "Remediation F27".
 **Chờ Codex re-audit đúng 3 case đã yêu cầu** (person xoá, org xoá, revision stale), không mở lại
 F25/F26/P2 đã ACCEPTED.
+
+## F27 ACCEPTED — remediation F28 (row lock MySQL nhiều instance) sau chính vòng re-audit đó
+
+Codex re-audit xác nhận **ACCEPTED F27**: chạy lại độc lập đúng 3 case bắt buộc (person bị xoá,
+organization bị xoá, revision/snapshot drift) trên 15/15 test cả SQLite/MySQL — F27 đóng, không mở
+lại.
+
+Cùng lúc phát hiện **F28 (P1 release blocker)**: freshness re-check F27 vừa thêm
+(`fetchPersonSnapshot`/`fetchOrgSnapshot`, `server/ai.js`) chỉ dùng plain `SELECT`, không giữ row
+lock. Trong 1 process không sao — `withTransaction()` đảm bảo không handler nào khác của CHÍNH
+process đó chen được vào giữa. Nhưng trên MySQL khi triển khai **nhiều Cloud Run instance** (mỗi
+instance là 1 process/connection MySQL riêng), 1 instance khác vẫn `UPDATE`/`DELETE` được đúng row
+parent giữa lúc instance A đọc snapshot và lúc A `INSERT` interaction — race **liên-process** thật,
+khác hẳn F27 (chỉ trong cùng 1 process). Codex chốt: không chặn việc đóng F27, nhưng phải sửa trước
+khi deploy/scaling nhiều instance; không cần mở rộng sang UI hoặc thêm schema revision.
+
+Fix (commit `d8ff14b`): export `isMysql` từ `server/db.js` (dựa vào `DB_CLIENT` module-level sẵn
+có). `fetchPersonSnapshot`/`fetchOrgSnapshot` dùng `SELECT ... FOR UPDATE` khi `isMysql`, giữ nguyên
+plain `SELECT` cho SQLite — claim `UPDATE` đã lấy write lock toàn DB (SQLite chỉ có 1 writer tại 1
+thời điểm) và SQLite cũng không hỗ trợ cú pháp `FOR UPDATE`. Đúng đề xuất Codex, không thêm cột
+`revision`.
+
+Test mới (`integration-voice-secure-command.test.js`, tăng 15→17, 2 test MySQL-only qua
+`{ skip: !isMysql }`): dùng 2 connection `mysql2/promise` **độc lập với app** — connA giữ
+`SELECT ... FOR UPDATE` (đúng câu SQL fix vừa thêm) trên row person, connB thử `UPDATE`/`DELETE`
+cùng row phải bị **CHẶN** cho tới khi connA `COMMIT`/`ROLLBACK`. Không đi qua HTTP route thật được:
+`MySQLSyncDatabase` (`server/mysql-sync.js`) chặn đồng bộ chính main thread bằng `Atomics.wait` khi
+gọi MySQL — nếu giữ lock trước rồi gọi HTTP confirm() trên cùng 1 process test, main thread sẽ đóng
+băng chờ MySQL cấp lock, nhưng chính main thread đó lại là nơi duy nhất chạy được code JS để
+COMMIT/ROLLBACK connection đang giữ lock → tự deadlock chính test process (không phải lỗi của fix).
+Vì vậy test xác minh trực tiếp cơ chế khoá mà fix dựa vào, bằng đúng câu SQL production dùng.
+
+Full regression: SQLite 826 total/818 pass/8 skip (không đổi — 2 test mới skip trên SQLite), MySQL
+828 total/827 pass/1 skip (+2), `verify-g0.mjs` + `verify-gate1-mapping` 150/150 PASS, `git diff
+--check` sạch. Chi tiết: `01-audit-findings.md` §F28, `24-audit-bundle-w3voice-securecommand.md` mục
+"Remediation F28". **Chờ Codex re-audit F28**, không mở lại F25/F26/P2/F27 đã ACCEPTED.

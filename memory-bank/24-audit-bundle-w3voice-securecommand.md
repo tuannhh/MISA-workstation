@@ -1,14 +1,18 @@
 # Evidence Bundle — W3.VOICE.SECURE-COMMAND + W3.VOICE.1 (backend/API-only) — gửi Codex audit
 
 > **Trạng thái: BLOCKED hẹp (Codex audit) → F25/F26/P2 ACCEPTED (Codex re-audit) → F27 phát hiện
-> trong chính vòng re-audit đó → ĐÃ FIX F27 (Claude 2026-08-31), chờ re-audit lần cuối.**
+> trong chính vòng re-audit đó → F27 ACCEPTED cả 3 case (Codex re-audit) → F28 phát hiện trong chính
+> vòng re-audit đó → ĐÃ FIX F28 (Claude 2026-08-31), chờ re-audit.**
 > Codex audit trên bundle gốc dưới đây xác nhận phần lớn thiết kế đúng hướng (10/10 test cũ xanh,
 > principal binding/tampering guard/quyền re-check tại confirm/score-clamp/confirm lặp tuần tự đều
 > đúng) nhưng trả **BLOCKED** với 2 MUST-FIX P1 tái hiện được bằng HTTP thật + 1 P2 gộp chung: xem
 > mục "Remediation F25/F26/P2" — **Codex re-audit ACCEPTED cả 3** (chạy lại 12/12 test độc lập, tự
 > xác nhận transaction/rollback thật) nhưng phát hiện thêm **F27** (P1 mới, parent entity TOCTOU) —
-> xem mục "Remediation F27" ở cuối tài liệu. Nội dung bundle gốc bên dưới **giữ nguyên không sửa**
-> (đúng nguyên tắc audit trail); phần fix + evidence ghi ở 2 mục cuối.
+> xem mục "Remediation F27" — **Codex re-audit ACCEPTED cả 3 case bắt buộc** (person xoá, org xoá,
+> revision drift; chạy lại độc lập 15/15 test cả 2 driver) nhưng phát hiện thêm **F28** (P1 release
+> blocker, row lock MySQL nhiều instance) — xem mục "Remediation F28" ở cuối tài liệu. Nội dung bundle
+> gốc bên dưới **giữ nguyên không sửa** (đúng nguyên tắc audit trail); phần fix + evidence ghi ở các
+> mục cuối.
 
 Batch độc lập (không gộp với bundle W1 đã đóng). Backend/API thuần theo lane Claude
 (`17-fast-track-collaboration.md` §1, `CLAUDE.md` mục 6); UI cho R149/R150 CHƯA làm — lane Codex,
@@ -270,11 +274,106 @@ unrelated pre-existing nào lẫn vào commit.
 
 ---
 
+## Remediation F28 (2026-08-31) — row lock MySQL nhiều instance, phát hiện trong vòng re-audit F27
+
+**Status:** ĐÃ FIX (commit `d8ff14b`, đã push `misa/main`) — chờ Codex re-audit.
+
+**Evidence Codex đưa ra:** phát hiện ngay trong lúc re-audit ACCEPTED F27, không phải finding mới
+độc lập. Codex chỉ ra: freshness re-check F27 vừa thêm (`fetchPersonSnapshot`/`fetchOrgSnapshot`)
+chạy TRONG transaction confirm nhưng chỉ dùng plain `SELECT` — không giữ row lock. Trên MySQL khi
+triển khai thật với **nhiều instance Cloud Run** (mỗi instance là 1 process/connection MySQL riêng
+biệt), instance A đọc snapshot xong (hợp lệ) rồi instance B (connection khác) `UPDATE`/`DELETE` đúng
+row đó GIỮA lúc A đọc và A `INSERT interaction` — A vẫn ghi interaction dùng dữ liệu đã cũ. Đây là
+race **liên-process** thật, khác với F27 (F27 chỉ đóng gap trong CÙNG 1 process — `withTransaction()`
+chỉ đảm bảo không handler nào khác của process đó chen được vào giữa, không nói gì về process khác).
+
+**Đề xuất sửa của Codex (đã áp dụng đúng nguyên văn):** trong transaction sau claim, dùng locking
+read cho MySQL — `SELECT ... FOR UPDATE` cho person và organization đã chọn; SQLite giữ query thường
+vì claim write đã lấy write lock toàn DB. Sau lock, so snapshot rồi mới insert/audit/CAS. Thêm 1
+MySQL concurrency test bằng hai connection: connection thứ hai phải bị chặn khi cố update/delete
+parent cho tới khi confirm transaction commit/rollback. Quyết định của Codex: "F27 đóng. W3 Voice
+backend có thể ghi ACCEPTED WITH RELEASE BLOCKER F28; cần sửa F28 trước khi deploy/scaling nhiều
+instance. Không cần mở rộng sang UI hoặc thêm schema revision."
+
+**Fix áp dụng:**
+1. `server/db.js`: export thêm `isMysql: DB_CLIENT === 'mysql'` từ `module.exports` (dựa vào hằng số
+   `DB_CLIENT` module-level đã có sẵn, không đổi logic chọn driver).
+2. `server/ai.js`: import `isMysql`; `fetchPersonSnapshot(id)`/`fetchOrgSnapshot(id)` nối thêm
+   ` FOR UPDATE` vào câu SQL khi `isMysql === true`, giữ nguyên plain `SELECT` khi không phải MySQL
+   (SQLite không hỗ trợ cú pháp `FOR UPDATE` và không cần — claim `UPDATE` phía trên đã lấy write
+   lock toàn DB, SQLite chỉ có đúng 1 writer tại 1 thời điểm). Cả 2 hàm chỉ được gọi TRONG
+   `withTransaction()` của route confirm (đã xác minh lại — không có lời gọi nào khác ngoài đó), nên
+   thêm `FOR UPDATE` không ảnh hưởng đường nào khác.
+3. Không thêm cột `revision` cho `people`/`organizations`, không đổi UI/MDS — đúng phạm vi Codex đã
+   chốt.
+
+**Test mới (`server/test/integration-voice-secure-command.test.js`, 15→17 test, 2 test MySQL-only
+qua `{ skip: !isMysql }`):**
+- Dùng 2 connection `mysql2/promise` **độc lập với app** (không qua route HTTP thật) — lý do: app
+  dùng `MySQLSyncDatabase` (`server/mysql-sync.js`), chặn đồng bộ chính main thread của process bằng
+  `Atomics.wait` mỗi khi gọi MySQL. Nếu test giữ lock trước bằng 1 connection rồi gọi HTTP
+  confirm() trên CÙNG process test, main thread sẽ đóng băng chờ MySQL cấp lock cho app — nhưng
+  chính main thread đó lại là nơi DUY NHẤT chạy được code JS để COMMIT/ROLLBACK connection đang giữ
+  lock (test code cũng cần main thread event loop) → tự deadlock chính test process, không phải lỗi
+  của fix. Vì vậy test xác minh trực tiếp cơ chế khoá mà fix dựa vào, dùng ĐÚNG câu SQL production
+  vừa thêm (`SELECT ... FOR UPDATE`), qua 2 connection MySQL thật độc lập.
+- Test 1 (UPDATE): connA `START TRANSACTION` + `SELECT ... FOR UPDATE` trên row person; connB (raw
+  connection thứ 2) gọi `UPDATE people SET relationship_score=? WHERE id=?` cùng row — assert promise
+  của connB CHƯA settle sau 400ms (còn bị chặn thật); connA `COMMIT`; assert connB resolve ngay sau
+  đó và giá trị đã ghi đúng.
+- Test 2 (DELETE): tương tự nhưng connB gọi `DELETE`, connA giải phóng lock bằng `ROLLBACK` (không
+  chỉ COMMIT) — assert connB vẫn bị chặn tới khi ROLLBACK xong rồi mới chạy được.
+- 17/17 test xanh trên MySQL (2 test mới mất ~430ms mỗi test — đúng bằng cửa sổ 400ms chờ trước khi
+  release lock, xác nhận khoảng chặn có thật chứ không phải race pass ngẫu nhiên); trên SQLite, 2
+  test này skip đúng qua `{ skip: !isMysql }`, 15/15 còn lại vẫn xanh.
+
+**Commands and exact results:**
+
+| Suite | Kết quả |
+|---|---|
+| Security | 6/6 pass |
+| SQLite `integration-voice-secure-command.test.js` | 15/15 pass (2 test F28 skip đúng) |
+| MySQL `integration-voice-secure-command.test.js` | 17/17 pass (bao gồm 2 test F28 mới) |
+| SQLite full integration suite | 826 total / 818 pass / 8 skip (không đổi) |
+| MySQL full integration suite | 828 total / 827 pass / 1 skip (+2) |
+| `scripts/verify-g0.mjs` | PASS toàn bộ check |
+| `scripts/verify-gate1-mapping.mjs` | PASS — 150/150 route |
+| `git diff --check` | sạch |
+
+**Changed files:** `server/db.js` (export `isMysql`); `server/ai.js` (`fetchPersonSnapshot`/
+`fetchOrgSnapshot` nối `FOR UPDATE` khi MySQL); `server/test/integration-voice-secure-command.test.js`
+(2 test MySQL-only mới + helper `rawMysqlConnConfig`/`stillPendingAfter`). `01-audit-findings.md`
+(§F28 mới, cập nhật trạng thái F27 → ACCEPTED), `04-ROADMAP.md`/`15-changelog.md` (execution update)
+— docs only, commit riêng.
+
+**Behavior changes:**
+1. Trên MySQL, freshness re-check của person/organization trong route confirm nay khoá row (`FOR
+   UPDATE`) trong lúc đọc — hành vi quan sát được từ 1 client duy nhất KHÔNG đổi (vẫn `200`/`409
+   PROPOSAL_STALE` như trước), chỉ khác ở tầng đồng thời nhiều connection: connection khác cố
+   ghi/xoá đúng row đó trong lúc confirm đang xử lý sẽ phải CHỜ tới khi confirm COMMIT/ROLLBACK thay
+   vì có thể chen vào giữa.
+2. SQLite không đổi hành vi (không hỗ trợ và không cần `FOR UPDATE`).
+3. Mọi case đã ACCEPTED trước đó (F25/F26/P2/F27) giữ nguyên hành vi, không regression — xác nhận
+   bằng full regression suite ở trên.
+
+**Out-of-scope:** không thêm cột `revision` schema-wide; không mở rộng sang UI Voice/MDS; không đổi
+route `/interaction-voice` cũ; không sửa gì ở SQLite ngoài việc không áp dụng thay đổi (đúng chốt của
+Codex).
+
+**Rollback path:** 1 commit độc lập (`d8ff14b`), `git revert` an toàn — chỉ đổi 1 dòng export ở
+`db.js` + nội dung 2 câu SQL trong `ai.js` + thêm test, không entity/route khác phụ thuộc.
+
+**Worktree status:** `git status --short` sạch tại thời điểm chuẩn bị remediation này; không có file
+unrelated pre-existing nào lẫn vào commit.
+
+---
+
 ## Remediation F27 (2026-08-31) — parent entity (person/organization) TOCTOU, phát hiện trong vòng re-audit F25/F26/P2
 
-**Status:** ĐÃ FIX (commit `340e4a8`, đã push `misa/main`) — chờ Codex re-audit đúng 3 case đã yêu
-cầu: person bị xoá, organization bị xoá, revision stale (theo `17-fast-track-collaboration.md` §8,
-không mở lại F25/F26/P2 đã ACCEPTED).
+**Status:** ĐÃ FIX (commit `340e4a8`, đã push `misa/main`) — **Codex re-audit ACCEPTED cả 3 case bắt
+buộc** (person bị xoá, organization bị xoá, revision/snapshot drift), tự xác nhận độc lập 15/15 test
+pass cả 2 driver. F27 đóng, không mở lại. (Trong chính vòng re-audit này, Codex phát hiện thêm F28 —
+xem mục "Remediation F28" bên dưới.)
 
 **Evidence Codex đưa ra:** phát hiện ngay trong lúc re-audit F25/F26/P2, không phải finding mới độc
 lập — Codex tái hiện HTTP thật:
@@ -357,5 +456,5 @@ Fix); không mở rộng sang UI Voice/MDS; không đổi route `/interaction-vo
 **Rollback path:** 1 commit độc lập (`340e4a8`), `git revert` an toàn — chỉ đổi logic nội bộ route
 confirm + 2 hàm helper cục bộ trong `ai.js`, không entity/route khác phụ thuộc.
 
-**Worktree status:** `git status --short` sạch tại thời điểm chuẩn bị remediation này; không có file
+**Worktree status (F27):** `git status --short` sạch tại thời điểm chuẩn bị remediation này; không có file
 unrelated pre-existing nào lẫn vào commit.
