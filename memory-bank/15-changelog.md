@@ -2771,3 +2771,41 @@ schema/verify-g0/verify-gate1-mapping, lặp lại tiền lệ `W1.ADMIN`): rout
 **Không dựng UI cho R149/R150** — lane Codex, chưa được giao lại; contract sẵn sàng cho slice UI
 Voice ở Wave 3 khi tới lượt. Commit `506311a` (mechanical), `b6ba61e` (feature+test). **Chưa gửi
 Codex audit** — batch đứng riêng, sẽ chuẩn bị Evidence Bundle riêng.
+
+## Remediation F25/F26/P2 — Codex audit BLOCKED hẹp trên bundle W3.VOICE.SECURE-COMMAND, đã fix
+
+Codex audit `24-audit-bundle-w3voice-securecommand.md` trả BLOCKED với 2 MUST-FIX P1 + 1 P2 gộp
+chung, sau khi xác nhận phần lớn thiết kế đúng hướng (10/10 test cũ xanh, principal binding/
+tampering/quyền-re-check/score-clamp đều đúng): **F25** route confirm claim proposal `confirmed`
+trước rồi mới ghi interaction — không bọc transaction, nên lỗi giữa chừng (Codex tự tạo trigger ép
+`INSERT` lỗi, tái hiện HTTP thật) làm proposal kẹt vĩnh viễn ở `confirmed` mồ côi (không có
+interaction), retry trả `200` giả vờ thành công — mất lệnh người dùng thật. **F26** CAS
+`relationship_score` stale trước đây chỉ bỏ qua phần điểm, vẫn tạo interaction — trái nguyên văn
+D14.4 ("từ chối và yêu cầu chuẩn bị lại" khi snapshot khác hiện tại). **P2** `idempotencyKey` không
+bắt buộc, ghi `null` khi thiếu — mất khả năng retry đáng tin cậy.
+
+Fix (commit `05826b4`): thêm `withTransaction(fn)` (`server/db.js`) — bọc `BEGIN`/`COMMIT`/
+`ROLLBACK` thô qua `db.exec()`; an toàn dùng được vì cả 2 driver (`DatabaseSync` SQLite,
+`MySQLSyncDatabase` MySQL qua worker 1-connection) đều gọi đồng bộ, không `await` xen giữa trong 1
+request handler nên không request nào khác chen vào giữa transaction được. Route confirm nay bọc
+claim + insert interaction + audit + cập nhật `result_interaction_id` + CAS điểm trong 1
+`withTransaction()` — lỗi ở bước nào cũng ROLLBACK về đúng `pending`, retry thật sự tạo lại được.
+CAS điểm stale nay ROLLBACK toàn bộ (kể cả interaction vừa insert), trả `409 PROPOSAL_STALE` — phân
+biệt rõ với nhánh thiếu QUYỀN sửa điểm (`PolicyForbiddenError`, giữ nguyên hành vi cũ vì đó là thiếu
+quyền chứ không phải dữ liệu lệch thời điểm). TTL claim chuyển vào ngay câu `UPDATE`
+(`AND expires_at > datetime('now')`) thay vì chỉ dựa `isExpired()` JS trước đó. `idempotencyKey` nay
+bắt buộc (string không rỗng, ≤200 ký tự), thiếu/sai trả `400 VALIDATION_FAILED`.
+
+Test: sửa 5 test hiện có (thêm `idempotencyKey` bắt buộc vào mọi lời gọi `confirm()`; đổi kỳ vọng
+test stale-score từ `200`/`scoreApplied:false` sang `409 PROPOSAL_STALE`/không tạo interaction);
+thêm 2 test mới — thiếu/rỗng `idempotencyKey` → 400; lỗi giữa chừng dùng CHECK constraint (MySQL,
+vì `CREATE TRIGGER` cần quyền SUPER khi bật binary log) / TRIGGER (SQLite) tạm thời ép thật sự
+`INSERT` lỗi có điều kiện, không dùng mock JS (mock không xác nhận được hành vi transaction/rollback
+thật ở tầng DB) — xác nhận proposal quay về `pending`, retry sau khi gỡ lỗi tạo đúng 1 interaction.
+12/12 test xanh cả SQLite/MySQL.
+
+Full regression: security 6/6, SQLite 823 total/815 pass/8 skip (+2), MySQL 823 total/822 pass/1
+skip (+2), `verify-g0.mjs` PASS, `verify-gate1-mapping` 150/150 PASS, `git diff --check` sạch. Chi
+tiết: `01-audit-findings.md` §F25/§F26/P2, `24-audit-bundle-w3voice-securecommand.md` mục
+"Remediation F25/F26/P2". **Chờ Codex re-audit đúng 5 hành vi đã yêu cầu**, không mở rộng sang UI
+Voice/MDS trong vòng backend này (đúng phạm vi Codex đã giới hạn).

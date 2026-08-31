@@ -861,6 +861,25 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > (`24-audit-bundle-w3voice-securecommand.md`, commit `c60aa70`) — chờ owner chuyển cho Codex audit
 > (không có kênh gửi trực tiếp trong phiên này).
 >
+> **Execution update — 2026-08-31 (remediation F25/F26/P2 sau audit Codex, ĐÃ FIX, chờ re-audit):**
+> Codex audit bundle trên trả **BLOCKED hẹp** — 2 MUST-FIX P1: **F25** confirm claim proposal
+> `confirmed` trước rồi mới ghi interaction KHÔNG bọc transaction — lỗi giữa chừng (Codex tái hiện
+> bằng trigger ép `INSERT` lỗi) làm proposal kẹt ở `confirmed` mồ côi (không có interaction), retry
+> giả vờ thành công; **F26** CAS điểm quan hệ stale chỉ bỏ qua phần điểm, vẫn tạo interaction — trái
+> D14.4 (phải "từ chối và yêu cầu chuẩn bị lại"); gộp thêm **P2** `idempotencyKey` không bắt buộc.
+> Fix: `withTransaction()` mới (`server/db.js`) bọc claim+insert interaction+audit+CAS điểm trong 1
+> transaction (an toàn vì cả 2 driver 1-connection + đồng bộ, không `await` xen giữa 1 request); lỗi
+> ở bất kỳ bước nào ROLLBACK về đúng `pending`. CAS điểm stale nay ROLLBACK toàn bộ, trả `409
+> PROPOSAL_STALE` (khác nhánh thiếu QUYỀN sửa điểm — vẫn giữ hành vi cũ). `idempotencyKey` bắt buộc,
+> 400 nếu thiếu/rỗng. TTL claim nay atomic ngay trong câu `UPDATE` (`expires_at > datetime('now')`).
+> Test: sửa 5 test hiện có + 2 test mới (thiếu key → 400; lỗi giữa chừng dùng CHECK
+> constraint/TRIGGER thật ép INSERT lỗi, không mock JS) — 12/12 xanh cả 2 driver. Full regression:
+> security 6/6, SQLite 823/815/8 skip (+2), MySQL 823/822/1 skip (+2), `verify-g0.mjs` PASS,
+> `verify-gate1-mapping` 150/150 PASS, `git diff --check` sạch. Commit `05826b4`. Chi tiết đầy đủ:
+> `01-audit-findings.md` §F25/§F26/P2, `24-audit-bundle-w3voice-securecommand.md` mục "Remediation
+> F25/F26/P2". **Chờ Codex re-audit đúng 5 hành vi đã yêu cầu**, không mở lại phần đã ACCEPTED
+> (không có phần nào), không mở rộng sang UI Voice/MDS.
+>
 > **Rà soát Wave 2-4 sau batch này (đóng vòng `/goal`):** hỏi lại owner riêng về W2.5 (host-adapter
 > interface) vì tự thấy ranh giới server/client mơ hồ — **owner xác nhận (2026-08-31): W2.5 là lane
 > Codex** (interface sống ở `frontend/`), để lại chưa làm, xem hàng W2.5 ở bảng Wave 2. Sau khi trừ

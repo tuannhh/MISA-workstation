@@ -1,5 +1,12 @@
 # Evidence Bundle — W3.VOICE.SECURE-COMMAND + W3.VOICE.1 (backend/API-only) — gửi Codex audit
 
+> **Trạng thái: BLOCKED hẹp (Codex audit) → ĐÃ FIX F25/F26/P2 (Claude 2026-08-31), chờ re-audit.**
+> Codex audit trên bundle gốc dưới đây xác nhận phần lớn thiết kế đúng hướng (10/10 test cũ xanh,
+> principal binding/tampering guard/quyền re-check tại confirm/score-clamp/confirm lặp tuần tự đều
+> đúng) nhưng trả **BLOCKED** với 2 MUST-FIX P1 tái hiện được bằng HTTP thật + 1 P2 gộp chung: xem
+> mục "Remediation F25/F26/P2" ở cuối tài liệu. Nội dung bundle gốc bên dưới **giữ nguyên không sửa**
+> (đúng nguyên tắc audit trail); phần fix + evidence ghi ở mục cuối.
+
 Batch độc lập (không gộp với bundle W1 đã đóng). Backend/API thuần theo lane Claude
 (`17-fast-track-collaboration.md` §1, `CLAUDE.md` mục 6); UI cho R149/R150 CHƯA làm — lane Codex,
 chưa được owner giao lại.
@@ -161,3 +168,95 @@ Không có known-red mới. `memory-bank/g1b-allowlist.json` không đổi trong
 
 Không có worktree phụ. Tại thời điểm gửi bundle này: `git status --short` sạch (đã commit + push
 hết, `misa/main` @ `ba81e43`); không có file unrelated pre-existing nào lẫn vào 3 commit trên.
+
+---
+
+## Remediation F25/F26/P2 (2026-08-31) — phạm vi hẹp, chỉ sửa đúng 2 MUST-FIX + 1 P2 Codex chỉ ra
+
+**Status:** ĐÃ FIX (commit `05826b4`, đã push `misa/main`) — chờ Codex re-audit đúng 5 hành vi đã
+yêu cầu (theo `17-fast-track-collaboration.md` §8, không mở lại phần đã pass trong bundle gốc).
+
+**Evidence Codex đưa ra (audit lần 1):** tạo trigger tạm ép `INSERT INTO interactions` lỗi, tái
+hiện HTTP thật trên SQLite:
+```
+first: 502
+afterFailure: { "status": "confirmed", "idempotency_key": "audit-atomicity-key", "result_interaction_id": null }
+retry: { "status": 200, "interactionId": null, "idempotent": true }
+```
+Root cause F25: claim proposal (`UPDATE ... status='confirmed'`) và các bước ghi tiếp theo (INSERT
+interaction, audit, cập nhật `result_interaction_id`, CAS điểm) là các câu lệnh SQL rời rạc không
+bọc transaction — gate atomic gốc chỉ chống double-click, không bảo vệ toàn bộ chuỗi nghiệp vụ khỏi
+lỗi giữa chừng. Root cause F26: CAS điểm stale chỉ bỏ qua phần điểm (`scoreApplied:false`), vẫn tạo
+interaction — trái nguyên văn D14.4 ("từ chối và yêu cầu chuẩn bị lại" khi snapshot khác hiện tại).
+P2: `idempotencyKey` không validate, ghi `null` khi thiếu.
+
+**Fix áp dụng đúng theo hướng Codex đề xuất ("Hướng sửa gọn cho Claude" trong audit):**
+1. `withTransaction(fn)` mới (`server/db.js`) — bọc `BEGIN`/`COMMIT`/`ROLLBACK` thô qua `db.exec()`.
+   An toàn dùng được vì cả 2 driver (`DatabaseSync` SQLite, `MySQLSyncDatabase` MySQL — 1 connection
+   duy nhất qua worker thread, gọi đồng bộ bằng `Atomics.wait`) không có `await` xen giữa trong 1
+   request handler, nên không request nào khác chen được vào giữa transaction (đã sanity-check
+   `node:sqlite` hỗ trợ `BEGIN`/`COMMIT`/`ROLLBACK` thô qua script độc lập trước khi áp dụng).
+2. `POST /ai/interaction-voice-confirm` (`server/ai.js`) nay bọc claim + insert interaction + audit
+   + cập nhật `result_interaction_id` + CAS điểm trong 1 `withTransaction()`. Điều kiện TTL chuyển
+   vào ngay câu `UPDATE` claim (`AND expires_at > datetime('now')`) thay vì chỉ dựa `isExpired()`
+   JS trước đó — hết hạn đúng lúc claim cũng được xử lý atomic như 1 dạng xung đột claim.
+3. CAS điểm stale (`cas.changes !== 1`) nay `throw StaleScoreError` bên trong transaction → ROLLBACK
+   TOÀN BỘ (kể cả interaction vừa insert), route trả `409 PROPOSAL_STALE`. Phân biệt rõ với nhánh
+   thiếu QUYỀN sửa điểm (`PolicyForbiddenError` ở `assertWritable`) — nhánh đó GIỮ NGUYÊN hành vi cũ
+   (vẫn tạo interaction, bỏ qua phần điểm), vì đó là thiếu quyền chứ không phải dữ liệu lệch thời
+   điểm — không phải case Codex yêu cầu sửa.
+4. `idempotencyKey` nay bắt buộc: `typeof !== 'string' || !trim() || length > 200` → `400
+   VALIDATION_FAILED` trước khi chạm DB.
+5. Test mới/sửa trong `server/test/integration-voice-secure-command.test.js` (12 test, tăng từ 10):
+   - Sửa 5 test hiện có: thêm `idempotencyKey` bắt buộc vào mọi lời gọi `confirm()` còn thiếu; đổi
+     kỳ vọng test stale-score từ `200`/`scoreApplied:false` sang `409 PROPOSAL_STALE` + interaction
+     count không đổi + proposal quay về `pending`.
+   - Test mới "thiếu hoặc rỗng idempotencyKey bị từ chối 400" — 2 case (thiếu hẳn, chuỗi khoảng
+     trắng), xác nhận proposal không bị claim bởi request không hợp lệ.
+   - Test mới "lỗi giữa chừng khi ghi interaction → proposal ROLLBACK về pending, retry sau khi hết
+     lỗi tạo đúng 1 interaction" — dùng CHECK constraint tạm thời qua `ALTER TABLE` (MySQL — `CREATE
+     TRIGGER` cần quyền SUPER khi bật binary log, không có trong user test) / TRIGGER tạm thời
+     (SQLite) ép thật sự `INSERT` lỗi có điều kiện (`partner_name='FORCE_FAIL_MARKER'`, giá trị điều
+     khiển được từ `person_name` trong payload Gemini mock) — đúng phong cách thí nghiệm Codex đã
+     dùng (lỗi DB thật, không phải mock JS — mock không xác nhận được hành vi transaction/rollback
+     thật ở tầng DB, và không thể mock được vì `ai.js` destructure `buildInsert` tại require-time,
+     không đọc lại `module.exports` sau khi mutate).
+   - Test "confirm 2 lần cùng/khác idempotencyKey" (đã có từ batch gốc) tiếp tục phủ đúng yêu cầu
+     "confirm lặp cùng key → cùng 1 interaction" của Codex, không cần test mới.
+6. Full regression chạy lại đúng 1 lần ở HEAD sau fix.
+
+**Commands and exact results:**
+
+| Suite | Kết quả |
+|---|---|
+| Security | 6/6 pass |
+| SQLite integration | 823 total / 815 pass / 8 skip (+2 so với bundle gốc) |
+| MySQL integration | 823 total / 822 pass / 1 skip (+2 so với bundle gốc) |
+| Route mapping | 150/150 PASS (không đổi — remediation không thêm/bớt route) |
+| `scripts/verify-g0.mjs` | PASS toàn bộ check |
+| `git diff --check` | sạch |
+
+**Changed files:** `server/db.js` (+`withTransaction()`, +export); `server/ai.js` (route confirm
+viết lại phần claim/ghi để dùng transaction + phân loại lỗi `ConfirmConflictError`/`StaleScoreError`
++ validate `idempotencyKey`); `server/test/integration-voice-secure-command.test.js` (sửa 5 test,
+thêm 2 test, thêm helper `forceInsertFailure()`/`clearInsertFailure()`/`getProposal()`).
+`01-audit-findings.md` (§F25/§F26/P2 mới), `04-ROADMAP.md`/`15-changelog.md` (execution update) —
+docs only, không phải test/product.
+
+**Behavior changes:**
+1. Lỗi giữa chừng lúc confirm (vd DB tạm thời từ chối insert) nay ROLLBACK về `pending`, KHÔNG còn
+   để lại proposal `confirmed` mồ côi — client retry được thật (trước đây retry trả `200` giả).
+2. CAS điểm `relationship_score` stale nay trả `409 PROPOSAL_STALE`, KHÔNG tạo interaction (trước
+   đây `200`, tạo interaction, chỉ bỏ qua phần điểm). Nhánh thiếu QUYỀN sửa điểm KHÔNG đổi.
+3. `idempotencyKey` thiếu/rỗng nay `400` (trước đây được chấp nhận, ghi `null`).
+4. Happy-path và các case đã ACCEPTED trong audit lần 1 (principal binding, tampering guard, quyền
+   bị rút, score clamp, confirm lặp cùng/khác key) giữ nguyên hành vi, không regression.
+
+**Out-of-scope:** không mở rộng sang UI Voice/MDS — đúng phạm vi Codex đã giới hạn ("không mở rộng
+scope sang UI Voice/MDS trong vòng backend này"). Không đổi route `/interaction-voice` cũ.
+
+**Rollback path:** 1 commit độc lập (`05826b4`), `git revert` an toàn — chỉ đổi logic nội bộ route
+confirm + thêm 1 helper dùng chung, không route/entity khác phụ thuộc `withTransaction()`.
+
+**Worktree status:** `git status --short` sạch tại thời điểm chuẩn bị remediation này; không có file
+unrelated pre-existing nào lẫn vào commit.
