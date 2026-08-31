@@ -569,6 +569,24 @@ function init() {
 function metaGet(key, def) { try { const r = db.prepare('SELECT value FROM app_meta WHERE `key`=?').get(key); return r ? r.value : def; } catch { return def; } }
 function metaSet(key, value) { db.prepare('INSERT INTO app_meta (`key`,value) VALUES (?,?) ON CONFLICT(`key`) DO UPDATE SET value=excluded.value').run(key, String(value)); }
 
+// W3.VOICE.SECURE-COMMAND remediation F25 (Codex audit 2026-08-31): cả DatabaseSync (SQLite) lan
+// MySQLSyncDatabase deu chi dung DUY NHAT 1 connection va goi dong bo (Atomics.wait chan hoan toan
+// event loop cho MySQL, node:sqlite von dong bo) -- trong 1 request handler khong co `await` xen
+// giua, khong co request nao khac chen duoc vao giua BEGIN..COMMIT/ROLLBACK. An toan de dung
+// BEGIN/COMMIT/ROLLBACK dang exec() tho, khong can pool/lock rieng.
+function withTransaction(fn) {
+  db.exec('BEGIN');
+  let result;
+  try {
+    result = fn();
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* best-effort, uu tien nem loi goc */ }
+    throw err;
+  }
+  db.exec('COMMIT');
+  return result;
+}
+
 // Nguồn RSS + bộ từ khóa mặc định — idempotent, tạo cả trên DB cũ (không cần reseed)
 const NEWS_SOURCES_VER = '3'; // tăng khi đổi danh sách news_sources.js -> reconcile lại
 function seedMonitoringDefaults() {
@@ -1013,4 +1031,4 @@ function closeDb() {
   return typeof db.close === 'function' ? db.close() : undefined;
 }
 
-module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb, isIgnorableMigrationError, migrate };
+module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb, isIgnorableMigrationError, migrate, withTransaction };

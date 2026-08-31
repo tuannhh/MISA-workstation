@@ -62,6 +62,33 @@ function insertPerson(fullName, relationshipScore) {
 }
 function getPerson(id) { return db.prepare('SELECT * FROM people WHERE id=?').get(id); }
 function countInteractions() { return db.prepare('SELECT COUNT(*) c FROM interactions').get().c; }
+function getProposal(id) { return db.prepare('SELECT * FROM voice_proposals WHERE id=?').get(id); }
+
+// Remediation F25 (Codex audit 2026-08-31): chan tam thoi insert co partner_name='FORCE_FAIL_MARKER'
+// -- mo phong dung phong cach thi nghiem Codex da dung de bat loi "confirm thanh cong nua chung"
+// that trong route, khong phai mock JS (mock khong the xac nhan duoc hanh vi transaction/rollback
+// that o tang DB). MySQL: CREATE TRIGGER can quyen SUPER khi bat binary log (khong co trong test
+// user) -- dung CHECK constraint qua ALTER TABLE thay the (khong can quyen dac biet). SQLite: khong
+// ho tro ALTER TABLE ADD CONSTRAINT tren bang co san -- dung TRIGGER (da xac nhan hoat dong).
+const FORCE_FAIL_NAME = 'force_insert_fail_f25_test';
+function forceInsertFailure() {
+  if (isMysql) {
+    db.exec(`ALTER TABLE interactions ADD CONSTRAINT ${FORCE_FAIL_NAME} CHECK (partner_name <> 'FORCE_FAIL_MARKER')`);
+  } else {
+    db.exec(`CREATE TRIGGER ${FORCE_FAIL_NAME} BEFORE INSERT ON interactions
+WHEN NEW.partner_name = 'FORCE_FAIL_MARKER'
+BEGIN
+  SELECT RAISE(ABORT, 'forced failure for F25 regression test');
+END`);
+  }
+}
+function clearInsertFailure() {
+  if (isMysql) {
+    db.exec(`ALTER TABLE interactions DROP CHECK ${FORCE_FAIL_NAME}`);
+  } else {
+    db.exec(`DROP TRIGGER IF EXISTS ${FORCE_FAIL_NAME}`);
+  }
+}
 
 // Giu lai fetch THAT truoc khi bat ky test nao thay global.fetch -- dung de goi vao chinh server
 // test cuc bo (baseUrl), TACH BIET khoi global.fetch bi mock (danh cho Gemini). Giong quy uoc
@@ -144,17 +171,53 @@ test('propose->confirm happy path: tao interaction + doi relationship_score dung
 
 test('confirm: nguoi khac (khong phai principal tao proposal) bi 403', async () => {
   const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: '', org_name: '' });
-  const { res, body } = await confirm(execBCookie, { proposalId: p.proposalId });
+  const { res, body } = await confirm(execBCookie, { proposalId: p.proposalId, idempotencyKey: 'k-403' });
   assert.equal(res.status, 403);
   assert.equal(body.code, 'FORBIDDEN_MODULE');
 });
 
-test('confirm: proposal het han bi tu choi 410', async () => {
+test('confirm: proposal het han bi tu choi 410, proposal khong bi khoa (van con pending trong DB)', async () => {
   const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: '', org_name: '' });
   db.prepare("UPDATE voice_proposals SET expires_at='2020-01-01 00:00:00' WHERE id=?").run(p.proposalId);
-  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId });
+  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-410' });
   assert.equal(res.status, 410);
   assert.equal(body.code, 'PROPOSAL_EXPIRED');
+  // Dieu kien TTL nam ngay trong cau UPDATE claim (khong chi kiem tra JS truoc do) -- xac nhan
+  // claim that su khong "nuot" proposal dang pending du het han.
+  assert.equal(getProposal(p.proposalId).status, 'pending');
+});
+
+test('confirm: thieu hoac rong idempotencyKey bi tu choi 400', async () => {
+  const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: '', org_name: '' });
+  const missing = await confirm(execACookie, { proposalId: p.proposalId });
+  assert.equal(missing.res.status, 400);
+  assert.equal(missing.body.code, 'VALIDATION_FAILED');
+  const empty = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: '   ' });
+  assert.equal(empty.res.status, 400);
+  assert.equal(empty.body.code, 'VALIDATION_FAILED');
+  assert.equal(getProposal(p.proposalId).status, 'pending'); // khong bi claim boi request khong hop le
+});
+
+test('confirm: loi giua chung khi ghi interaction -> proposal ROLLBACK ve pending, retry sau khi het loi tao dung 1 interaction', async () => {
+  const before_ = countInteractions();
+  const { body: p } = await propose(execACookie, {
+    transcript: 't', summary: 's', person_name: 'FORCE_FAIL_MARKER', org_name: '',
+  });
+  forceInsertFailure();
+  let first;
+  try {
+    first = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'rollback-key' });
+  } finally {
+    clearInsertFailure();
+  }
+  assert.equal(first.res.status, 502); // loi that (INSERT bi trigger chan), khong phai thanh cong nua chung
+  assert.equal(countInteractions(), before_); // KHONG co interaction mo coi nao duoc tao
+  assert.equal(getProposal(p.proposalId).status, 'pending'); // ROLLBACK dung nghia -- van con dung lai duoc
+
+  const retry = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'rollback-key' });
+  assert.equal(retry.res.status, 200);
+  assert.ok(retry.body.interactionId);
+  assert.equal(countInteractions(), before_ + 1); // dung 1 interaction, khong tao trung
 });
 
 test('confirm 2 lan cung idempotencyKey: lan 2 tra ket qua cu, KHONG tao them interaction', async () => {
@@ -180,8 +243,8 @@ test('confirm 2 lan KHONG cung idempotencyKey: lan 2 bi tu choi 409, khong tao t
   assert.equal(countInteractions(), before_ + 1);
 });
 
-test('confirm: relationship_score bi doi song song (lost-update) -> van tao interaction, CHI phan diem bi tu choi', async () => {
-  const pid = insertPerson(`Lost Update ${Date.now()}`, 50);
+test('confirm: relationship_score bi doi song song (stale) -> TU CHOI TOAN BO 409, KHONG tao interaction (D14.4, remediation F26)', async () => {
+  const pid = insertPerson(`Stale Score ${Date.now()}`, 50);
   const before_ = countInteractions();
   const { body: p } = await propose(execACookie, {
     transcript: 't', summary: 's', person_name: getPerson(pid).full_name, org_name: '', suggested_score_delta: 5,
@@ -189,19 +252,18 @@ test('confirm: relationship_score bi doi song song (lost-update) -> van tao inte
   // Giả lập ghi song song ngoài luồng proposal này (vd PUT /people/:id thủ công) xảy ra GIỮA lúc
   // chuẩn bị và lúc xác nhận.
   db.prepare('UPDATE people SET relationship_score=? WHERE id=?').run(70, pid);
-  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId });
-  assert.equal(res.status, 200);
-  assert.ok(body.interactionId);
-  assert.equal(countInteractions(), before_ + 1);
-  assert.equal(body.person.scoreApplied, false);
-  assert.equal(body.person.reason, 'STALE_SCORE_SNAPSHOT');
-  assert.equal(getPerson(pid).relationship_score, 70); // giữ nguyên giá trị ghi song song, KHÔNG bị đè bởi delta cũ
+  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-stale' });
+  assert.equal(res.status, 409);
+  assert.equal(body.code, 'PROPOSAL_STALE');
+  assert.equal(countInteractions(), before_); // KHONG tao interaction mo coi khi chi ghi duoc mot nua
+  assert.equal(getPerson(pid).relationship_score, 70); // giữ nguyên giá trị ghi song song, KHÔNG bị đè
+  assert.equal(getProposal(p.proposalId).status, 'pending'); // ROLLBACK claim -- co the tao proposal moi/thu lai
 });
 
 test('confirm: khong co suggested_score_delta -> chi tao interaction, khong dung toi people', async () => {
   const pid = insertPerson(`No Delta ${Date.now()}`, 50);
   const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: getPerson(pid).full_name, org_name: '' });
-  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId });
+  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-nodelta' });
   assert.equal(res.status, 200);
   assert.equal(body.person, null);
   assert.equal(getPerson(pid).relationship_score, 50);
@@ -211,7 +273,7 @@ test('confirm: quyen bi rut giua propose va confirm (downgrade role -> viewer, r
   const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: '', org_name: '' });
   db.prepare('UPDATE users SET role=? WHERE username=?').run('viewer', execAUsername);
   await realFetch(`${baseUrl}/api/me`, { headers: { cookie: execACookie } }); // refresh req.session.user.role tu DB
-  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId });
+  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-role' });
   assert.equal(res.status, 403);
   assert.equal(body.code, 'FORBIDDEN_MODULE');
   db.prepare('UPDATE users SET role=? WHERE username=?').run('executor', execAUsername); // trả lại cho test sau

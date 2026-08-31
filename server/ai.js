@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { db } = require('./db');
+const { db, withTransaction } = require('./db');
 const gemini = require('./gemini');
 const cfg = require('./config');
 const { requireAuth, requirePerm } = require('./auth');
@@ -196,10 +196,29 @@ Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
 // Buoc 2: nguoi dung xac nhan -- CHI gui proposalId + idempotencyKey + edits tuong minh (khong gui
 // lai toan bo payload). Server doc lai proposal, re-check PolicyEngine + optimistic concurrency,
 // roi moi ghi 1 lan (D14.4).
+// Remediation F25/F26/P2 (Codex audit 2026-08-31, xem 25-audit-remediation-f25-f26.md):
+// - idempotencyKey nay BAT BUOC (P2) -- khong co no thi retry sau network timeout khong the phan
+//   biet duoc voi 1 lan confirm moi.
+// - Loi giua chung claim va ghi (vd INSERT interactions that bai) truoc day de proposal ket thuc o
+//   trang thai 'confirmed' MO COI (khong co interaction, khong the retry that) -- F25. Nay bao boc
+//   claim + insert interaction + audit + cap nhat result_interaction_id + CAS diem trong 1
+//   withTransaction(): loi o buoc nao cung ROLLBACK ve nguyen trang 'pending', proposal dung nghia
+//   con dung lai duoc.
+// - CAS diem quan he stale (F26): truoc day chi bo qua phan diem, van tao interaction -- trai
+//   D14.4 ("tu choi va yeu cau chuan bi lai" khi snapshot khac hien tai). Nay ROLLBACK toan bo,
+//   tra 409 PROPOSAL_STALE. Phan biet ro voi truong hop KHONG co quyen sua diem (PolicyForbidden)
+//   -- truong hop do van giu hanh vi cu (tao interaction, bo qua phan diem), vi khong phai loi du
+//   lieu dua-tren-thoi-diem, ma la thieu quyen tu dau.
+class ConfirmConflictError extends Error {}
+class StaleScoreError extends Error {}
+
 router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'), (req, res) => {
   try {
     const { proposalId, idempotencyKey, edits } = req.body || {};
     if (!proposalId) return sendError(req, res, 400, 'VALIDATION_FAILED', 'Thiếu proposalId.');
+    if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim() || idempotencyKey.length > 200) {
+      return sendError(req, res, 400, 'VALIDATION_FAILED', 'Thiếu hoặc sai định dạng idempotencyKey.');
+    }
     const proposal = db.prepare('SELECT * FROM voice_proposals WHERE id=?').get(proposalId);
     if (!proposal) return sendError(req, res, 404, 'NOT_FOUND', 'Không tìm thấy đề xuất, có thể đã hết hạn từ lâu.');
     // D14.4: proposal gan voi dung 1 principal -- user khac khong xac nhan duoc, ke ca cung role.
@@ -266,33 +285,60 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
       }
     }
 
-    // Chot gate duy nhat chong double-confirm: chi request nao thang atomic UPDATE nay moi duoc ghi
-    // tiep. Khong dung transaction da-cau-lenh (codebase hien khong co helper transaction()) nen ghi
-    // interaction LUON thanh cong sau khi claim (INSERT thuan, khong CAS); phan doi diem la buoc
-    // rieng, best-effort optimistic-concurrency (CAS) o duoi -- neu stale thi CHI phan diem khong
-    // ap dung, khong lam mat interaction da xac nhan.
-    const claimed = db.prepare(`UPDATE voice_proposals SET status='confirmed', confirmed_at=datetime('now'), idempotency_key=? WHERE id=? AND status='pending'`)
-      .run(idempotencyKey || null, proposalId).changes;
-    if (claimed !== 1) return sendError(req, res, 409, 'PROPOSAL_ALREADY_CONFIRMED', 'Đề xuất đã được xác nhận hoặc hết hạn.');
+    // Claim + ghi interaction + audit + CAS diem trong 1 transaction: loi o bat ky buoc nao (vd
+    // INSERT interactions that bai, hoac CAS diem stale) deu ROLLBACK ve dung 'pending' -- proposal
+    // khong bao gio ket thuc o trang thai 'confirmed' mo coi (F25). Dieu kien TTL dua vao chinh
+    // cau UPDATE claim (khong chi dua vao isExpired() da kiem tra JS truoc do) de het han dung luc
+    // claim cung duoc coi la mot loai xung dot claim, khong phai race rieng.
+    let result;
+    try {
+      result = withTransaction(() => {
+        const claimed = db.prepare(
+          `UPDATE voice_proposals SET status='confirmed', confirmed_at=datetime('now'), idempotency_key=? WHERE id=? AND status='pending' AND expires_at > datetime('now')`
+        ).run(idempotencyKey, proposalId).changes;
+        if (claimed !== 1) {
+          const fresh = db.prepare('SELECT * FROM voice_proposals WHERE id=?').get(proposalId);
+          const err = new ConfirmConflictError();
+          err.proposal = fresh;
+          throw err;
+        }
 
-    const r = buildInsert('interactions', preparedInteraction);
-    logEdit(req, 'CREATE', 'interaction', r.lastInsertRowid, interactionInput.summary);
-    buildUpdate('voice_proposals', proposalId, { result_interaction_id: r.lastInsertRowid });
+        const r = buildInsert('interactions', preparedInteraction);
+        logEdit(req, 'CREATE', 'interaction', r.lastInsertRowid, interactionInput.summary);
+        buildUpdate('voice_proposals', proposalId, { result_interaction_id: r.lastInsertRowid });
 
-    let personResult = null;
-    if (personEditAllowed) {
-      const newScore = Math.max(0, Math.min(100, Number(selectedPerson.relationship_score || 0) + scoreDelta));
-      const cas = db.prepare('UPDATE people SET relationship_score=? WHERE id=? AND relationship_score=?')
-        .run(newScore, selectedPerson.id, selectedPerson.relationship_score);
-      if (cas.changes === 1) {
-        logEdit(req, 'EDIT', 'person', selectedPerson.id, `AI voice: relationship_score ${selectedPerson.relationship_score} -> ${newScore} (proposal ${proposalId})`);
-        personResult = { id: selectedPerson.id, relationship_score: newScore, scoreApplied: true };
-      } else {
-        personResult = { id: selectedPerson.id, relationship_score: selectedPerson.relationship_score, scoreApplied: false, reason: 'STALE_SCORE_SNAPSHOT' };
+        let personResult = null;
+        if (personEditAllowed) {
+          const newScore = Math.max(0, Math.min(100, Number(selectedPerson.relationship_score || 0) + scoreDelta));
+          const cas = db.prepare('UPDATE people SET relationship_score=? WHERE id=? AND relationship_score=?')
+            .run(newScore, selectedPerson.id, selectedPerson.relationship_score);
+          // F26 (D14.4): snapshot diem da doi so voi luc propose -- tu choi TOAN BO xac nhan (rollback
+          // ca interaction vua tao), khong chi bo qua phan diem nhu truoc. Khac voi nhanh
+          // personEditAllowed=false o tren (thieu QUYEN sua diem, khong phai du lieu stale) -- truong
+          // hop do KHONG rollback, van giu hanh vi cu (tao interaction, bo qua phan diem).
+          if (cas.changes !== 1) throw new StaleScoreError();
+          logEdit(req, 'EDIT', 'person', selectedPerson.id, `AI voice: relationship_score ${selectedPerson.relationship_score} -> ${newScore} (proposal ${proposalId})`);
+          personResult = { id: selectedPerson.id, relationship_score: newScore, scoreApplied: true };
+        }
+
+        return { interactionId: r.lastInsertRowid, person: personResult };
+      });
+    } catch (err) {
+      if (err instanceof ConfirmConflictError) {
+        const fresh = err.proposal;
+        if (fresh && fresh.status === 'confirmed' && fresh.idempotency_key === idempotencyKey) {
+          return res.json({ ok: true, interactionId: fresh.result_interaction_id, idempotent: true });
+        }
+        if (fresh && isExpired(fresh)) return sendError(req, res, 410, 'PROPOSAL_EXPIRED', 'Đề xuất đã hết hạn, vui lòng ghi âm lại.');
+        return sendError(req, res, 409, 'PROPOSAL_ALREADY_CONFIRMED', 'Đề xuất đã được xác nhận hoặc hết hạn.');
       }
+      if (err instanceof StaleScoreError) {
+        return sendError(req, res, 409, 'PROPOSAL_STALE', 'Dữ liệu người liên hệ đã thay đổi kể từ lúc chuẩn bị, vui lòng tạo lại đề xuất.');
+      }
+      throw err;
     }
 
-    res.json({ ok: true, interactionId: r.lastInsertRowid, person: personResult });
+    res.json({ ok: true, interactionId: result.interactionId, person: result.person });
   } catch (e) {
     res.status(502).json({ error: 'Lỗi xác nhận: ' + e.message });
   }
