@@ -791,9 +791,57 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
 | W3.VOICE.0 | **D14.2 đã chốt (human-in-the-loop, owner 2026-08-24).** Còn 1 việc BA: định nghĩa quy tắc AI **đề xuất** mức đổi `relationship_score` (không chặn thiết kế vì đã có bước xác nhận) | BA | doc / — / — |
-| W3.VOICE.1 | Route AI voice mở rộng: giữ "trích-xuất-chờ-duyệt", thành **hành động đa bước chờ-xác-nhận-1-lần** (AI chuẩn bị: match entity + soạn bản ghi + đề xuất đổi điểm → người dùng xác nhận rồi mới ghi). Rào chắn: confidence thấp/nhiều khớp → **bắt người dùng chọn**; log mọi lần ghi | W3.VOICE.SECURE-COMMAND | code+test / — / fail-closed: không ghi khi chưa xác nhận |
-| W3.VOICE.SECURE-COMMAND | **Mới (Codex round-3 re-audit R3-08, D14.4):** proposal opaque/có định danh/gắn 1 principal/hết hạn + snapshot revision; xác nhận chỉ gửi `proposal_id`+chỉnh sửa+idempotency key (không gửi lại toàn payload); server đọc lại bản ghi + check optimistic concurrency + chạy lại PolicyEngine trước khi ghi 1 lần; chống replay/tampering/TOCTOU | W1.AI-POLICY | code+test / — / fail-closed: từ chối nếu revision lệch hoặc proposal hết hạn |
+| W3.VOICE.1 | Route AI voice mở rộng: giữ "trích-xuất-chờ-duyệt", thành **hành động đa bước chờ-xác-nhận-1-lần** (AI chuẩn bị: match entity + soạn bản ghi + đề xuất đổi điểm → người dùng xác nhận rồi mới ghi). Rào chắn: confidence thấp/nhiều khớp → **bắt người dùng chọn**; log mọi lần ghi | W3.VOICE.SECURE-COMMAND | code+test / **XONG — Claude 2026-08-31 (backend/API-only, chờ Codex audit)** / R150 `POST /ai/interaction-voice-confirm`, xem execution update |
+| W3.VOICE.SECURE-COMMAND | **Mới (Codex round-3 re-audit R3-08, D14.4):** proposal opaque/có định danh/gắn 1 principal/hết hạn + snapshot revision; xác nhận chỉ gửi `proposal_id`+chỉnh sửa+idempotency key (không gửi lại toàn payload); server đọc lại bản ghi + check optimistic concurrency + chạy lại PolicyEngine trước khi ghi 1 lần; chống replay/tampering/TOCTOU | W1.AI-POLICY | code+test / **XONG — Claude 2026-08-31 (backend/API-only, chờ Codex audit)** / R149 `POST /ai/interaction-voice-propose` + bảng `voice_proposals`, xem execution update |
 | W3.VOICE.2 | "Gọi từ mọi màn hình" — trigger toàn cục (nút nổi/mic) ở tầng **web app trong WebView host** (D15); có thể cần bridge host cấp quyền mic OS — **gắn O3 (bridge contract, DevOps)** | O3(DevOps), W2.5 | code+device-test / WebView-host / `UNVERIFIED` tới bridge contract |
+
+> **Execution update — 2026-08-31 (W3.VOICE.SECURE-COMMAND + W3.VOICE.1, backend/API-only, XONG —
+> chờ Codex audit):** owner giao `/goal` "làm việc Wave 2/3/4 mà Claude được giao, để lại việc của
+> Codex". Rà toàn bộ Wave 2-4 theo lane (`17-fast-track-collaboration.md` §1: Claude
+> backend/kiến trúc, Codex UI/MDS): mọi slice UI Wave 3 + toàn bộ Wave 4 là UI/device (lane Codex,
+> không làm); W2.2 chạm `frontend/` (lane Codex); W2.3/W2.4 chặn ngoài bởi O5 (harness đã có từ
+> G1.8, không có việc mới). W3.VOICE.SECURE-COMMAND + W3.VOICE.1 là backend thuần, thiết kế đã chốt
+> đủ ở D14.4, không phụ thuộc slice UI nào trước nó — chọn làm batch kế tiếp. Batch Contract:
+> `23-w3voice-securecommand-batch-contract.md`.
+>
+> **Thiết kế:** bảng mới `voice_proposals` (id TEXT PK đối ngẫu, gắn `user_id`, `payload_json` chứa
+> interaction đề xuất + toàn bộ candidate đã khớp entity kèm snapshot `relationship_score` từng
+> candidate — dùng optimistic concurrency, hết hạn 10 phút mặc định). `POST
+> /ai/interaction-voice-propose` (R149): y hệt luồng Gemini của `/interaction-voice` cũ (KHÔNG đổi
+> route cũ) nhưng KHÔNG tự chọn candidate gần nhất khi ≥2 khớp tên (trả về toàn bộ, guardrail D14.4)
+> — trả `proposalId` thay vì để client tự giữ payload. `POST /ai/interaction-voice-confirm` (R150):
+> chỉ nhận `proposalId`+`idempotencyKey`+`edits` tường minh (không nhận lại toàn payload — chống
+> tampering); chọn candidate ngoài danh sách đã đề xuất bị 400; re-chạy `policyService.prepareCreate`
+> (interaction) + `assertWritable` (person edit nếu có delta điểm) — không tin quyền đã kiểm tra lúc
+> propose; atomic claim (`UPDATE voice_proposals SET status='confirmed' WHERE status='pending'`) là
+> gate DUY NHẤT chống double-confirm cho phần tạo interaction (INSERT sau claim luôn thành công,
+> không cần CAS); phần đổi `relationship_score` là bước RIÊNG, optimistic concurrency bằng CAS
+> (`UPDATE people SET relationship_score=? WHERE id=? AND relationship_score=snapshot`) — nếu stale
+> (bị đổi song song ngoài luồng) CHỈ phần điểm bị từ chối, KHÔNG làm mất interaction đã xác nhận
+> (codebase này không có transaction đa-câu-lệnh, xem comment trong `ai.js`, chấp nhận đánh đổi này
+> thay vì tự dựng transaction wrapper mới ngoài phạm vi batch). `suggested_score_delta`: Gemini tự
+> đề xuất trong lời nói (không phải quy tắc cứng của Claude — D14.3 vẫn là việc BA), server chỉ kẹp
+> biên an toàn `[-10,10]`.
+>
+> Mechanical (commit riêng, không đổi hành vi): tách `buildInsert`/`buildUpdate`/`logEdit` từ
+> `routes.js` sang `server/db-helpers.js` để `ai.js` dùng chung.
+>
+> **Test mới:** `server/test/integration-voice-secure-command.test.js` (10 test) — happy path
+> propose→confirm; principal binding (user khác confirm bị 403); hết hạn (410); double-confirm cùng
+> idempotency key (idempotent, không tạo trùng) và khác key (409); lost-update relationship_score
+> (CAS reject, interaction vẫn tạo); không có score delta; quyền bị rút giữa propose/confirm (403,
+> xác nhận qua downgrade role + refresh session `/me`).
+>
+> Cập nhật toàn bộ apparatus tự-kiểm-chứng (route catalog/permission matrix/UI-flow/gate1-mapping/
+> schema, giống tiền lệ `W1.ADMIN`): route 148→150 (`R149`/`R150`), UI-flow 35→36 (`F036`), bảng
+> 35→36 (`voice_proposals`, KHÔNG đưa vào `dropAll()` — đúng quyết định `W1.RBAC.0`), index 22→23.
+> **KHÔNG dựng UI cho R149/R150** — lane Codex theo `CLAUDE.md` mục 6, chưa được giao lại; contract
+> sẵn sàng cho slice UI Voice ở Wave 3 khi tới lượt.
+>
+> Full regression: security 6/6, SQLite 821/8 skip (0 fail, +10), MySQL 821/1 skip (0 fail, +10),
+> `verify-g0.mjs` PASS, `verify-gate1-mapping` 150/150 PASS, `git diff --check` sạch. **Chưa gửi
+> Codex audit** — batch này tự đứng riêng (không phụ thuộc/không thể gộp bundle với W1, đã đóng),
+> sẽ gửi Evidence Bundle riêng.
 
 ---
 

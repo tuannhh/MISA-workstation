@@ -2725,3 +2725,49 @@ trung vị của candidate cải thiện (4.2s so với 8.0s) nhưng **đuôi x�
 `scripts/.w26-eval-out/results-recheck.jsonl` commit cùng bản gốc làm evidence. Tổng chi phí 2 lần
 eval: $4.456 + $4.531 = $8.987/$200 (O6). Không đổi code sản phẩm/test, chỉ thêm tham số `--tag=`
 tương thích ngược.
+
+## W3.VOICE.SECURE-COMMAND + W3.VOICE.1 — luồng propose/confirm an toàn cho voice command (backend/API-only)
+
+Owner giao `/goal`: làm việc Wave 2/3/4 thuộc lane Claude, để lại việc lane Codex. Rà toàn bộ
+Wave 2-4 theo `17-fast-track-collaboration.md` §1: mọi slice UI Wave 3 + toàn bộ Wave 4 là
+lane Codex (UI/MDS/WebView-host); W2.2 chạm `frontend/` — lane Codex; W2.3/W2.4 chặn ngoài bởi O5
+(DevOps, chưa có việc mới). W3.VOICE.SECURE-COMMAND + W3.VOICE.1 là backend thuần, thiết kế đã
+chốt sẵn ở D14.4 (`02-decisions.md` §E) từ round-3 re-audit Codex — chọn làm batch kế tiếp. Batch
+Contract: `23-w3voice-securecommand-batch-contract.md`.
+
+Mechanical trước (commit riêng, không đổi hành vi): tách `buildInsert`/`buildUpdate`/`logEdit` từ
+`routes.js` sang `server/db-helpers.js` dùng chung với `ai.js`.
+
+Feature: bảng mới `voice_proposals` (đối tượng đề xuất bất biến, gắn `user_id`, TTL 10 phút, chứa
+snapshot toàn bộ candidate đã khớp kèm `relationship_score` tại thời điểm đề xuất). `POST
+/ai/interaction-voice-propose` (R149) chạy Gemini y hệt `/interaction-voice` cũ (route cũ giữ
+nguyên, không đụng) nhưng không tự chọn khi ≥2 candidate trùng tên — trả `proposalId` thay vì để
+client giữ payload thô. `POST /ai/interaction-voice-confirm` (R150) chỉ nhận
+`proposalId`+`idempotencyKey`+`edits` tường minh (chống tamper — không nhận lại toàn payload); chọn
+candidate ngoài danh sách đã đề xuất bị 400; re-chạy `policyService.prepareCreate`/`assertWritable`
+tại confirm (không tin quyền đã kiểm lúc propose); atomic claim
+(`UPDATE voice_proposals SET status='confirmed' WHERE status='pending'`, check `changes===1`) là
+gate duy nhất chống double-confirm; đổi `relationship_score` là bước riêng dùng CAS
+(`UPDATE people SET relationship_score=? WHERE id=? AND relationship_score=snapshot`) — stale thì
+chỉ phần điểm bị từ chối (`scoreApplied:false`), interaction đã tạo không mất (codebase không có
+transaction đa-câu-lệnh, xem comment trong `ai.js`). `suggested_score_delta` do Gemini tự đề xuất
+trong lời nói (không phải quy tắc BA của Claude — D14.3 vẫn treo), server chỉ kẹp biên an toàn
+`[-10,10]`.
+
+Test mới `server/test/integration-voice-secure-command.test.js` (10 test): happy path, principal
+binding (403 khi user khác confirm), hết hạn (410), double-confirm cùng key (idempotent) và khác
+key (409), lost-update `relationship_score` (CAS reject, interaction vẫn còn), không có score
+delta, quyền bị rút giữa propose/confirm (403). Bug tự phát hiện: helper test gọi `fetch()` không
+định danh trong lúc `global.fetch` đang bị mock để chặn Gemini — vô tình bắt luôn lời gọi tới local
+test server; sửa bằng cách chốt `realFetch` trước khi mock, theo đúng khuôn mẫu
+`integration-ai-golden.test.js`.
+
+Cập nhật toàn bộ apparatus tự-kiểm-chứng (route catalog/permission matrix/UI-flow/gate1-mapping/
+schema/verify-g0/verify-gate1-mapping, lặp lại tiền lệ `W1.ADMIN`): route 148→150, UI-flow 35→36
+(`F036`), bảng 35→36 (`voice_proposals`, không vào `dropAll()` — đúng quyết định `W1.RBAC.0`), index
+22→23. Full regression: security 6/6, SQLite 821/8 skip (0 fail), MySQL 821/1 skip (0 fail),
+`verify-g0.mjs` PASS, `verify-gate1-mapping` 150/150 PASS, `git diff --check` sạch.
+
+**Không dựng UI cho R149/R150** — lane Codex, chưa được giao lại; contract sẵn sàng cho slice UI
+Voice ở Wave 3 khi tới lượt. Commit `506311a` (mechanical), `b6ba61e` (feature+test). **Chưa gửi
+Codex audit** — batch đứng riêng, sẽ chuẩn bị Evidence Bundle riêng.
