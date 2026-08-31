@@ -60,7 +60,12 @@ function insertPerson(fullName, relationshipScore) {
   const r = db.prepare('INSERT INTO people (full_name, relationship_score) VALUES (?,?)').run(fullName, relationshipScore);
   return Number(r.lastInsertRowid);
 }
+function insertOrg(name, orgType) {
+  const r = db.prepare('INSERT INTO organizations (name, org_type) VALUES (?,?)').run(name, orgType || 'other');
+  return Number(r.lastInsertRowid);
+}
 function getPerson(id) { return db.prepare('SELECT * FROM people WHERE id=?').get(id); }
+function getOrg(id) { return db.prepare('SELECT * FROM organizations WHERE id=?').get(id); }
 function countInteractions() { return db.prepare('SELECT COUNT(*) c FROM interactions').get().c; }
 function getProposal(id) { return db.prepare('SELECT * FROM voice_proposals WHERE id=?').get(id); }
 
@@ -257,7 +262,47 @@ test('confirm: relationship_score bi doi song song (stale) -> TU CHOI TOAN BO 40
   assert.equal(body.code, 'PROPOSAL_STALE');
   assert.equal(countInteractions(), before_); // KHONG tao interaction mo coi khi chi ghi duoc mot nua
   assert.equal(getPerson(pid).relationship_score, 70); // giữ nguyên giá trị ghi song song, KHÔNG bị đè
-  assert.equal(getProposal(p.proposalId).status, 'pending'); // ROLLBACK claim -- co the tao proposal moi/thu lai
+  // F27: trang thai terminal 'stale' (KHONG con la 'pending') -- khong the "song lai" du du lieu vo
+  // tinh quay ve dung snapshot cu; client phai tao proposal moi, khong retry proposal nay.
+  assert.equal(getProposal(p.proposalId).status, 'stale');
+  const retry = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-stale-retry' });
+  assert.equal(retry.res.status, 409);
+  assert.equal(retry.body.code, 'PROPOSAL_STALE');
+});
+
+test('confirm: person bi XOA giua propose va confirm (khong co score delta) -> 409 PROPOSAL_STALE, khong tao interaction (remediation F27)', async () => {
+  const pid = insertPerson(`To Be Deleted ${Date.now()}`, 50);
+  const before_ = countInteractions();
+  const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: getPerson(pid).full_name, org_name: '' });
+  db.prepare('DELETE FROM people WHERE id=?').run(pid);
+  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-person-deleted' });
+  assert.equal(res.status, 409);
+  assert.equal(body.code, 'PROPOSAL_STALE');
+  assert.equal(countInteractions(), before_); // KHONG duoc tao interaction tro toi person da mat
+  assert.equal(getProposal(p.proposalId).status, 'stale');
+});
+
+test('confirm: organization bi XOA giua propose va confirm -> 409 PROPOSAL_STALE, khong tao interaction (remediation F27)', async () => {
+  const oid = insertOrg(`To Be Deleted Org ${Date.now()}`, 'press');
+  const before_ = countInteractions();
+  const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: '', org_name: getOrg(oid).name });
+  db.prepare('DELETE FROM organizations WHERE id=?').run(oid);
+  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-org-deleted' });
+  assert.equal(res.status, 409);
+  assert.equal(body.code, 'PROPOSAL_STALE');
+  assert.equal(countInteractions(), before_);
+  assert.equal(getProposal(p.proposalId).status, 'stale');
+});
+
+test('confirm: person DOI TEN (khong phai diem) giua propose va confirm -> 409 PROPOSAL_STALE (remediation F27, "revision" that su la toan bo snapshot)', async () => {
+  const pid = insertPerson(`Original Name ${Date.now()}`, 50);
+  const before_ = countInteractions();
+  const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: getPerson(pid).full_name, org_name: '' });
+  db.prepare('UPDATE people SET full_name=? WHERE id=?').run(`Changed Name ${Date.now()}`, pid);
+  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-person-renamed' });
+  assert.equal(res.status, 409);
+  assert.equal(body.code, 'PROPOSAL_STALE');
+  assert.equal(countInteractions(), before_);
 });
 
 test('confirm: khong co suggested_score_delta -> chi tao interaction, khong dung toi people', async () => {

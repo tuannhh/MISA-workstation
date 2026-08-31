@@ -210,7 +210,24 @@ Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
 //   -- truong hop do van giu hanh vi cu (tao interaction, bo qua phan diem), vi khong phai loi du
 //   lieu dua-tren-thoi-diem, ma la thieu quyen tu dau.
 class ConfirmConflictError extends Error {}
-class StaleScoreError extends Error {}
+
+// Remediation F27 (Codex audit 2026-08-31, xem 25-audit-remediation-f25-f26.md muc F27): snapshot
+// candidate luc propose chi co id/name/org_name/relationship_score, KHONG duoc doc lai luc confirm
+// -- person/org bi xoa hoac doi giua propose/confirm khong bi phat hien, interaction van duoc tao
+// tro toi 1 ban ghi da mat/da doi. Doc lai dung field da snapshot va so sanh truoc khi ghi bat ky
+// gi -- coi day la "revision" thuc te (toan bo field nguoi dung da thay khi xac nhan), khong can
+// them cot revision rieng + instrument moi duong ghi people/organizations trong toan bo code base.
+function fetchPersonSnapshot(id) {
+  return db.prepare(`SELECT p.id, p.full_name AS name, o.name AS org_name, p.relationship_score
+    FROM people p LEFT JOIN organizations o ON o.id=p.org_id WHERE p.id=?`).get(id);
+}
+function fetchOrgSnapshot(id) {
+  return db.prepare('SELECT id, name, org_type FROM organizations WHERE id=?').get(id);
+}
+function snapshotDrifted(fresh, snap, fields) {
+  if (!fresh) return true;
+  return fields.some((f) => String(fresh[f] ?? '') !== String(snap[f] ?? ''));
+}
 
 router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'), (req, res) => {
   try {
@@ -230,6 +247,12 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
         return res.json({ ok: true, interactionId: proposal.result_interaction_id, idempotent: true });
       }
       return sendError(req, res, 409, 'PROPOSAL_ALREADY_CONFIRMED', 'Đề xuất đã được xác nhận trước đó.');
+    }
+    // F27: proposal da bi danh dau stale o lan confirm truoc (parent bi xoa/doi hoac diem stale) --
+    // trang thai terminal, KHONG duoc "song lai" du dieu kien pending gia tao lai (vd score vo tinh
+    // quay ve dung snapshot cu) -- phai tao proposal moi.
+    if (proposal.status === 'stale') {
+      return sendError(req, res, 409, 'PROPOSAL_STALE', 'Dữ liệu người liên hệ/cơ quan đã thay đổi kể từ lúc chuẩn bị, vui lòng tạo lại đề xuất.');
     }
     if (isExpired(proposal)) return sendError(req, res, 410, 'PROPOSAL_EXPIRED', 'Đề xuất đã hết hạn, vui lòng ghi âm lại.');
 
@@ -285,11 +308,11 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
       }
     }
 
-    // Claim + ghi interaction + audit + CAS diem trong 1 transaction: loi o bat ky buoc nao (vd
-    // INSERT interactions that bai, hoac CAS diem stale) deu ROLLBACK ve dung 'pending' -- proposal
-    // khong bao gio ket thuc o trang thai 'confirmed' mo coi (F25). Dieu kien TTL dua vao chinh
-    // cau UPDATE claim (khong chi dua vao isExpired() da kiem tra JS truoc do) de het han dung luc
-    // claim cung duoc coi la mot loai xung dot claim, khong phai race rieng.
+    // Claim + (F27) re-check parent con ton tai/khong doi + ghi interaction + audit + CAS diem
+    // trong 1 transaction: loi that o bat ky buoc nao (vd INSERT interactions that bai) deu
+    // ROLLBACK ve dung 'pending' -- proposal khong bao gio ket thuc o trang thai 'confirmed' mo coi
+    // (F25). Dieu kien TTL dua vao chinh cau UPDATE claim (khong chi dua vao isExpired() da kiem
+    // tra JS truoc do) de het han dung luc claim cung duoc coi la mot loai xung dot claim.
     let result;
     try {
       result = withTransaction(() => {
@@ -303,6 +326,25 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
           throw err;
         }
 
+        // F27: doc lai dung field da snapshot luc propose CHO TOAN BO parent da chon (ke ca khi
+        // khong doi diem) TRUOC khi ghi bat ky gi -- bat ca truong hop bi xoa lan doi ten/doi diem.
+        // Khac voi loi that (nhanh catch ben duoi): stale KHONG duoc rollback claim ve 'pending' (co
+        // the "song lai" neu du lieu vo tinh quay ve dung snapshot cu) -- chuyen sang trang thai
+        // terminal 'stale' va COMMIT, khong bao gio insert interaction.
+        let stale = false;
+        if (selectedPerson) {
+          const freshPerson = fetchPersonSnapshot(selectedPerson.id);
+          if (snapshotDrifted(freshPerson, selectedPerson, ['name', 'org_name', 'relationship_score'])) stale = true;
+        }
+        if (!stale && selectedOrg) {
+          const freshOrg = fetchOrgSnapshot(selectedOrg.id);
+          if (snapshotDrifted(freshOrg, selectedOrg, ['name', 'org_type'])) stale = true;
+        }
+        if (stale) {
+          db.prepare(`UPDATE voice_proposals SET status='stale' WHERE id=?`).run(proposalId);
+          return { stale: true };
+        }
+
         const r = buildInsert('interactions', preparedInteraction);
         logEdit(req, 'CREATE', 'interaction', r.lastInsertRowid, interactionInput.summary);
         buildUpdate('voice_proposals', proposalId, { result_interaction_id: r.lastInsertRowid });
@@ -310,13 +352,14 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
         let personResult = null;
         if (personEditAllowed) {
           const newScore = Math.max(0, Math.min(100, Number(selectedPerson.relationship_score || 0) + scoreDelta));
+          // Da xac nhan snapshot con dung nguyen (khong stale) o buoc tren TRONG CUNG transaction
+          // nay -- khong co ghi nao khac chen duoc vao giua (xem giai thich withTransaction trong
+          // db.js). CAS van giu lam luoi an toan thu 2 (defense-in-depth): neu no THAT BAI o day du
+          // vua xac nhan fresh, do la bat thuong that (vi pham gia dinh 1-connection dong bo), nem
+          // loi that de ROLLBACK toan bo + 502 thay vi coi la "stale" binh thuong.
           const cas = db.prepare('UPDATE people SET relationship_score=? WHERE id=? AND relationship_score=?')
             .run(newScore, selectedPerson.id, selectedPerson.relationship_score);
-          // F26 (D14.4): snapshot diem da doi so voi luc propose -- tu choi TOAN BO xac nhan (rollback
-          // ca interaction vua tao), khong chi bo qua phan diem nhu truoc. Khac voi nhanh
-          // personEditAllowed=false o tren (thieu QUYEN sua diem, khong phai du lieu stale) -- truong
-          // hop do KHONG rollback, van giu hanh vi cu (tao interaction, bo qua phan diem).
-          if (cas.changes !== 1) throw new StaleScoreError();
+          if (cas.changes !== 1) throw new Error('CAS relationship_score that bai ngay sau khi xac nhan fresh -- vi pham gia dinh dong bo cua withTransaction()');
           logEdit(req, 'EDIT', 'person', selectedPerson.id, `AI voice: relationship_score ${selectedPerson.relationship_score} -> ${newScore} (proposal ${proposalId})`);
           personResult = { id: selectedPerson.id, relationship_score: newScore, scoreApplied: true };
         }
@@ -329,15 +372,18 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
         if (fresh && fresh.status === 'confirmed' && fresh.idempotency_key === idempotencyKey) {
           return res.json({ ok: true, interactionId: fresh.result_interaction_id, idempotent: true });
         }
+        if (fresh && fresh.status === 'stale') {
+          return sendError(req, res, 409, 'PROPOSAL_STALE', 'Dữ liệu người liên hệ/cơ quan đã thay đổi kể từ lúc chuẩn bị, vui lòng tạo lại đề xuất.');
+        }
         if (fresh && isExpired(fresh)) return sendError(req, res, 410, 'PROPOSAL_EXPIRED', 'Đề xuất đã hết hạn, vui lòng ghi âm lại.');
         return sendError(req, res, 409, 'PROPOSAL_ALREADY_CONFIRMED', 'Đề xuất đã được xác nhận hoặc hết hạn.');
-      }
-      if (err instanceof StaleScoreError) {
-        return sendError(req, res, 409, 'PROPOSAL_STALE', 'Dữ liệu người liên hệ đã thay đổi kể từ lúc chuẩn bị, vui lòng tạo lại đề xuất.');
       }
       throw err;
     }
 
+    if (result.stale) {
+      return sendError(req, res, 409, 'PROPOSAL_STALE', 'Dữ liệu người liên hệ/cơ quan đã thay đổi kể từ lúc chuẩn bị, vui lòng tạo lại đề xuất.');
+    }
     res.json({ ok: true, interactionId: result.interactionId, person: result.person });
   } catch (e) {
     res.status(502).json({ error: 'Lỗi xác nhận: ' + e.message });
