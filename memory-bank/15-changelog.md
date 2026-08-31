@@ -2705,3 +2705,23 @@ Codex xác nhận (2026-08-31).** Toàn bộ khối việc lớn nhất của ro
 đóng qua 2 bundle audit (`21-audit-bundle-f15-rbac-exp-b1-b6.md`, `22-audit-bundle-w1-close.md`) +
 1 vòng remediation P0/P1 mỗi bundle (F21/F22, rồi F24) — không còn P0/P1 nào mở. Chuyển ưu tiên
 sang **Wave 2** (`04-ROADMAP.md`).
+
+## W2.6 recheck theo yêu cầu owner — chạy lại eval độc lập, xác nhận lại quyết định GIỮ PIN
+
+Owner đề nghị đổi `GEMINI_TEXT_MODEL` sang `gemini-3.7-flash`, tin rằng đây là model mới/chưa từng
+test. Chỉ ra W2.6 gốc (2026-08-30) đã test đúng model này bằng 360 lệnh gọi thật và kết luận giữ pin
+do regression ở `event-extract` + đuôi latency xấu. Owner chọn chạy lại eval trước khi quyết định
+thay vì đổi ngay hoặc giữ nguyên theo dữ liệu cũ.
+
+Chạy lại độc lập đủ 360 lệnh gọi thật (tag `recheck`, cách bản gốc 1 ngày), thêm `--tag=` cho
+`scripts/w26-eval-analyze.mjs` để phân tích song song không ghi đè dữ liệu cũ. Kết quả lặp lại gần
+như y hệt: `gemini-3.5-flash` schema=100%/acc=99.7%, `gemini-3.7-flash` schema=100%/acc=98.8% nhưng
+**event-extract riêng vẫn thua rõ** (95%/95% so với pin 100%/100%, khớp mẫu regression gốc). Latency
+trung vị của candidate cải thiện (4.2s so với 8.0s) nhưng **đuôi xấu nhất tệ hơn** (max 96.7s so với
+70.7s gốc) — rủi ro đuôi latency dài không phải nhiễu một lần, tái hiện độc lập.
+
+**Quyết định (không đổi so với gốc): GIỮ NGUYÊN pin `gemini-3.5-flash`**, không đổi
+`cfg.GEMINI_TEXT_MODEL`. Owner đồng ý sau khi xem dữ liệu recheck. Dữ liệu thô
+`scripts/.w26-eval-out/results-recheck.jsonl` commit cùng bản gốc làm evidence. Tổng chi phí 2 lần
+eval: $4.456 + $4.531 = $8.987/$200 (O6). Không đổi code sản phẩm/test, chỉ thêm tham số `--tag=`
+tương thích ngược.

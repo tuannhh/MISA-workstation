@@ -303,6 +303,25 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > candidate mới hoặc khi `gemini-3.7-flash` cải thiện đuôi latency. Không đổi UI, không đụng RBAC v2
 > pilot, không tốn ngân sách ngoài batch này.
 
+> **Execution update — 2026-08-31 (W2.6 recheck theo yêu cầu owner, XÁC NHẬN LẠI GIỮ PIN):** owner đề
+> nghị đổi sang `gemini-3.7-flash` (tin là model mới nhất/chưa test) — chỉ ra kết luận W2.6 gốc
+> (2026-08-30) đã test đúng model này và có regression. Owner chọn "chạy lại eval trước khi đổi" thay
+> vì đổi ngay hoặc giữ nguyên theo kết quả cũ. Chạy lại độc lập đủ 360 lệnh gọi thật (tag `recheck`,
+> `scripts/w26-eval-run.mjs --tag=recheck --repeats=3`), thêm `--tag=` cho
+> `scripts/w26-eval-analyze.mjs` để phân tích song song 2 lần chạy không ghi đè nhau. **Kết quả lặp
+> lại gần như y hệt bản gốc:** `gemini-3.5-flash` schema=100%/acc=99.7%/p50=6.9s/p90=13.9s/max=31.0s,
+> chi phí $2.942; `gemini-3.7-flash` schema=100%/acc=98.8%/p50=4.2s/p90=6.3s/**max=96.7s**, chi phí
+> $1.589. Riêng `event-extract`: candidate vẫn thua rõ (schema 95%/acc 95% so với pin 100%/100%,
+> khớp mẫu regression gốc 98%/96%). Latency trung vị/p90 của candidate cải thiện nhiều (do mẫu ngẫu
+> nhiên khác + ít bị outlier hơn ở phần lớn ca) nhưng **đuôi xấu nhất (max) tệ hơn bản gốc** (96.7s
+> so với 70.7s) — rủi ro đuôi latency dài kèm output hỏng ở D10 vẫn tái hiện, không phải nhiễu một
+> lần. **Quyết định (không đổi so với gốc, theo đúng D10):** candidate vẫn KHÔNG thắng rõ — **GIỮ
+> NGUYÊN pin `gemini-3.5-flash`**, không đổi `cfg.GEMINI_TEXT_MODEL`. Owner đồng ý sau khi xem dữ
+> liệu recheck. Dữ liệu thô lưu `scripts/.w26-eval-out/results-recheck.jsonl` (commit cùng gốc làm
+> evidence đối chiếu). Tổng chi phí 2 lần eval: $4.456 + $4.531 = **$8.987/$200** (O6). Không đổi
+> code sản phẩm, không đổi test — chỉ thêm `--tag=` (tương thích ngược, mặc định vẫn `full`) và dữ
+> liệu eval mới.
+
 > **Execution update — 2026-08-30 (W1.7 tune rate-limit theo owner: quá 5 lần sai → khoá 30 phút):**
 > khi rà lại roadmap phát hiện tài liệu (dòng W1.7/G1B.3 cũ) đang LỆCH với code thật — commit
 > `70e9f93` (trước batch này trong cùng ngày) đã implement thật `req.session.regenerate()`

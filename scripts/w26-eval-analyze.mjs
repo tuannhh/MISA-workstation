@@ -4,7 +4,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FILE = path.join(__dirname, '.w26-eval-out', 'results-full.jsonl');
+const args = Object.fromEntries(process.argv.slice(2).map((a) => {
+  const [k, v] = a.replace(/^--/, '').split('=');
+  return [k, v === undefined ? true : v];
+}));
+const FILE = path.join(__dirname, '.w26-eval-out', `results-${args.tag || 'full'}.jsonl`);
 const rows = fs.readFileSync(FILE, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
 function pct(arr, p) {
