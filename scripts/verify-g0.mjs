@@ -211,16 +211,16 @@ function verifyRoutesAndMatrices() {
   const catalog = read('memory-bank/07-route-catalog.md');
   const matrix = read('memory-bank/08-permission-matrix.md');
   const catalogRows = markdownRows(catalog, /^\| R\d{3} \|/);
-  ok(catalogRows.length === 145, `catalog rows=${catalogRows.length}, expected 145`);
+  ok(catalogRows.length === 148, `catalog rows=${catalogRows.length}, expected 148`);
 
   const ids = catalogRows.map((row) => row[0]);
-  const expectedIds = Array.from({ length: 145 }, (_, index) => `R${String(index + 1).padStart(3, '0')}`);
+  const expectedIds = Array.from({ length: 148 }, (_, index) => `R${String(index + 1).padStart(3, '0')}`);
   assertPartition(ids, expectedIds, 'route catalog IDs');
 
   const source = sourceRoutes();
-  ok(source.length === 145, `source literal routes=${source.length}, expected 145`);
+  ok(source.length === 148, `source literal routes=${source.length}, expected 148`);
   const sourceByKey = new Map(source.map((route) => [`${route.method} ${route.fullPath}`, route]));
-  ok(sourceByKey.size === 145, 'source contains duplicate method/path pairs');
+  ok(sourceByKey.size === 148, 'source contains duplicate method/path pairs');
 
   const catalogById = new Map();
   for (const row of catalogRows) {
@@ -242,7 +242,7 @@ function verifyRoutesAndMatrices() {
     }
     catalogById.set(id, route);
   }
-  pass('route catalog: 145 unique IDs and exact source method/path/auth');
+  pass('route catalog: 148 unique IDs and exact source method/path/auth');
 
   const sectionA = matrix.slice(matrix.indexOf('## A.'), matrix.indexOf('## B.'));
   const sectionARows = markdownRows(sectionA, /^\| (partners|reminders|interactions|reports|awards|suppliers|events|admin|monitoring|dashboard|\*\(không)/);
@@ -255,10 +255,10 @@ function verifyRoutesAndMatrices() {
         `${id} Section A module=${documentedModule}, source=${catalogById.get(id).module}`);
     }
   }
-  pass('authorization matrix Section A: 145 unique IDs and exact source module partition');
+  pass('authorization matrix Section A: 148 unique IDs and exact source module partition');
 
   const flowRows = markdownRows(matrix, /^\| F\d{3} \|/);
-  ok(flowRows.length === 34, `UI flow rows=${flowRows.length}, expected 34`);
+  ok(flowRows.length === 35, `UI flow rows=${flowRows.length}, expected 35`);
   const flowIds = flowRows.map((row) => row[0]);
   ok(new Set(flowIds).size === flowRows.length, 'duplicate flow_id in UI-flow matrix');
   const mappedIds = [];
@@ -270,7 +270,7 @@ function verifyRoutesAndMatrices() {
     ok(row[7].length > 0, `${row[0]} missing disabled/masked evidence status`);
   }
   assertPartition(mappedIds, expectedIds, 'UI-flow route mapping');
-  pass('UI-flow matrix: 145 routes -> exactly 1 of 34 flows; 2 roles x Desktop/Native present');
+  pass('UI-flow matrix: 148 routes -> exactly 1 of 35 flows; 2 roles x Desktop/Native present');
 }
 
 function verifyGemini() {

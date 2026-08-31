@@ -871,3 +871,60 @@ Exit criteria: full regression (test:security 6/6, sqlite 788 total/780 pass/8 s
       verifyImportantDatesGate moi, verify-g0-selftest 6/6, git diff --check sach) deu xanh.
 Expected commit range/count: 1 commit.
 ```
+
+## Batch W1.ADMIN (2026-08-31) -- dong sub-item cuoi cung cua W1 (backend/API-only)
+
+```md
+Batch-ID: W1.ADMIN
+Goal: theo `/goal` "lam het cac van de cua W1" -- dong 3 muc con cua roadmap item `W1.ADMIN`:
+      (a) expose `policy-visibility-store.js` (da co san, chua tung duoc goi qua HTTP) qua route
+      that; (b) them nang luc gan lai owner cho ban ghi entity Direct (`prepareUpdate()` da co san
+      logic `OWNER_TRANSFER_ADMIN_ONLY` tu batch RBAC truoc nhung KHONG route nao lot field owner
+      qua `pick()` allowlist -- logic khong the goi toi trong thuc te); (c) ra soat role management
+      -- xac nhan da xong san (khong can code moi).
+In scope: (a) 2 route moi: `GET /admin/field-visibility` (requirePerm admin,view) doc
+      `visibilityStore.isPublic()` theo `ALLOWED_FIELDS` allowlist (hien chi module `partners`, 22
+      field); `PUT /admin/field-visibility` (requirePerm admin,edit) goi `visibilityStore.
+      setPublic()` -- enforce D13.2b "chi siet khong noi" (chi duoc bat is_public=true cho field
+      da la Public-tier theo `policy.classification()`, tra 400 FORBIDDEN_TIER neu khong). (b) 1
+      route moi: `PUT /admin/records/:entity/:id/owner` (requirePerm admin,edit) voi
+      `REASSIGNABLE_OWNER_TABLE` (14 entity Direct -> ten bang that), fetch ban ghi (404 neu khong
+      co), validate owner_id la user active (400 neu khong), goi `policyService.prepareUpdate()`
+      truoc khi UPDATE (defense-in-depth dung dang sau requirePerm coarser-grained). (c) Xac nhan
+      `PUT /admin/users/:id` da co san D13.1 escalation protection (Admin khong sua duoc Admin-tro-
+      len, chi Super Admin) -- khong can code them cho muc (c). (d) Cap nhat toan bo he thong tai
+      lieu tu-verify lan dau tien them route MOI (khac cac batch truoc chi re-gate route co san):
+      `07-route-catalog.md` (+R146/R147/R148, header 145->148), `08-permission-matrix.md` (Section
+      A admin 5->8 route + tong 145->148; Section B them flow F035 + token moi `D-MISSING` cho
+      route backend/API chua co UI -- KHONG dung `D-403` vi khong co man hinh nao de thieu trang
+      403; 34->35 flow), `scripts/verify-g0.mjs` (8 hang so 145/34 -> 148/35),
+      `scripts/verify-gate1-mapping.mjs` (2 hang so 145->148) + `gate1-test-mapping.md` (+R146/
+      R147/R148 tro toi test that), `server/test/ui-characterization.test.js` (assertion 34/145 ->
+      35/148), `memory-bank/16-coding-rules.md` va `memory-bank/README.md` (dem endpoint/route
+      song hanh 145->148, 139/145->142/148 route co requirePerm).
+Out of scope: KHONG dung UI cho 3 route moi -- UI/MDS thuoc lane Codex theo CLAUDE.md muc 6, chua
+      duoc owner giao lai. Khong tu dung view/man hinh gia de "co bang chung D-LIST/D-EMBED" --
+      token `D-MISSING` ghi trung thuc hien trang thay vi bia bang chung khong that.
+Behavior mode: THEM MOI nang luc (khong doi hanh vi route cu). 2 route field-visibility va 1 route
+      owner-reassignment la hoan toan moi, chi admin/super_admin goi toi duoc (requirePerm admin,*
+      + prepareUpdate() defense-in-depth).
+Risk hotspots: day la batch DAU TIEN trong toan bo session them route MOI thay vi re-gate route co
+      san -- rui ro lon nhat la lam lech he thong tai lieu tu-verify (catalog/matrix/verify script/
+      mapping deu hard-code tong so route+flow). Da ra soat va sua DU 6 diem: 07-route-catalog.md,
+      08-permission-matrix.md (Section A + B.2 + B.3 legend), verify-g0.mjs, verify-gate1-
+      mapping.mjs, gate1-test-mapping.md, server/test/ui-characterization.test.js -- xac nhan qua
+      `node scripts/verify-g0.mjs` va `node scripts/verify-gate1-mapping.mjs` deu PASS truoc khi
+      coi la xong, khong tu suy dien dem tay.
+Required tests: `server/test/integration-auth-admin.test.js` R146 (happy/invalid module/
+      unauthenticated/forbidden), R147 (happy siet full_name/invalid mo public bank_name Restricted
+      D13.2b/unauthenticated/forbidden), R148 (happy gan lai owner booking/invalid entity la/invalid
+      thieu owner_id/invalid owner_id user khong active/not-found id la/unauthenticated/forbidden)
+      -- 15 test moi, ca sqlite lan mysql driver.
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 803 total/795 pass/8 skip, mysql 803
+      total/802 pass/1 skip, verify-gate1-mapping 148/148, verify-g0.mjs PASS toan bo 9 check, verify-
+      g0-selftest 6/6, git diff --check sach) deu xanh. Sau batch nay, ra soat lai toan bo bang
+      W1.* trong `04-ROADMAP.md` xac nhan khong con sub-item nao khac o trang thai mo -- neu dung,
+      cong bo W1 DONG HOAN TOAN (thoa man `/goal` "lam het cac van de cua W1").
+Expected commit range/count: 1 commit.
+```

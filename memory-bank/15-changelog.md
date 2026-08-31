@@ -2623,3 +2623,43 @@ roadmap `W1.POLICY.2` mô tả.
   skip (+3), `test:verify-gate1-mapping` 145/145, `verify-g0.mjs` PASS (bao gồm
   `verifyImportantDatesGate` mới), `verify-g0-selftest` 6/6, `git diff --check` sạch. **Không còn
   backlog nào của `W1.POLICY.2`.**
+
+## Wave 1: batch W1.ADMIN — đóng sub-item cuối cùng của W1 (field-visibility + gán lại owner, backend/API-only)
+
+Theo `/goal` "làm hết các vấn đề của W1" — batch contract đầy đủ ở
+`18-g1b-rbac-batch-contract.md#batch-w1admin-2026-08-31`.
+
+- **2 route mới:** `GET /api/admin/field-visibility` (`requirePerm(admin,view)`) và `PUT
+  /api/admin/field-visibility` (`requirePerm(admin,edit)`) — expose `policy-visibility-store.js`
+  (có sẵn từ trước nhưng chưa từng được gọi qua HTTP) qua API thật. `PUT` enforce D13.2b "chỉ siết
+  không nới": chỉ được bật `is_public=true` cho field đã là Public-tier theo
+  `policy.classification()`, trả 400 `FORBIDDEN_TIER` nếu không — chặn đúng kịch bản nới lỏng field
+  Confidential/Restricted (vd `bank_name`) thành public qua API cấu hình.
+- **1 route mới:** `PUT /api/admin/records/:entity/:id/owner` (`requirePerm(admin,edit)`) — gán lại
+  owner cho 14 entity Direct qua `REASSIGNABLE_OWNER_TABLE` (entity→tên bảng thật, allowlist cố
+  định, fail-closed 400 nếu entity lạ). Phát hiện: `policyService.prepareUpdate()` đã có sẵn logic
+  `OWNER_TRANSFER_ADMIN_ONLY` từ các batch RBAC trước, nhưng KHÔNG route nào từng lọt field
+  owner_id/responsible_user_id qua `pick()` allowlist — logic tồn tại nhưng không thể gọi tới trong
+  thực tế cho đến batch này. Route mới đi qua `prepareUpdate()` làm defense-in-depth dù
+  `requirePerm(admin,edit)` (gate thô hơn) đã giới hạn admin/super_admin.
+- **Rà soát role management (mục thứ 3 của `W1.ADMIN`):** xác nhận `PUT /admin/users/:id` đã có sẵn
+  bảo vệ D13.1 escalation (Admin không sửa được tài khoản Admin-trở-lên, chỉ Super Admin) — không
+  cần code thêm.
+- **Lần đầu tiên trong session thêm route MỚI** (các batch trước chỉ re-gate route có sẵn) — kéo
+  theo cập nhật toàn bộ hệ thống tài liệu tự-verify: `07-route-catalog.md` (+R146/R147/R148, header
+  145→148), `08-permission-matrix.md` (Section A admin 5→8 route, tổng 145→148; Section B thêm flow
+  F035 + token mới `D-MISSING` cho route backend/API chưa có UI — khác `D-403` vốn dành cho route
+  CÓ UI nhưng thiếu trang 403 chuẩn; 34→35 flow), `scripts/verify-g0.mjs` và
+  `scripts/verify-gate1-mapping.mjs` (hằng số 145/34→148/35) + `gate1-test-mapping.md` (+3 dòng),
+  `server/test/ui-characterization.test.js` (assertion 34/145→35/148), `16-coding-rules.md` và
+  `README.md` (đếm endpoint/route song hành).
+- **Quyết định không dựng UI:** UI/MDS thuộc lane Codex theo `CLAUDE.md` mục 6, chưa được owner
+  giao lại — không tự dựng view giả để "có bằng chứng" `D-LIST`/`D-EMBED`; dùng token `D-MISSING`
+  ghi trung thực hiện trạng thay vì bịa bằng chứng.
+- Test mới: `server/test/integration-auth-admin.test.js` R146/R147/R148 — 15 test (happy/invalid/
+  not-found/unauthenticated/forbidden), cả SQLite lẫn MySQL driver.
+- Verify: `test:security` 6/6, SQLite 803 total/795 pass/8 skip (+15), MySQL 803 total/802 pass/1
+  skip (+15), `test:verify-gate1-mapping` 148/148, `verify-g0.mjs` PASS toàn bộ 9 check,
+  `verify-g0-selftest` 6/6, `git diff --check` sạch.
+- **`W1.ADMIN` là sub-item cuối cùng còn mở của `W1`** — sau khi rà soát lại toàn bộ bảng `W1.*`
+  trong `04-ROADMAP.md`, không còn sub-item nào khác ở trạng thái mở: **W1 đóng hoàn toàn.**

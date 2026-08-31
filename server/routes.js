@@ -6,8 +6,8 @@ const bcrypt = require('bcryptjs');
 const { db, audit, UPLOAD_DIR, metaGet, metaSet } = require('./db');
 const rbac = require('./rbac');
 const { requireAuth, requirePerm } = require('./auth');
-const { createVisibilityStore } = require('./policy-visibility-store');
-const { createPolicyService, PolicyForbiddenError } = require('./policy-service');
+const { createVisibilityStore, assertAllowed, ALLOWED_FIELDS } = require('./policy-visibility-store');
+const { createPolicyService, PolicyForbiddenError, ownerColumn } = require('./policy-service');
 const policy = require('./policy-engine');
 const { upload } = require('./uploads');
 const scheduler = require('./scheduler');
@@ -17,7 +17,11 @@ const { sendError } = require('./error-contract');
 
 const router = express.Router();
 router.use(requireAuth);
-const policyService = createPolicyService({ visibilityStore: createVisibilityStore(db) });
+// W1.ADMIN (a): giu tham chieu rieng toi visibilityStore de cac route /admin/field-visibility goi
+// truc tiep duoc setPublic()/isPublic() -- truoc day chi truyen thang vao createPolicyService(),
+// khong route nao trong file nay giu duoc de goi lai.
+const visibilityStore = createVisibilityStore(db);
+const policyService = createPolicyService({ visibilityStore });
 
 // ---------- helpers ----------
 function pageParams(req) {
@@ -1823,6 +1827,66 @@ router.get('/admin/audit', requirePerm('admin', 'view'), (req, res) => {
   if (req.principal.role !== 'super_admin') return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Chỉ Super Admin được xem audit log.');
   const rows = db.prepare('SELECT * FROM audit_log ORDER BY id DESC LIMIT 200').all();
   res.json({ rows });
+});
+
+// ===== W1.ADMIN (a): cấu hình field public/private theo module =====
+// `policy-visibility-store.js#setPublic()` đã tồn tại đầy đủ (fail-closed, D13.2b: chỉ được SIẾT
+// field Public-tier xuống private, KHÔNG được nới field Confidential/Restricted lên public) nhưng
+// trước batch này KHÔNG route nào expose qua HTTP — chỉ gọi được trực tiếp từ test. Route dưới đây
+// chỉ thêm tầng HTTP, không đổi logic quyết định (giữ nguyên ở policy-visibility-store.js).
+router.get('/admin/field-visibility', requirePerm('admin', 'view'), (req, res) => {
+  const module = req.query.module || 'partners';
+  if (!ALLOWED_FIELDS[module]) return res.status(400).json({ error: `Module không hỗ trợ cấu hình visibility: ${module}` });
+  const fields = [...ALLOWED_FIELDS[module]].map((field) => ({ field, is_public: visibilityStore.isPublic(module, field) ?? null }));
+  res.json({ module, fields });
+});
+router.put('/admin/field-visibility', requirePerm('admin', 'edit'), (req, res) => {
+  const { module, field, is_public } = req.body || {};
+  try {
+    assertAllowed(module, field);
+    visibilityStore.setPublic({ module, field, isPublic: !!is_public, principal: req.principal });
+  } catch (err) {
+    if (err.message === 'FORBIDDEN') return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Chỉ Admin/Super Admin được cấu hình field visibility.');
+    if (err.message === 'FORBIDDEN_TIER') return sendError(req, res, 400, 'VALIDATION_FAILED', 'Field không phải Public-tier — không thể mở public (D13.2b: chỉ được siết, không được nới).');
+    return res.status(400).json({ error: err.message });
+  }
+  logEdit(req, 'EDIT', 'field_visibility', 0, `${module}.${field} -> is_public=${!!is_public}`);
+  res.json({ ok: true });
+});
+
+// ===== W1.ADMIN (b): gán/gán lại owner cho bản ghi entity Direct =====
+// `policyService.prepareUpdate()` đã chặn OWNER_TRANSFER_ADMIN_ONLY từ lâu, nhưng KHÔNG route CRUD
+// nào của 14 entity Direct từng cho phép `owner_id`/`responsible_user_id` lọt qua allowlist
+// `pick(req.body, X_COLS)` của chính nó — nghĩa là owner không bao giờ gán lại được trong thực tế
+// (kể cả bởi Admin/Super Admin), dù bản ghi cũ owner=NULL hoặc nhân viên phụ trách đã nghỉ việc.
+// Route generic này dùng chung cho cả 14 entity thay vì lặp lại 14 route gần giống nhau.
+const REASSIGNABLE_OWNER_TABLE = {
+  booking: 'bookings', interaction: 'interactions', award: 'awards', award_participation: 'award_participations',
+  event: 'events', sponsorship: 'sponsorships', agreement: 'agreements', work_log: 'work_logs', gift: 'gifts',
+  association_fee: 'association_fees', supplier_quote: 'supplier_quotes', supplier_transaction: 'supplier_transactions',
+  supplier_contact: 'supplier_contacts', benefit_usage: 'benefit_usages',
+};
+router.put('/admin/records/:entity/:id/owner', requirePerm('admin', 'edit'), (req, res) => {
+  const { entity, id } = req.params;
+  const table = REASSIGNABLE_OWNER_TABLE[entity];
+  if (!table) return res.status(400).json({ error: `Entity không hỗ trợ gán lại owner: ${entity}` });
+  const newOwnerId = Number(req.body && req.body.owner_id);
+  if (!newOwnerId) return res.status(400).json({ error: 'Thiếu owner_id hợp lệ.' });
+  const newOwner = db.prepare('SELECT id FROM users WHERE id=? AND active=1').get(newOwnerId);
+  if (!newOwner) return res.status(400).json({ error: 'owner_id phải là user đang hoạt động.' });
+  const existing = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
+  if (!existing) return res.status(404).json({ error: 'Không tìm thấy bản ghi.' });
+  const owner = ownerColumn(entity);
+  let data;
+  try {
+    data = policyService.prepareUpdate({ principal: req.principal, entity, record: existing, input: { [owner]: newOwnerId } });
+  } catch (err) {
+    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Chỉ Admin/Super Admin được gán lại owner.');
+    throw err;
+  }
+  db.prepare(`UPDATE ${table} SET ${owner}=? WHERE id=?`).run(data[owner], id);
+  logEdit(req, 'EDIT', entity, id, `Gán lại owner -> user #${newOwnerId}`);
+  res.json({ ok: true });
 });
 
 // =====================================================================

@@ -2,7 +2,7 @@
 
 > **Sửa sau Codex G0-audit** (FAIL — 47/135 literal path không xuất hiện nguyên dạng do bản trước nén bằng wildcard). Bản này: **1 route = 1 row, không compress, không wildcard**, tự-verify khớp 100% với source.
 >
-> **Verify:** `rg -o "router\.(get|post|put|patch|delete)\('[^']+'" server/routes.js server/ai.js` → 142 literal path (135 `routes.js` + 7 `ai.js`) khớp 100% thứ tự + cú pháp param (`:id`,`:fid`,`:cid`,`:pid`,`:tid`,`:qid`,`:aid`) với 142 dòng đầu bảng dưới. + 3 route auth (`app.post/get` trực tiếp, không qua `router.`, đọc trực tiếp `server/app.js:25-27`) = **145/145 khớp, 0 lệch**. Router mount: `apiRouter` ở `/api` (`server/app.js:30`), `aiRouter` ở `/api/ai` (`server/app.js:32`) — mọi full path dưới đã cộng prefix đúng. **Sửa lại 2026-08-25 (Codex G1A.1-audit A5):** 3 route auth + 2 mount đã chuyển từ `server/index.js` sang `server/app.js` khi tách `createApp()` (commit `2c64b7e`) — line number cập nhật theo file mới, không còn trỏ `index.js`.
+> **Verify:** `rg -o "router\.(get|post|put|patch|delete)\('[^']+'" server/routes.js server/ai.js` → 145 literal path (138 `routes.js` + 7 `ai.js`) khớp 100% thứ tự + cú pháp param (`:id`,`:fid`,`:cid`,`:pid`,`:tid`,`:qid`,`:aid`,`:entity`) với 145 dòng đầu bảng dưới. + 3 route auth (`app.post/get` trực tiếp, không qua `router.`, đọc trực tiếp `server/app.js:25-27`) = **148/148 khớp, 0 lệch**. Router mount: `apiRouter` ở `/api` (`server/app.js:30`), `aiRouter` ở `/api/ai` (`server/app.js:32`) — mọi full path dưới đã cộng prefix đúng. **Sửa lại 2026-08-25 (Codex G1A.1-audit A5):** 3 route auth + 2 mount đã chuyển từ `server/index.js` sang `server/app.js` khi tách `createApp()` (commit `2c64b7e`) — line number cập nhật theo file mới, không còn trỏ `index.js`. **Sửa lại 2026-08-31 (batch `W1.ADMIN` backend):** thêm 3 route mới `R146`/`R147`/`R148` (`routes.js`, module `admin`) — 135→138 literal path trong `routes.js`, tổng 145→148.
 
 | ID | method | full path | auth | entity/table | sensitive_group | upload/download | source |
 |---|---|---|---|---|---|---|---|
@@ -151,6 +151,9 @@
 | R143 | POST | /api/login | **no-auth (public)** | users | — | không | app.js:25 |
 | R144 | POST | /api/logout | **no auth middleware** (`auth.logout` chỉ destroy session nếu có) | — | — | không | app.js:26; auth.js:24 |
 | R145 | GET | /api/me | **handler tự kiểm tra session** (`auth.me`, không gắn `requireAuth` middleware) | users | — | không | app.js:27; auth.js:28 |
+| R146 | GET | /api/admin/field-visibility | requirePerm(admin,view) | field_visibility | is_public theo field (đọc, `ALLOWED_FIELDS` allowlist) | không | routes.js:1837 |
+| R147 | PUT | /api/admin/field-visibility | requirePerm(admin,edit) | field_visibility | is_public (ghi qua `visibilityStore.setPublic()` — D13.2b: chỉ được siết field Public-tier xuống private, không được nới Confidential/Restricted lên public) | không | routes.js:1843 |
+| R148 | PUT | /api/admin/records/:entity/:id/owner | requirePerm(admin,edit) | 14 bảng entity Direct (`REASSIGNABLE_OWNER_TABLE`) | owner_id/responsible_user_id (ghi qua `policyService.prepareUpdate()`, entity trong allowlist cố định — fail-closed 400 nếu lạ) | không | routes.js:1869 |
 
 ## Background jobs (không phải HTTP endpoint, giữ riêng)
 | Job | Định nghĩa | Nơi gọi lúc boot | Tần suất |
@@ -177,4 +180,4 @@
 | (notification widget) | `~:2850-2869` | R057-R059 |
 | (login/logout) | `~:2877-2887` | R143-R145 |
 
-Không có view riêng cho R001 (assignable-users, dùng nội bộ dropdown ở nhiều view khác), R142 (ai/status, internal check).
+Không có view riêng cho R001 (assignable-users, dùng nội bộ dropdown ở nhiều view khác), R142 (ai/status, internal check), R146/R147/R148 (backend/API mới batch `W1.ADMIN` 2026-08-31 — chưa có UI, lane Codex theo `CLAUDE.md` mục 6, chưa được giao lại).

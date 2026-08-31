@@ -152,7 +152,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 | W1.POLICY | `DATA_POLICY_REGISTRY` nguồn = bảng `field_visibility` động (KHÔNG hard-code) + `PolicyEngine` (authorizeRead/Write/Attachment) đọc role 4 cấp + ownership + visibility. Choke point tầng service, fail-closed 403, KHÔNG silent-strip (D1) | W1.RBAC.2 | code+test / — / fail-closed 403 |
 | W1.POLICY.2 | Service command = choke point mọi sensitive write; wrapper `authorizedInsert/Update` bắt buộc `principal+resource+operation`; CI static rule cấm raw SQL ghi field ngoài policy (dọn 10 nhóm write-bypass F1 + 3 cách mask song song — `16-coding-rules.md` §8). **Phần READ (2026-08-31):** `projectRecord()` nay là choke point duy nhất cho MỌI route GET (kể cả list + collection lồng), dọn hết `rbac.maskList/senGroups/maskMoney/canMoney` cũ (SUPERSEDED — `02-decisions.md` O7) + `scripts/verify-g0.mjs#verifyNoLegacyMasking()` cấm tái phát — xem `18-g1b-rbac-batch-contract.md#batch-w1policy2-2026-08-31`. **Phần WRITE (2026-08-31, batch `W1.POLICY.2-write-side`):** audit độc lập xác nhận KHÔNG còn write-bypass nào trong `routes.js` (10 nhóm bypass gốc F1 đã đóng hết qua RBAC-EXP-B1..B6) — tìm ra 1 lớp bug mới (F23: 3 route ghi `important_dates` gate nhầm theo quyền `view` của module cha, viewer tạo được dữ liệu không đúng quyền), đã sửa + thêm CI guard `verifyImportantDatesGate()`. **Quyết định KHÔNG xây wrapper `authorizedInsert/Update` tổng quát** — không còn bug cụ thể nào thúc đẩy, xây thêm là premature abstraction — xem `01-audit-findings.md` §F23. **Không còn backlog nào của W1.POLICY.2.** | W1.POLICY | code+test / — / fail-closed |
 | W1.OWN | Logic ownership: quyền sửa = `user.id===owner_id` HOẶC Admin/Super Admin bypass; delete chỉ Admin/Super Admin (D13.4b); Nhân viên thực thi tự xem đầy đủ bản ghi mình `owner`; Admin gán/gán lại `owner_id` (giải quyết cả dữ liệu cũ owner=NULL + nhân viên nghỉ việc). **Không self-claim — owner APPROVED 2026-08-25** (D13.4c, C0.1, không còn là mặc định chờ xác nhận). Bao gồm resource-policy nhóm global/inherited/module-admin-only (D13.4a) cho organizations/people/suppliers/important_dates/budgets/event_costs/monitoring | W1.POLICY | code+test / — / fail-closed |
-| W1.ADMIN | Màn hình Admin (Desktop MDS): (a) cấu hình field public/private theo module; (b) gán/gán lại owner cho bản ghi; (c) quản vai trò 4 cấp. Super Admin thêm: cấu hình API key, xem `audit_log` | W1.OWN | code+test / — / — |
+| W1.ADMIN | Backend/API (Desktop MDS UI thuộc lane Codex, chưa giao lại): (a) cấu hình field public/private theo module — **XONG 2026-08-31** (`GET/PUT /api/admin/field-visibility`, D13.2b chỉ siết không nới); (b) gán/gán lại owner cho bản ghi — **XONG 2026-08-31** (`PUT /api/admin/records/:entity/:id/owner`, `REASSIGNABLE_OWNER_TABLE` 14 entity Direct, qua `policyService.prepareUpdate()`); (c) quản vai trò 4 cấp — **đã có sẵn từ trước, không cần code thêm** (`PUT /admin/users/:id` đã có D13.1 escalation protection). Super Admin config API key/audit_log: đã có sẵn (`GET /admin/audit`). **Không còn backlog nào của W1.ADMIN** (backend/API) — UI chờ owner giao lại lane. | W1.OWN | code+test / — / fail-closed |
 | W1.FILE | Attachment: visibility per-file lúc upload (D13.3), classification server-derived cho gate `/files/:id` theo owner+action+visibility (D3, F9). File cũ default `private`. **Không cần R1 dual-write/reconcile — dữ liệu bỏ được, seed sạch**. `GET /files/:id` nay gate ĐỦ 6 owner_type thật (F21, Codex ACCEPTED WITH BACKLOG 2026-08-31) — **P2 (upload chưa gate owner_id của Direct entity) đã sửa 2026-08-31, batch `W1.FILE-P2`**: award/event/agreement/work_log upload nay gate owner_id giống PUT/DELETE của chính entity; supplier upload giữ role-gate (Global entity, đúng thiết kế). **P3 (metadata file chưa lọc theo visibility) đã xác định là WON'T-FIX 2026-08-31 (đúng thiết kế D13 "existence vs content", không phải bug)** — xem `01-audit-findings.md` §F21. **Không còn backlog nào của W1.FILE.** | W1.POLICY | code+test / — / fail-closed |
 
 > **R1.0–R1.7 cũ (dual-write/backfill/reconcile/shadow/canary/rollback) BỎ, có điều kiện (Codex C0.5/R3-06, không phải bỏ vô điều kiện).** Chỉ được bỏ khi W1.RBAC.0 (preflight) xác nhận không có dữ liệu thật cần giữ. Nếu bất kỳ bước preflight nào phát hiện dữ liệu cần giữ, **khôi phục toàn bộ quy trình R1** (ghi lại ở đây để không mất kiến thức: bản v2 §R1 trong git history commit trước `04-ROADMAP.md` v3). **Lưu ý (Codex C0.5 mục cuối):** dữ liệu test bỏ được KHÔNG có nghĩa các rủi ro khác (F2 session, F3 SSRF, F4 AI-egress, F7 Atomics) cũng bỏ được — môi trường test công khai vẫn mang credential Cloud/session/SSRF exposure thật, vẫn phải sửa theo đúng lộ trình W1.7/W1.8/W1.AI-POLICY/W2.3, không được coi nhẹ vì "chỉ là test".
@@ -698,6 +698,38 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > thúc đẩy, sẽ là premature abstraction — xem `01-audit-findings.md` §F23. **Không còn backlog nào
 > của W1.POLICY.2.** Còn lại của W1: **W1.ADMIN** (owner reassignment API backend, field-visibility
 > config API backend — UI thuộc lane Codex) — batch tiếp theo, batch cuối của W1.
+
+> **Execution update — 2026-08-31 (batch `W1.ADMIN`, theo `/goal` "làm hết các vấn đề của W1" —
+> BATCH CUỐI CÙNG CỦA W1):** Đóng 3 mục con của `W1.ADMIN` (phạm vi backend/API, UI thuộc lane
+> Codex theo `CLAUDE.md` mục 6 chưa được giao lại): (a) 2 route mới expose `policy-visibility-
+> store.js` (có sẵn từ batch RBAC trước nhưng chưa từng gọi được qua HTTP) — `GET`/`PUT /api/admin/
+> field-visibility`, enforce D13.2b "chỉ siết không nới" (400 `FORBIDDEN_TIER` nếu mở public field
+> không phải Public-tier); (b) 1 route mới `PUT /api/admin/records/:entity/:id/owner` — phát hiện
+> `policyService.prepareUpdate()`'s `OWNER_TRANSFER_ADMIN_ONLY` đã tồn tại từ các batch RBAC-EXP
+> trước nhưng KHÔNG route nào từng lọt field owner qua `pick()` allowlist, nên hoàn toàn không thể
+> gọi tới trong thực tế — route mới dùng `REASSIGNABLE_OWNER_TABLE` (14 entity Direct) + đi qua
+> `prepareUpdate()` làm defense-in-depth; (c) rà soát role management — xác nhận `PUT /admin/
+> users/:id` đã có sẵn D13.1 escalation protection, không cần code thêm. **Lần đầu tiên trong
+> session thêm route MỚI** (mọi batch trước chỉ re-gate route có sẵn) — cập nhật đồng bộ toàn bộ hệ
+> thống tài liệu tự-verify: `07-route-catalog.md` (+R146/R147/R148, 145→148), `08-permission-
+> matrix.md` (Section A admin 5→8, tổng 145→148; Section B +flow F035 + token mới `D-MISSING` cho
+> route backend/API chưa có UI — khác `D-403`; 34→35 flow), `scripts/verify-g0.mjs` +
+> `scripts/verify-gate1-mapping.mjs` (hằng số 145/34→148/35) + `gate1-test-mapping.md` (+3 dòng),
+> `server/test/ui-characterization.test.js` (34/145→35/148), `16-coding-rules.md`/`README.md` (đếm
+> route song hành). 15 test mới (`integration-auth-admin.test.js` R146/R147/R148, cả 2 driver). Full
+> regression: security 6/6, SQLite 803/795 pass/8 skip, MySQL 803/802 pass/1 skip, mapping 148/148,
+> `verify-g0.mjs` PASS toàn bộ 9 check, `verify-g0-selftest` 6/6, `git diff --check` sạch. **Không
+> còn backlog nào của `W1.ADMIN` (backend/API)** — UI chờ owner giao lại lane Codex.
+>
+> **→ W1 ĐÓNG HOÀN TOÀN (2026-08-31).** Rà soát lại toàn bộ 2 bảng `W1.*` (nhánh RBAC v2 +
+> nhánh security) ở trên: `W1.RBAC.0` (preflight script + regression đã xong 2026-08-27; cutover
+> DB production thật là hành động DevOps-gated, tương tự O3/O4/O5, KHÔNG phải backlog phía Claude),
+> `W1.RBAC.1/2` XONG (schema + 4 vai trò, nền tảng cho mọi batch RBAC đã chạy suốt session),
+> `W1.POLICY`/`W1.POLICY.2`/`W1.OWN`/`W1.ADMIN`/`W1.FILE` đều XONG không còn backlog (xem từng hàng
+> trên), `W1.1`/`W1.8`/`W1.9`/`W1.AI-POLICY` đều XONG, `W1.7` XONG phần logic thật — chỉ còn durable
+> session STORE chờ DevOps chọn implementation (O4), không chặn đóng W1 theo đúng ghi chú "O3/O4/O5
+> không chặn G0/G1/W1.RBAC/W1.8/W1.9" đã có sẵn ở trên. **Không còn sub-item W1 nào ở trạng thái mở
+> phía Claude** — thoả mãn `/goal` "làm hết các vấn đề của W1".
 
 ---
 

@@ -6,7 +6,7 @@
 
 ## 1. Contract và phạm vi
 
-- **In scope:** Vue shell, legacy UI `public/app.js`, 14 module desktop root, 34 business/UI
+- **In scope:** Vue shell, legacy UI `public/app.js`, 14 module desktop root, 35 business/UI
   flow và hai role đang tồn tại (`super_admin`, `pr_staff`).
 - **Out of scope:** thay giao diện, cài Playwright, hoặc giả lập native host. Mỗi phần phải
   được làm trong slice Wave 3/4 có native composition/bridge contract thật.
@@ -28,7 +28,7 @@ npm run test:verify-gate1-mapping
 |---|---|---|
 | UI-CHAR-001 | 14 key `NAV` desktop có resolver `VIEWS` tương ứng | Không module desktop nào bị mất route khi refactor legacy app |
 | UI-CHAR-002 | Vue tạo đủ mount point và chỉ nạp `/app.js` sau `nextTick()` | Khóa contract ghép Vue shell ↔ legacy DOM để slice sau đổi có chủ đích |
-| UI-CHAR-003 | 34 flow map đúng 145 route, mỗi flow có hai cột `N-MISSING` | Ma trận không được lặng lẽ diễn giải Native-Mobile là PASS |
+| UI-CHAR-003 | 35 flow map đúng 148 route, mỗi flow có hai cột `N-MISSING` | Ma trận không được lặng lẽ diễn giải Native-Mobile là PASS |
 | UI-CHAR-004 | Compact đang là desktop responsive, không có native root/topbar/bottom-nav | Chặn “responsive = native” sai nghĩa MDS; F5 vẫn P0 |
 
 Các rule được join trong [`gate1-test-mapping.md`](gate1-test-mapping.md), vì vậy verifier
@@ -60,7 +60,9 @@ host của MDS.
 ## 4. Kết luận và đường đi tiếp
 
 1. G1A.6 đóng **baseline characterization** sau khi full regression của batch xanh.
-2. **F5 giữ nguyên `FAIL/MISSING` P0:** 34/34 flow × mọi role vẫn chưa có native composition.
+2. **F5 giữ nguyên `FAIL/MISSING` P0:** 35/35 flow × mọi role vẫn chưa có native composition
+   (F035 thêm 2026-08-31 từ batch W1.ADMIN — route backend/API thuần, chưa có UI nào nên cũng
+   chưa có native composition để đánh giá).
    Không dùng G1A.6 để báo "MDS mobile pass" hoặc cho release native.
 3. Wave 3 bắt đầu bằng People Detail theo strangler slice; mỗi slice thay legacy DOM bằng Desktop
    MDS và một native composition riêng. Wave 4.1-4.3 bổ sung host bridge, device/accessibility,

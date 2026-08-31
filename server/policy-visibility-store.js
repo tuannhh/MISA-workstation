@@ -25,4 +25,4 @@ function createVisibilityStore(db) {
     },
   };
 }
-module.exports = { createVisibilityStore, assertAllowed };
+module.exports = { createVisibilityStore, assertAllowed, ALLOWED_FIELDS };

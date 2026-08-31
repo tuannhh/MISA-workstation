@@ -1,5 +1,6 @@
 'use strict';
 // G1A.3 — integration test mức HTTP cho nhóm route auth + admin (R143,R144,R145,R099-R103).
+// W1.ADMIN (2026-08-31) bổ sung R146,R147,R148 (field-visibility + gán lại owner).
 // Dùng lại harness G1A.1 (app-harness/db-harness/fixtures/resource-stack) — xem server/test/smoke.test.js
 // cho pattern gốc. Mỗi route tối thiểu: happy + invalid + unauthenticated + not-found (route nào
 // không có :id hoặc không có khái niệm "invalid body" thì bỏ qua case đó có ghi chú tại sao).
@@ -328,5 +329,177 @@ test('R103 unauthenticated: không cookie trả 401', async () => {
 test('R103 forbidden: executor không có quyền admin.view trả 403', async () => {
   const cookie = await loginAs(staff);
   const res = await fetch(`${baseUrl}/api/admin/audit`, { headers: { cookie } });
+  assert.equal(res.status, 403);
+});
+
+// ---------------------------------------------------------------------------
+// R146/R147 — GET/PUT /api/admin/field-visibility (W1.ADMIN backend, batch 2026-08-31).
+// Đọc/ghi cấu hình field public/private theo module (hiện chỉ có "partners").
+// ---------------------------------------------------------------------------
+test('R146 happy: super_admin xem cấu hình field-visibility module partners', async () => {
+  const cookie = await loginAs(admin);
+  const res = await fetch(`${baseUrl}/api/admin/field-visibility?module=partners`, { headers: { cookie } });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.module, 'partners');
+  assert.ok(Array.isArray(body.fields) && body.fields.some((f) => f.field === 'full_name'));
+});
+
+test('R146 invalid: module không hỗ trợ trả 400', async () => {
+  const cookie = await loginAs(admin);
+  const res = await fetch(`${baseUrl}/api/admin/field-visibility?module=khong_ton_tai`, { headers: { cookie } });
+  assert.equal(res.status, 400);
+});
+
+test('R146 unauthenticated: không cookie trả 401', async () => {
+  const res = await fetch(`${baseUrl}/api/admin/field-visibility`);
+  assert.equal(res.status, 401);
+});
+
+test('R146 forbidden: executor không có quyền admin.view trả 403', async () => {
+  const cookie = await loginAs(staff);
+  const res = await fetch(`${baseUrl}/api/admin/field-visibility`, { headers: { cookie } });
+  assert.equal(res.status, 403);
+});
+
+test('R147 happy: super_admin siết field Public (full_name) xuống private, GET phản ánh đúng', async () => {
+  const cookie = await loginAs(admin);
+  const put = await fetch(`${baseUrl}/api/admin/field-visibility`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ module: 'partners', field: 'full_name', is_public: false }),
+  });
+  assert.equal(put.status, 200);
+  const get = await fetch(`${baseUrl}/api/admin/field-visibility?module=partners`, { headers: { cookie } });
+  const body = await get.json();
+  assert.equal(body.fields.find((f) => f.field === 'full_name').is_public, false);
+  // Trả lại mặc định để không rò rỉ trạng thái sang các test khác trong cùng tiến trình.
+  await fetch(`${baseUrl}/api/admin/field-visibility`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ module: 'partners', field: 'full_name', is_public: true }),
+  });
+});
+
+test('R147 invalid: mở public field không phải Public-tier (bank_name, Restricted) trả 400 (D13.2b: chỉ siết không nới)', async () => {
+  const cookie = await loginAs(admin);
+  const res = await fetch(`${baseUrl}/api/admin/field-visibility`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ module: 'partners', field: 'bank_name', is_public: true }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('R147 unauthenticated: không cookie trả 401', async () => {
+  const res = await fetch(`${baseUrl}/api/admin/field-visibility`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ module: 'partners', field: 'full_name', is_public: false }),
+  });
+  assert.equal(res.status, 401);
+});
+
+test('R147 forbidden: executor không có quyền admin.edit trả 403', async () => {
+  const cookie = await loginAs(staff);
+  const res = await fetch(`${baseUrl}/api/admin/field-visibility`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ module: 'partners', field: 'full_name', is_public: false }),
+  });
+  assert.equal(res.status, 403);
+});
+
+// ---------------------------------------------------------------------------
+// R148 — PUT /api/admin/records/:entity/:id/owner (W1.ADMIN backend, batch 2026-08-31).
+// Gán/gán lại owner cho bản ghi entity Direct qua policyService.prepareUpdate().
+// Fixture createUser()/createPrivilegedUser() không trả .id -> phải query DB trực tiếp.
+// ---------------------------------------------------------------------------
+test('R148 happy: super_admin gán lại owner cho booking (entity Direct)', async () => {
+  const { db } = require('../db');
+  const bookingId = db
+    .prepare("INSERT INTO bookings (subject_type, subject_id, title) VALUES ('person', 1, 'R148 happy test')")
+    .run().lastInsertRowid;
+  const targetUserId = db.prepare('SELECT id FROM users WHERE username=?').get(admin.username).id;
+  const cookie = await loginAs(admin);
+  const res = await fetch(`${baseUrl}/api/admin/records/booking/${bookingId}/owner`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_id: targetUserId }),
+  });
+  assert.equal(res.status, 200);
+  const row = db.prepare('SELECT owner_id FROM bookings WHERE id=?').get(bookingId);
+  assert.equal(row.owner_id, targetUserId);
+});
+
+test('R148 invalid: entity không hỗ trợ trả 400', async () => {
+  const cookie = await loginAs(admin);
+  const res = await fetch(`${baseUrl}/api/admin/records/khong_ton_tai/1/owner`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_id: 1 }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('R148 invalid: thiếu owner_id hợp lệ trả 400', async () => {
+  const { db } = require('../db');
+  const bookingId = db
+    .prepare("INSERT INTO bookings (subject_type, subject_id, title) VALUES ('person', 1, 'R148 missing owner_id test')")
+    .run().lastInsertRowid;
+  const cookie = await loginAs(admin);
+  const res = await fetch(`${baseUrl}/api/admin/records/booking/${bookingId}/owner`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('R148 invalid: owner_id trỏ tới user không active trả 400', async () => {
+  const { db } = require('../db');
+  const bookingId = db
+    .prepare("INSERT INTO bookings (subject_type, subject_id, title) VALUES ('person', 1, 'R148 inactive owner test')")
+    .run().lastInsertRowid;
+  const inactiveId = db
+    .prepare('INSERT INTO users (username, password_hash, full_name, role, active) VALUES (?,?,?,?,0)')
+    .run(`r148_inactive_${Date.now()}`, 'x', 'R148 Inactive', 'executor').lastInsertRowid;
+  const cookie = await loginAs(admin);
+  const res = await fetch(`${baseUrl}/api/admin/records/booking/${bookingId}/owner`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_id: inactiveId }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('R148 not-found: record id không tồn tại trả 404', async () => {
+  const { db } = require('../db');
+  const targetUserId = db.prepare('SELECT id FROM users WHERE username=?').get(admin.username).id;
+  const cookie = await loginAs(admin);
+  const res = await fetch(`${baseUrl}/api/admin/records/booking/9999999/owner`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_id: targetUserId }),
+  });
+  assert.equal(res.status, 404);
+});
+
+test('R148 unauthenticated: không cookie trả 401', async () => {
+  const res = await fetch(`${baseUrl}/api/admin/records/booking/1/owner`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_id: 1 }),
+  });
+  assert.equal(res.status, 401);
+});
+
+test('R148 forbidden: executor không có quyền admin.edit trả 403', async () => {
+  const cookie = await loginAs(staff);
+  const res = await fetch(`${baseUrl}/api/admin/records/booking/1/owner`, {
+    method: 'PUT',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_id: 1 }),
+  });
   assert.equal(res.status, 403);
 });
