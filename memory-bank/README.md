@@ -27,6 +27,7 @@
 | [18-g1b-rbac-batch-contract.md](18-g1b-rbac-batch-contract.md) | Batch contracts G1B cho session, explicit action/permission và PolicyEngine |
 | [19-g1c-e2e-acceptance-framework.md](19-g1c-e2e-acceptance-framework.md) | G1C.1 — khung acceptance E2E theo 4 vai trò, chỉ định nghĩa trước Wave 1 |
 | [20-ui-characterization.md](20-ui-characterization.md) | G1A.6 — baseline UI desktop/compact, runtime evidence và ranh giới không suy diễn Native-Mobile pass |
+| [25-w2-host-adapter-contract.md](25-w2-host-adapter-contract.md) | W2.5 — contract host UI, fake Browser/Native và ranh giới O3 trước khi tích hợp AMIS WebView thật |
 
 ## Tổng quan sản phẩm (1 đoạn)
 

@@ -1,5 +1,11 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
+
+- Thêm `frontend/src/platform/host-adapter.mjs`: contract không mang `principal`/token, chọn Desktop/Native bằng `surface` tường minh, capability state có recovery rõ, lifecycle/safe-area/deep-link/Back/gesture quy về một adapter.
+- Thêm hai provider test `fake-browser` và `fake-native`; registry fail-closed nếu Native không có provider riêng, không suy diễn desktop responsive hoặc Browser fallback là Native UI.
+- Thêm `server/test/unit-host-adapter.test.js` (`W25-001..004`) và tài liệu `25-w2-host-adapter-contract.md`. Đây là infrastructure cho People Detail, chưa đụng `public/app.js`, chưa tạo Native route và **không** đóng F5/O3/W4 device evidence.
+
 > Dựng lại từ `git log --oneline --all --reverse` (commit đầu → mới nhất). Tóm tắt "vì sao" dựa trên message commit đã có sẵn — không bịa lý do mới. Mốc kiến trúc/tính năng lớn; không liệt kê từng commit nhỏ không đáng chú ý.
 
 ## 2026-06-19 — Khởi tạo & vòng nghiệp vụ CRM lõi
