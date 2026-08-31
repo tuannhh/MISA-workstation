@@ -356,18 +356,30 @@ router.delete('/work-logs/:id', (req, res) => {
   logEdit(req, 'DELETE', 'work_log', req.params.id);
   res.json({ ok: true });
 });
-// D13 (W1.FILE P2): agreement/work_log la entity Direct -- upload file phai gate theo owner_id
-// giong PUT/DELETE cua chinh entity (assertWritable voi record that), khong chi gate tho theo
-// role qua requirePerm nhu truoc day (bat ky executor nao cung upload duoc vao ho so nguoi khac).
-function govFileUpload(entity, table) {
-  return (req, res) => {
+// D13 (W1.FILE F24 remediation, Codex audit tren bundle dong W1): authorization phai chay TRUOC
+// Multer, khong phai sau -- Multer dung disk storage (uploads.js) nen da ghi file that vao
+// UPLOAD_DIR ngay trong middleware, truoc khi handler kip goi assertWritable(). Deny sau khi da
+// upload van tao file mo coi tren dia (khong co row attachments quan ly), vi pham nguyen tac
+// "deny phai khong co side-effect". Middleware nay doc record that + assertWritable() TRUOC
+// upload.array(), chi next() khi hop le -- handler phia sau khong can kiem tra lai.
+function requireFileWrite(entity, table, moduleLabel) {
+  return (req, res, next) => {
     const existing = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(req.params.id);
     try {
       policyService.assertWritable({ principal: req.principal, entity, action: 'edit', record: existing });
     } catch (err) {
-      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên partners.');
+      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', `Bạn không có quyền edit trên ${moduleLabel}.`);
       throw err;
     }
+    next();
+  };
+}
+// D13 (W1.FILE P2): agreement/work_log la entity Direct -- upload file phai gate theo owner_id
+// giong PUT/DELETE cua chinh entity, khong chi gate tho theo role qua requirePerm nhu truoc day
+// (bat ky executor nao cung upload duoc vao ho so nguoi khac). Authorization that da chay trong
+// requireFileWrite() truoc upload.array() o duoi.
+function govFileUpload(entity) {
+  return (req, res) => {
     const files = req.files || [];
     if (!files.length) return res.status(400).json({ error: 'Không có file nào.' });
     const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary) VALUES (?,?,'file',?,?,?,0)`);
@@ -376,8 +388,8 @@ function govFileUpload(entity, table) {
     res.json({ ok: true });
   };
 }
-router.post('/agreements/:id/files', upload.array('files', 8), govFileUpload('agreement', 'agreements'));
-router.post('/work-logs/:id/files', upload.array('files', 8), govFileUpload('work_log', 'work_logs'));
+router.post('/agreements/:id/files', requireFileWrite('agreement', 'agreements', 'partners'), upload.array('files', 8), govFileUpload('agreement'));
+router.post('/work-logs/:id/files', requireFileWrite('work_log', 'work_logs', 'partners'), upload.array('files', 8), govFileUpload('work_log'));
 
 // === Quà tặng đối ngoại (gắn cơ quan hoặc nhân sự) — giá trị mật. LƯU Ý: `owner_id`/`owner_type`
 // trên bảng `gifts` là NGƯỜI/CƠ QUAN NHẬN quà (nghiệp vụ), KHÁC với chủ sở hữu RBAC — PolicyEngine
@@ -1317,14 +1329,8 @@ router.delete('/awards/:id/participations/:pid', (req, res) => {
 // Đính kèm thông báo (ảnh/PDF) — phục vụ qua /files/:id sẵn có, xóa qua /attachments/:aid
 // D13 (W1.FILE P2): award la entity Direct -- gate theo owner_id giong PUT /awards/:id, khong chi
 // gate tho theo role (truoc day bat ky executor nao cung upload duoc vao award nguoi khac tao).
-router.post('/awards/:id/files', upload.array('files', 8), (req, res) => {
-  const existing = db.prepare('SELECT * FROM awards WHERE id=?').get(req.params.id);
-  try {
-    policyService.assertWritable({ principal: req.principal, entity: 'award', action: 'edit', record: existing });
-  } catch (err) {
-    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên awards.');
-    throw err;
-  }
+// F24 remediation: authorization that da chay trong requireFileWrite() truoc upload.array().
+router.post('/awards/:id/files', requireFileWrite('award', 'awards', 'awards'), upload.array('files', 8), (req, res) => {
   const files = req.files || [];
   if (!files.length) return res.status(400).json({ error: 'Không có file nào.' });
   const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary)
@@ -1647,14 +1653,8 @@ router.delete('/events/:id/costs/:cid', (req, res) => {
   db.prepare('DELETE FROM event_costs WHERE id=? AND event_id=?').run(req.params.cid, req.params.id); res.json({ ok: true });
 });
 // D13 (W1.FILE P2): event la entity Direct -- gate theo owner_id giong PUT /events/:id.
-router.post('/events/:id/files', upload.array('files', 10), (req, res) => {
-  const existing = db.prepare('SELECT * FROM events WHERE id=?').get(req.params.id);
-  try {
-    policyService.assertWritable({ principal: req.principal, entity: 'event', action: 'edit', record: existing });
-  } catch (err) {
-    if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền edit trên events.');
-    throw err;
-  }
+// F24 remediation: authorization that da chay trong requireFileWrite() truoc upload.array().
+router.post('/events/:id/files', requireFileWrite('event', 'events', 'events'), upload.array('files', 10), (req, res) => {
   const kind = (req.query.kind || 'doc').slice(0, 40);
   const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary) VALUES ('event', ?, ?, ?, ?, ?, 0)`);
   for (const f of (req.files || [])) ins.run(req.params.id, kind, f.filename, f.originalname, f.mimetype);

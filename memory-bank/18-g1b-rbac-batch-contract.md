@@ -928,3 +928,46 @@ Exit criteria: full regression (test:security 6/6, sqlite 803 total/795 pass/8 s
       cong bo W1 DONG HOAN TOAN (thoa man `/goal` "lam het cac van de cua W1").
 Expected commit range/count: 1 commit.
 ```
+
+## Batch F24-remediation (2026-08-31) -- fix P1 tu Codex audit tren bundle dong W1 (22-audit-bundle-w1-close.md)
+
+```md
+Batch-ID: F24-remediation
+Goal: Codex audit bundle `22-audit-bundle-w1-close.md` tra BLOCKED hep voi 1 finding P1 (F24):
+      authorization cua 4 route upload file (award/event/agreement/work_log) chay SAU khi Multer
+      da ghi file that vao dia -- deny van tao file mo coi, vi pham nguyen tac "deny phai khong co
+      side-effect". Batch nay CHI sua dung blocker do, khong mo lai toan bo W1.FILE-P2 (theo
+      `17-fast-track-collaboration.md` §8 -- Codex re-audit tap trung dung finding, khong mo lai
+      ca batch).
+In scope: (a) middleware moi `requireFileWrite(entity, table, moduleLabel)` (`server/routes.js`)
+      -- fetch record that + goi `policyService.assertWritable()` TRUOC `upload.array(...)`, chi
+      `next()` khi hop le; dat middleware nay truoc `upload.array()` cho ca 4 route agreement/
+      work_log/award/event; xoa logic `assertWritable` trung lap trong `govFileUpload()`/2 handler
+      inline award+event (da chay trong middleware, khong can kiem lai). Giu nguyen message loi
+      403 goc tung route qua tham so `moduleLabel` ('partners' cho agreement/work_log, 'awards'/
+      'events' cho 2 route inline) -- khong doi hanh vi ngoai viec them side-effect-safety. (b) Test
+      moi `server/test/integration-file-write-authz.test.js` (8 test table-driven ca 2 driver): moi
+      entity co case deny (executor upload vao record nguoi khac -> 403 + attachments KHONG tang +
+      so file UPLOAD_DIR KHONG tang) va case doi chung (executor upload vao record chinh minh ->
+      200 + CA 2 so lieu tang dung 1, xac nhan phep dem that su nhay). Da thi nghiem revert tam fix
+      (dua assertWritable() tro lai sau upload.array()) de xac nhan test bat dung loi F24 (403 van
+      dung nhung file-count tang 0->1) truoc khi coi test la du.
+Out of scope: khong mo rong sang cac phat hien khac ngoai F24 (ACCEPTED WITH BACKLOG tren bundle
+      truoc van giu nguyen); khong doi hanh vi 403/200 da co (D13-086..089 van pass nguyen ven,
+      khong sua assertion); khong dong lai toan bo W1 trong doc truoc khi Codex re-audit xac nhan.
+Behavior mode: TARGET-CHANGE hep (sua thu tu middleware, khong doi ket qua cuoi cung 403/200 cho
+      client -- chi loai bo side-effect ghi file khi deny).
+Risk hotspots: dam bao 4 route deu duoc phu (grep lai `upload.array` trong routes.js sau fix xac
+      nhan ca 4 call site deu co `requireFileWrite(...)` dung truoc no); dam bao message loi 403
+      khong doi (test cu D13-086..089 khong check message nhung van chay lai de xac nhan status
+      khong doi).
+Required tests: `integration-file-write-authz.test.js` (8 test moi, F24 deny + doi chung cho 4
+      entity, ca sqlite lan mysql driver) + full regression cu (D13-086..089, D13-078..092...) van
+      pass nguyen ven khong sua assertion nao.
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 811 total/803 pass/8 skip (+8), mysql 811
+      total/810 pass/1 skip (+8), verify-gate1-mapping 148/148, verify-g0.mjs PASS toan bo 9 check,
+      verify-g0-selftest 6/6, git diff --check sach) deu xanh. Gui lai Codex re-audit tap trung
+      dung F24 -- khong tu tuyen bo W1 CLOSED trong doc truoc khi co ket qua re-audit.
+Expected commit range/count: 1 commit.
+```

@@ -1,15 +1,24 @@
 # Evidence Bundle tổng hợp — đóng W1 (W1.POLICY.2 read+write, W1.FILE-P2, W1.ADMIN) — gửi Codex audit
 
-> **Trạng thái: CHỜ CODEX AUDIT (gửi 2026-08-31).** Bundle này gộp 4 batch liên tiếp thành 1
-> audit-closure bundle theo đúng cơ chế §12/§14 `17-fast-track-collaboration.md` (điều kiện: không
-> batch nào BLOCKED giữa chừng, không batch nào đụng lại phạm vi batch trước sau khi đóng, full
-> regression xanh một lần ở HEAD batch cuối). Đây là bundle audit **kế tiếp** sau
-> `21-audit-bundle-f15-rbac-exp-b1-b6.md` (Codex ACCEPTED WITH BACKLOG 2026-08-31, backlog P2/P3
-> chính là 4 batch trong bundle này: `W1.FILE` P2/P3, `W1.POLICY.2` phần còn lại, `W1.ADMIN`).
+> **Trạng thái: BLOCKED HẸP → ĐÃ FIX, CHỜ RE-AUDIT (cập nhật 2026-08-31).** Audit lần 1 (trên bundle
+> gốc dưới đây, commit range `2805020..70e5ed4`) trả **BLOCKED hẹp** với 1 finding P1 tái hiện được:
+> **F24** — 4 route upload file (award/event/agreement/work_log) chạy `assertWritable()` SAU khi
+> Multer đã ghi file thật vào `UPLOAD_DIR`, deny vẫn để lại file mồ côi trên đĩa. Remediation batch
+> `F24-remediation` (commit mới, xem mục "Remediation F24" cuối tài liệu) đã sửa đúng root cause
+> (authorization chạy TRƯỚC Multer) — theo `17-fast-track-collaboration.md` §8, Codex chỉ cần
+> re-audit tập trung đúng finding này, không mở lại toàn bộ 4 batch gốc. Nội dung bundle gốc bên
+> dưới **giữ nguyên không sửa** (đúng nguyên tắc audit trail); phần fix được ghi thêm ở cuối.
 >
-> Sau bundle này, theo `04-ROADMAP.md`, roadmap item **W1 được Claude tự tuyên bố đóng hoàn toàn**
-> (không còn sub-item nào mở phía Claude ở cả 2 nhánh RBAC v2 và security) — đây là bundle audit
-> đang chờ Codex xác nhận trước khi coi tuyên bố đó là CLOSED chính thức.
+> Bundle này gộp 4 batch liên tiếp thành 1 audit-closure bundle theo đúng cơ chế §12/§14
+> `17-fast-track-collaboration.md` (điều kiện: không batch nào BLOCKED giữa chừng, không batch nào
+> đụng lại phạm vi batch trước sau khi đóng, full regression xanh một lần ở HEAD batch cuối). Đây là
+> bundle audit **kế tiếp** sau `21-audit-bundle-f15-rbac-exp-b1-b6.md` (Codex ACCEPTED WITH BACKLOG
+> 2026-08-31, backlog P2/P3 chính là 4 batch trong bundle này: `W1.FILE` P2/P3, `W1.POLICY.2` phần
+> còn lại, `W1.ADMIN`).
+>
+> Sau bundle này (và sau khi F24 được re-audit xác nhận), theo `04-ROADMAP.md`, roadmap item **W1
+> được Claude tự tuyên bố đóng hoàn toàn** (không còn sub-item nào mở phía Claude ở cả 2 nhánh RBAC
+> v2 và security) — chỉ chính thức CLOSED sau khi Codex xác nhận cả bundle gốc lẫn fix F24.
 
 ## Batch-ID / commit range / HEAD
 
@@ -262,3 +271,67 @@ Sau bundle này, rà soát lại toàn bộ 2 bảng `W1.*` trong `04-ROADMAP.md
 **Không còn sub-item W1 nào ở trạng thái mở phía Claude.** Codex xác nhận bundle này (cùng bundle
 `21-audit-bundle-f15-rbac-exp-b1-b6.md` trước đó) là điều kiện cuối để coi roadmap item **W1
 CLOSED** chính thức thay vì chỉ là tự tuyên bố của Claude.
+
+---
+
+## Remediation F24 (2026-08-31) — phạm vi hẹp, chỉ sửa đúng blocker Codex chỉ ra
+
+**Status:** ĐÃ FIX, gửi Codex re-audit tập trung đúng finding này (không mở lại 4 batch gốc ở trên,
+theo `17-fast-track-collaboration.md` §8).
+
+**Evidence Codex đưa ra (audit lần 1):** HTTP thật trên SQLite tạm — executor upload vào `award`
+của admin nhận đúng `403`, nhưng số file trong `UPLOAD_DIR` tăng `0 → 1`. Root cause: 4 route
+(`routes.js` — agreements, work-logs, awards, events) đăng ký `upload.array(...)` (Multer, disk
+storage — `uploads.js:8`) TRƯỚC handler; `assertWritable()` nằm BÊN TRONG handler nên chạy SAU khi
+Multer đã ghi file — deny vẫn để lại file mồ côi trên đĩa.
+
+**Fix áp dụng đúng theo quyết định Codex:**
+1. Middleware mới `requireFileWrite(entity, table, moduleLabel)` (`server/routes.js`) — fetch
+   record thật + `policyService.assertWritable({principal, entity, action:'edit', record})` TRƯỚC
+   `upload.array(...)`, trả 403 và KHÔNG gọi `next()` nếu không hợp lệ.
+2. Đặt `requireFileWrite(...)` làm middleware đầu tiên cho `POST /agreements/:id/files`,
+   `POST /work-logs/:id/files`, `POST /awards/:id/files`, `POST /events/:id/files` — trước
+   `upload.array()`. Xoá logic `assertWritable` trùng lặp còn lại trong `govFileUpload()` và 2
+   handler inline award/event (đã pass ở middleware, không cần kiểm lại). Giữ nguyên message lỗi
+   403 gốc từng route qua tham số `moduleLabel` (`'partners'` cho agreement/work_log — đúng
+   generic message cũ của `govFileUpload`; `'awards'`/`'events'` cho 2 route inline).
+3. Test mới `server/test/integration-file-write-authz.test.js` — 8 test table-driven (cả SQLite lẫn
+   MySQL driver), cho mỗi entity (award/event/agreement/work_log): case deny (executor upload vào
+   record người khác → 403 + row `attachments` KHÔNG tăng + số file `UPLOAD_DIR` KHÔNG tăng) và
+   case đối chứng (executor upload vào record chính mình → 200 + CẢ 2 số liệu tăng đúng 1 — xác
+   nhận phép đếm trước/sau thật sự nhạy với thay đổi, không phải assertion luôn pass). Đã thí
+   nghiệm revert tạm fix (đưa `assertWritable()` trở lại sau `upload.array()`, y hệt bug gốc) để
+   xác nhận test bắt đúng: `403` vẫn đúng nhưng file-count tăng `0→1` — test FAIL đúng chỗ cần FAIL
+   — trước khi coi test là đủ, rồi khôi phục lại fix.
+4. Full regression chạy lại đúng 1 lần ở HEAD sau fix.
+
+**Commands and exact results:**
+
+| Suite | Kết quả |
+|---|---|
+| Security | 6/6 pass |
+| SQLite integration | 811 total / 803 pass / 8 skip (+8 so với bundle gốc) |
+| MySQL integration | 811 total / 810 pass / 1 skip (+8 so với bundle gốc) |
+| Route mapping | 148/148 PASS (không đổi — F24 không thêm/bớt route) |
+| `scripts/verify-g0.mjs` | PASS toàn bộ 9 check |
+| `verify-g0-selftest` | 6/6 pass |
+| `git diff --check` | sạch |
+
+**Changed files:** `server/routes.js` (middleware `requireFileWrite` mới + 4 call site + xoá check
+trùng lặp trong 3 handler); `server/test/integration-file-write-authz.test.js` (mới, 8 test).
+`01-audit-findings.md` (§F24 mới), `04-ROADMAP.md` (execution update + hàng `W1.FILE`),
+`15-changelog.md`, `18-g1b-rbac-batch-contract.md` (batch contract `F24-remediation`) — docs only,
+không phải test/product.
+
+**Behavior changes:** deny (`403`) không còn side-effect ghi file vào `UPLOAD_DIR` — kết quả HTTP
+cuối cùng cho client (`403`/`200`) KHÔNG đổi so với trước, D13-086..089/D13-078..092 vẫn pass
+nguyên vẹn không sửa assertion nào. Message lỗi 403 giữ nguyên từng route (không đổi).
+
+**Out-of-scope:** không mở rộng sang finding nào khác ngoài F24 — 4 batch gốc (W1.POLICY.2 read+
+write, W1.FILE-P2, W1.ADMIN) giữ nguyên nội dung không sửa lại.
+
+**Rollback path:** 1 commit độc lập, `git revert` an toàn — chỉ hoàn tác thứ tự middleware, không
+entity/route nào khác phụ thuộc vào `requireFileWrite()`.
+
+**Worktree status:** `git status --short` sạch tại thời điểm gửi remediation này; không có file
+unrelated pre-existing nào lẫn vào commit.

@@ -2663,3 +2663,29 @@ Theo `/goal` "làm hết các vấn đề của W1" — batch contract đầy đ
   `verify-g0-selftest` 6/6, `git diff --check` sạch.
 - **`W1.ADMIN` là sub-item cuối cùng còn mở của `W1`** — sau khi rà soát lại toàn bộ bảng `W1.*`
   trong `04-ROADMAP.md`, không còn sub-item nào khác ở trạng thái mở: **W1 đóng hoàn toàn.**
+
+## Wave 1: batch F24-remediation — Codex audit BLOCKED hẹp trên bundle đóng W1 (P1: deny upload có side-effect)
+
+Codex audit `22-audit-bundle-w1-close.md` trả **BLOCKED hẹp** (không mở lại toàn batch, đúng
+`17-fast-track-collaboration.md` §8): **F24 (P1)** — 4 route upload file (award/event/agreement/
+work_log) chạy `assertWritable()` SAU khi Multer đã ghi file thật vào `UPLOAD_DIR` — tái hiện thật:
+executor upload vào award của admin nhận đúng `403` nhưng số file trên đĩa vẫn tăng `0→1`, tạo file
+mồ côi không có row `attachments` quản lý, vi phạm nguyên tắc "deny phải không có side-effect".
+
+- **Root cause:** batch `W1.FILE-P2` đặt `policyService.assertWritable()` BÊN TRONG handler, đứng
+  SAU `upload.array(...)` (Multer, disk storage) trong thứ tự middleware Express — Multer luôn chạy
+  trước, ghi file xong mới tới lượt authorization.
+- **Fix:** middleware mới `requireFileWrite(entity, table, moduleLabel)` (`server/routes.js`) — fetch
+  record thật + `assertWritable()` TRƯỚC `upload.array()`, chỉ `next()` khi hợp lệ. Đặt middleware
+  này làm bước đầu tiên cho cả 4 route; xoá check trùng lặp trong `govFileUpload()` và 2 handler
+  inline award/event. Giữ nguyên message lỗi 403 gốc từng route qua tham số `moduleLabel`.
+- Test mới: `server/test/integration-file-write-authz.test.js` (8 test table-driven, cả 2 driver) —
+  mỗi entity: case deny (executor upload vào record người khác → 403 + `attachments` KHÔNG tăng +
+  file vật lý trong `UPLOAD_DIR` KHÔNG tăng) và case đối chứng (upload vào record chính mình → 200
+  + cả 2 số liệu tăng đúng 1, xác nhận phép đếm thật sự nhạy). Đã thí nghiệm revert tạm fix để xác
+  nhận test bắt đúng lỗi F24 (403 vẫn đúng nhưng file-count tăng `0→1`) trước khi coi test là đủ.
+- Verify: `test:security` 6/6, SQLite 811 total/803 pass/8 skip (+8), MySQL 811 total/810 pass/1
+  skip (+8), `test:verify-gate1-mapping` 148/148, `verify-g0.mjs` PASS toàn bộ 9 check,
+  `verify-g0-selftest` 6/6, `git diff --check` sạch.
+- **Đã fix, chờ Codex re-audit tập trung đúng F24** — chưa tự tuyên bố W1 CLOSED chính thức trong
+  tài liệu cho tới khi có kết quả re-audit (bundle `22-audit-bundle-w1-close.md` cập nhật kèm fix).
