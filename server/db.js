@@ -1031,4 +1031,4 @@ function closeDb() {
   return typeof db.close === 'function' ? db.close() : undefined;
 }
 
-module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb, isIgnorableMigrationError, migrate, withTransaction };
+module.exports = { db, audit, UPLOAD_DIR, metaGet, metaSet, closeDb, isIgnorableMigrationError, migrate, withTransaction, isMysql: DB_CLIENT === 'mysql' };

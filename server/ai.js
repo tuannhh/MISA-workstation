@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { db, withTransaction } = require('./db');
+const { db, withTransaction, isMysql } = require('./db');
 const gemini = require('./gemini');
 const cfg = require('./config');
 const { requireAuth, requirePerm } = require('./auth');
@@ -217,12 +217,20 @@ class ConfirmConflictError extends Error {}
 // tro toi 1 ban ghi da mat/da doi. Doc lai dung field da snapshot va so sanh truoc khi ghi bat ky
 // gi -- coi day la "revision" thuc te (toan bo field nguoi dung da thay khi xac nhan), khong can
 // them cot revision rieng + instrument moi duong ghi people/organizations trong toan bo code base.
+// F28: read nay chay TRONG withTransaction ngay sau claim -- tren MySQL nhieu instance (moi
+// instance 1 connection rieng), plain SELECT khong giu lock nen instance khac van co the
+// UPDATE/DELETE parent giua luc doc va luc INSERT interaction o day (that TOCTOU that, khac F27
+// vi F27 chi bat trong cung 1 process). SELECT ... FOR UPDATE bat instance kia phai cho toi khi
+// transaction nay COMMIT/ROLLBACK. SQLite khong ho tro FOR UPDATE va khong can: UPDATE claim ben
+// tren da lay write lock toan DB (SQLite chi co 1 writer tai 1 thoi diem).
 function fetchPersonSnapshot(id) {
-  return db.prepare(`SELECT p.id, p.full_name AS name, o.name AS org_name, p.relationship_score
-    FROM people p LEFT JOIN organizations o ON o.id=p.org_id WHERE p.id=?`).get(id);
+  const sql = `SELECT p.id, p.full_name AS name, o.name AS org_name, p.relationship_score
+    FROM people p LEFT JOIN organizations o ON o.id=p.org_id WHERE p.id=?${isMysql ? ' FOR UPDATE' : ''}`;
+  return db.prepare(sql).get(id);
 }
 function fetchOrgSnapshot(id) {
-  return db.prepare('SELECT id, name, org_type FROM organizations WHERE id=?').get(id);
+  const sql = `SELECT id, name, org_type FROM organizations WHERE id=?${isMysql ? ' FOR UPDATE' : ''}`;
+  return db.prepare(sql).get(id);
 }
 function snapshotDrifted(fresh, snap, fields) {
   if (!fresh) return true;

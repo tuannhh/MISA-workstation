@@ -324,3 +324,97 @@ test('confirm: quyen bi rut giua propose va confirm (downgrade role -> viewer, r
   db.prepare('UPDATE users SET role=? WHERE username=?').run('executor', execAUsername); // trả lại cho test sau
   await realFetch(`${baseUrl}/api/me`, { headers: { cookie: execACookie } });
 });
+
+// F28 (Codex re-audit 2026-08-31, P1 release blocker): fetchPersonSnapshot/fetchOrgSnapshot
+// (server/ai.js) doc plain SELECT trong transaction confirm -- trong 1 process (test suite nay,
+// SQLite, hoac MySQL 1 instance) khong sao vi withTransaction dam bao khong co code handler nao
+// khac chen vao giua CUNG process. Nhung tren MySQL nhieu instance (vd nhieu Cloud Run replica),
+// moi instance la 1 process/connection RIENG -- plain SELECT khong giu lock nen instance khac
+// van UPDATE/DELETE duoc parent giua luc doc va luc INSERT interaction. Fix: SELECT ... FOR UPDATE
+// cho MySQL (server/ai.js fetchPersonSnapshot/fetchOrgSnapshot).
+//
+// Khong the dung ngay HTTP route /interaction-voice-confirm de "khoa truoc, request khac cho" y
+// het nhu production: MySQLSyncDatabase (server/mysql-sync.js) chan CHINH main thread cua process
+// test bang Atomics.wait dong bo cho toi khi query MySQL xong. Neu 1 connection khac (vd connA)
+// giu lock TRUOC roi goi HTTP confirm() (chay tren CUNG process, cung main thread), main thread se
+// dong bang trong luc cho MySQL cap lock -- nhung chinh main thread đó lai la noi duy nhat co the
+// chay code JS de COMMIT/ROLLBACK connA (mysql2/promise cung can main thread event loop) => tu
+// deadlock chinh test process, khong phai loi cua fix. Vi vay test nay xac minh dung co che ma fix
+// dua vao (SELECT ... FOR UPDATE tren MySQL that su khoa row toi cap dong bo giua 2 connection doc
+// lap) bang 2 connection mysql2/promise RIENG BIET khoi app -- dung dung cau SQL fix da them.
+if (isMysql) {
+  const mysql2 = require('mysql2/promise');
+  function rawMysqlConnConfig() {
+    const cfg = {
+      user: process.env.MYSQL_USER || 'pr_media',
+      password: process.env.MYSQL_PASSWORD || 'pr_media',
+      database: process.env.MYSQL_DATABASE || 'pr_media',
+      charset: 'utf8mb4',
+    };
+    cfg.host = process.env.MYSQL_HOST || '127.0.0.1';
+    cfg.port = Number(process.env.MYSQL_PORT || 3306);
+    return cfg;
+  }
+  function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+  // Race 1 promise voi timeout: neu promise chua settle sau `ms`, coi la "van dang bi chan"
+  // (khong reject -- chi bao hieu bang sentinel rieng, promise goc van tiep tuc cho ket qua that).
+  async function stillPendingAfter(promise, ms) {
+    const PENDING = Symbol('pending');
+    const winner = await Promise.race([promise, sleep(ms).then(() => PENDING)]);
+    return winner === PENDING;
+  }
+
+  test('F28: MySQL nhieu instance -- connection khac bi CHAN UPDATE parent cho toi khi transaction giu FOR UPDATE COMMIT', { skip: !isMysql }, async () => {
+    const pid = insertPerson(`F28 Lock Update ${Date.now()}`, 50);
+    const connA = await mysql2.createConnection(rawMysqlConnConfig());
+    try {
+      await connA.query('START TRANSACTION');
+      // Dung dung cau SQL fix da them (server/ai.js fetchPersonSnapshot) -- khoa row nay toi khi
+      // connA COMMIT/ROLLBACK.
+      await connA.query('SELECT relationship_score FROM people WHERE id=? FOR UPDATE', [pid]);
+
+      const connB = await mysql2.createConnection(rawMysqlConnConfig());
+      let blockedUpdateSettled = false;
+      const blockedUpdate = connB.query('UPDATE people SET relationship_score=? WHERE id=?', [99, pid])
+        .then((r) => { blockedUpdateSettled = true; return r; });
+
+      const stillBlocked = await stillPendingAfter(blockedUpdate, 400);
+      assert.equal(stillBlocked, true, 'connB.UPDATE phai con bi CHAN trong khi connA giu FOR UPDATE lock');
+      assert.equal(blockedUpdateSettled, false);
+
+      await connA.commit(); // giai phong lock -- dung luc nay connB.UPDATE moi duoc tiep tuc
+      await blockedUpdate; // phai resolve (khong con bi chan) ngay sau khi connA COMMIT
+      assert.equal(blockedUpdateSettled, true);
+      assert.equal(getPerson(pid).relationship_score, 99);
+      await connB.end();
+    } finally {
+      await connA.end();
+    }
+  });
+
+  test('F28: MySQL nhieu instance -- connection khac bi CHAN DELETE parent cho toi khi transaction giu FOR UPDATE ROLLBACK', { skip: !isMysql }, async () => {
+    const pid = insertPerson(`F28 Lock Delete ${Date.now()}`, 40);
+    const connA = await mysql2.createConnection(rawMysqlConnConfig());
+    try {
+      await connA.query('START TRANSACTION');
+      await connA.query('SELECT relationship_score FROM people WHERE id=? FOR UPDATE', [pid]);
+
+      const connB = await mysql2.createConnection(rawMysqlConnConfig());
+      let blockedDeleteSettled = false;
+      const blockedDelete = connB.query('DELETE FROM people WHERE id=?', [pid])
+        .then((r) => { blockedDeleteSettled = true; return r; });
+
+      const stillBlocked = await stillPendingAfter(blockedDelete, 400);
+      assert.equal(stillBlocked, true, 'connB.DELETE phai con bi CHAN trong khi connA giu FOR UPDATE lock');
+      assert.equal(blockedDeleteSettled, false);
+
+      await connA.rollback(); // giai phong lock qua ROLLBACK (khong phai chi COMMIT moi tha lock)
+      await blockedDelete;
+      assert.equal(blockedDeleteSettled, true);
+      assert.equal(getPerson(pid), undefined); // connB.DELETE da chay xong sau khi lock duoc tha
+      await connB.end();
+    } finally {
+      await connA.end();
+    }
+  });
+}
