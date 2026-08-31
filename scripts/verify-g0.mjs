@@ -341,6 +341,29 @@ function verifyNoLegacyMasking() {
   pass('routes.js: 0 legacy masking call (rbac.maskList/maskRecord/maskMoney/senGroups/senVisible/canMoney) -- PolicyEngine la choke point duy nhat');
 }
 
+// W1.POLICY.2 write-side (F23): moi route ghi INSERT INTO important_dates phai gate theo dung
+// module/table that ('reminders'), khong duoc muon quyen 'view' cua module cha (partners/awards/
+// events) -- dung chinh loi thuc te tim thay (R028/R071/R096 truoc day dung requirePerm(<module
+// cha>,'view'), viewer khong co reminders:create van ghi duoc qua loi tat). Scope hep, chi kiem
+// dung 1 bang nay (khong phai bo may tong quat map bang->module, tranh false-positive).
+function verifyImportantDatesGate() {
+  const source = read('server/routes.js');
+  const routeStarts = [...source.matchAll(/router\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]([^\n]*)/g)];
+  const offenders = [];
+  for (let i = 0; i < routeStarts.length; i += 1) {
+    const match = routeStarts[i];
+    const start = match.index;
+    const end = i + 1 < routeStarts.length ? routeStarts[i + 1].index : source.length;
+    const body = source.slice(start, end);
+    if (!body.includes('INSERT INTO important_dates')) continue;
+    const permission = match[3].match(/requirePerm\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
+    const module = permission ? permission[1] : null;
+    if (module !== 'reminders') offenders.push(`${match[1].toUpperCase()} ${match[2]} (module=${module})`);
+  }
+  ok(!offenders.length, `route ghi important_dates nhung khong gate theo reminders: ${offenders.join(', ')}`);
+  pass('routes.js: mọi route ghi important_dates đều gate theo requirePerm(reminders,*)');
+}
+
 function verifyRemediationScope() {
   const baseArg = process.argv.find((arg) => arg.startsWith('--base='));
   if (!baseArg) return;
@@ -368,6 +391,7 @@ function main() {
     verifySchema();
     verifyErrorExample();
     verifyNoLegacyMasking();
+    verifyImportantDatesGate();
     verifyMarkdownLinks();
     verifyRemediationScope();
     console.log('\nG0 verification checks passed.');

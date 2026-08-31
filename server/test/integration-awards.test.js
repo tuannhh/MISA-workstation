@@ -261,6 +261,13 @@ test('R071 not-found: award_id không tồn tại trả 404', async () => {
 test('R071 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/awards/1/remind', { auth: false })).status, 401);
 });
+// D13-091 — batch W1.POLICY.2 write-side (F23): route ghi important_dates trước đây gate theo
+// 'awards','view' thay vì 'reminders','create' thật. Nay đã sửa, viewer trả 403.
+test('D13-091: viewer (không có reminders:create) trả 403 khi tạo nhắc hạn nộp hồ sơ; executor vẫn 200', async () => {
+  const id = await createAward({ submission_deadline: '2027-01-15' });
+  assert.equal((await call('POST', `/api/awards/${id}/remind`, { body: { lead_days: 10 }, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/awards/${id}/remind`, { body: { lead_days: 10 }, as: executorCookie })).status, 200);
+});
 
 // ---------------------------------------------------------------------------
 // D13-052..058 — batch RBAC-EXP-B4 (2/6 entity Direct — award/award_participation): award.cost là

@@ -499,7 +499,10 @@ router.delete('/partners/:id/fees/:fid', (req, res) => {
   db.prepare('DELETE FROM association_fees WHERE id=? AND org_id=?').run(req.params.fid, req.params.id);
   res.json({ ok: true });
 });
-router.post('/partners/:id/fees/:fid/remind', requirePerm('partners', 'view'), (req, res) => {
+// D13 (W1.POLICY.2 write-side): ghi vao important_dates -- phai gate theo 'reminders','create'
+// (dung module/bang duoc ghi), khong phai 'partners','view' (truoc day viewer, khong co
+// reminders:create, van tao duoc important_dates qua loi tat nay).
+router.post('/partners/:id/fees/:fid/remind', requirePerm('reminders', 'create'), (req, res) => {
   const f = db.prepare('SELECT f.*, o.name org_name FROM association_fees f JOIN organizations o ON o.id=f.org_id WHERE f.id=? AND f.org_id=?').get(req.params.fid, req.params.id);
   if (!f || !f.due_date) return res.status(400).json({ error: 'Khoản hội phí chưa có hạn đóng.' });
   const lead = Math.max(1, parseInt(req.body && req.body.lead_days) || 14);
@@ -1328,7 +1331,8 @@ router.post('/awards/:id/files', upload.array('files', 8), (req, res) => {
 });
 
 // Tạo nhanh nhắc hạn nộp hồ sơ -> vào "Sự kiện sắp tới"
-router.post('/awards/:id/remind', requirePerm('awards', 'view'), (req, res) => {
+// D13 (W1.POLICY.2 write-side): tuong tu fees/:fid/remind -- gate theo 'reminders','create'.
+router.post('/awards/:id/remind', requirePerm('reminders', 'create'), (req, res) => {
   const a = db.prepare('SELECT * FROM awards WHERE id=?').get(req.params.id);
   if (!a) return res.status(404).json({ error: 'Không tìm thấy' });
   if (!a.submission_deadline) return res.status(400).json({ error: 'Giải thưởng chưa có hạn nộp hồ sơ.' });
@@ -1652,7 +1656,8 @@ router.post('/events/:id/files', upload.array('files', 10), (req, res) => {
   for (const f of (req.files || [])) ins.run(req.params.id, kind, f.filename, f.originalname, f.mimetype);
   res.json({ ok: true });
 });
-router.post('/events/:id/remind', requirePerm('events', 'view'), (req, res) => {
+// D13 (W1.POLICY.2 write-side): tuong tu fees/:fid/remind -- gate theo 'reminders','create'.
+router.post('/events/:id/remind', requirePerm('reminders', 'create'), (req, res) => {
   const e = db.prepare('SELECT * FROM events WHERE id=?').get(req.params.id);
   if (!e || !e.start_time) return res.status(400).json({ error: 'Sự kiện chưa có ngày bắt đầu.' });
   const lead = Math.max(1, parseInt(req.body && req.body.lead_days) || 7);

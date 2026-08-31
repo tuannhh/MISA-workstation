@@ -292,6 +292,13 @@ test('R096 invalid CHARACTERIZATION: event_id không tồn tại cũng trả 400
 test('R096 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/events/1/remind', { auth: false })).status, 401);
 });
+// D13-092 — batch W1.POLICY.2 write-side (F23): route ghi important_dates trước đây gate theo
+// 'events','view' thay vì 'reminders','create' thật. Nay đã sửa, viewer trả 403.
+test('D13-092: viewer (không có reminders:create) trả 403 khi tạo nhắc lịch sự kiện; executor vẫn 200', async () => {
+  const id = await createEvent({ start_time: '2026-10-01T09:00:00Z' });
+  assert.equal((await call('POST', `/api/events/${id}/remind`, { body: { lead_days: 5 }, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/events/${id}/remind`, { body: { lead_days: 5 }, as: executorCookie })).status, 200);
+});
 
 // ---------------------------------------------------------------------------
 // D13-059..065 — batch RBAC-EXP-B4 (1/6 entity Inherited — event_cost, + entity Direct event):

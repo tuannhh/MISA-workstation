@@ -28,19 +28,19 @@ awk -F'|' 'NR>4 && $2 ~ /R[0-9]{3}/ {gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$5
 
 | Module | super_admin | pr_staff | Route ID (danh sách tường minh, KHÔNG dùng range che lấp module khác) | Đếm |
 |---|---|---|---|---|
-| partners | view/create/edit/delete | view/create/edit/delete (sensitive theo `sensitive_perms`) | R001-R036, R046-R049, R097 | 41 |
-| reminders | view/create/edit/delete | view/create/edit/delete | R038,R039,R040,R041,R042,R057,R058,R059,R060,R061,R137,R138 | 12 |
+| partners | view/create/edit/delete | view/create/edit/delete (sensitive theo `sensitive_perms`) | R001-R027, R029-R036, R046-R049, R097 | 40 |
+| reminders | view/create/edit/delete | view/create/edit/delete | R028,R038,R039,R040,R041,R042,R057,R058,R059,R060,R061,R071,R096,R137,R138 | 15 |
 | interactions | view/create/edit/delete | view/create/edit/delete | R043,R044,R045,R136 | 4 |
 | reports | view | **[] — không có quyền nào** | R050,R051,R052,R053,R054,R055,R056 | 7 |
-| awards | view/create/edit/delete | view/create/edit/delete | R062-R071, R139, R140 | 12 |
+| awards | view/create/edit/delete | view/create/edit/delete | R062-R070, R139, R140 | 11 |
 | suppliers | view/create/edit/delete | view/create/edit/delete | R072-R086 | 15 |
-| events | view/create/edit/delete | view/create/edit/delete | R087-R096, R141 | 11 |
+| events | view/create/edit/delete | view/create/edit/delete | R087-R095, R141 | 10 |
 | admin | view/create/edit/delete | **[] — không có quyền nào** | R099-R103 | 5 |
 | monitoring | view/create/edit/delete | view/create/edit/delete | R104-R135 | 32 |
 | dashboard | view | view | R098 | 1 |
 | *(không thuộc module nào — đặc biệt)* | — | — | R037 (`requireAuth` qua router — file serving đa-owner), R142 (`requireAuth` qua router, ai/status), R143 (public login), R144 (không auth middleware; logout destroy session nếu có), R145 (handler `auth.me` tự kiểm tra session) | 5 |
 
-**Tổng: 41+12+4+7+12+15+11+5+32+1+5 = 145.** Không route nào trùng 2 module (khác lỗi lần 1: `R096` chỉ thuộc `events`, không thuộc `reminders`; `R001/R046-R049/R097` thuộc `partners` — trước đây bị lọt hoàn toàn khỏi bảng). **N2 ĐÃ SỬA (Wave 1, 2026-08-30):** `R098` tách khỏi hàng đặc biệt sang module `dashboard` riêng (`requirePerm('dashboard','view')`, cấp cho cả 2 role).
+**Tổng: 40+15+4+7+11+15+10+5+32+1+5 = 145.** Không route nào trùng 2 module (khác lỗi lần 1: `R096` chỉ thuộc `events`, không thuộc `reminders`; `R001/R046-R049/R097` thuộc `partners` — trước đây bị lọt hoàn toàn khỏi bảng). **N2 ĐÃ SỬA (Wave 1, 2026-08-30):** `R098` tách khỏi hàng đặc biệt sang module `dashboard` riêng (`requirePerm('dashboard','view')`, cấp cho cả 2 role). **SỬA 2026-08-31 (batch `W1.POLICY.2 write-side`, F1-class module/action mismatch):** `R028`/`R071`/`R096` chuyển từ `partners`/`awards`/`events` (đều đang `view`) sang `reminders` (`create`) — cả 3 route ghi `important_dates` nhưng trước đây gate theo quyền `view` của module cha thay vì `reminders:create` thật, khiến `viewer` (không có `reminders:create`) vẫn tạo được nhắc lịch qua lối tắt này. Xem `01-audit-findings.md` §F23.
 
 > **Sửa cụ thể theo evidence Codex:** `R046-R049` (bookings) và `R097` (press-overview) dùng `requirePerm('partners', ...)` thật trong source (`server/routes.js:611,618,623,1148`), không phải route riêng biệt — nay đã gộp đúng vào `partners`. `R001` (assignable-users) cũng `partners:view` (`routes.js:82`).
 

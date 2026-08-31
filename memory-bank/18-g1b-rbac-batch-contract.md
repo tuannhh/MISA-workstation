@@ -821,3 +821,53 @@ Exit criteria: full regression (test:security 6/6, sqlite 785 total/777 pass/8 s
       `04-ROADMAP.md`/`01-audit-findings.md` §F21.
 Expected commit range/count: 1 commit.
 ```
+
+## Batch W1.POLICY.2-write-side (2026-08-31) -- dong phan WRITE con lai cua W1.POLICY.2
+
+```md
+Batch-ID: W1.POLICY.2-write-side
+Goal: theo `/goal` "lam het cac van de cua W1" -- dong phan WRITE con lai cua roadmap item
+      `W1.POLICY.2` (phan READ da dong o batch W1.POLICY.2 truoc). Truoc khi code, chay 1 audit
+      doc lap (agent) quet TOAN BO route ghi (POST/PUT/DELETE) trong routes.js, doi chieu module
+      khai o requirePerm() voi bang thuc su bi ghi -- tim dung loai loi ma "CI static rule cam raw
+      SQL ghi field ngoai policy" (mo ta roadmap) muon chan.
+In scope: (a) Audit tim ra 3 route that: `POST /partners/:id/fees/:fid/remind` (R028), `POST
+      /awards/:id/remind` (R071), `POST /events/:id/remind` (R096) deu `INSERT INTO
+      important_dates` nhung dang ky voi `requirePerm(<module cha>,'view')` thay vi
+      `requirePerm('reminders','create')` nhu route chinh thong `POST /reminders` (R040) da dung
+      dung. Risk that: vai tro `viewer` co `<module cha>:view` nhung KHONG co `reminders:create`
+      (MATRIX) -- viewer van tao duoc important_dates qua loi tat nay, sai ranh gioi quyen. (b) Sua
+      ca 3 route sang `requirePerm('reminders','create')` -- khong anh huong executor/admin/super_
+      admin (da co san reminders:create). (c) CI guard moi
+      `scripts/verify-g0.mjs#verifyImportantDatesGate()`: quet moi route co than ham chua `INSERT
+      INTO important_dates`, bat buoc dang ky `requirePerm('reminders',*)` -- pham vi HEP co chu y
+      (chi 1 bang, khong phai bo may tong quat map bang->module, tranh false-positive giong tinh
+      than `verifyNoLegacyMasking()`). Da thu nghiem bang cach revert tam 1 route de xac nhan
+      verifier bat duoc loi truoc khi coi la du. (d) `07-route-catalog.md` sua R028/R071/R096;
+      `08-permission-matrix.md` Section A: chuyen 3 route nay tu partners/awards/events sang
+      reminders (dem lai: partners 41->40, awards 12->11, events 11->10, reminders 12->15, tong
+      van 145).
+Out of scope: KHONG xay wrapper `authorizedInsert/Update` tong quat (phan con lai cua mo ta goc
+      W1.POLICY.2 trong roadmap) -- audit doc lap xac nhan KHONG con write-bypass nao khac trong
+      routes.js (10 nhom bypass goc cua F1 da dong het qua RBAC-EXP-B1..B6, moi route ghi deu co
+      assertWritable/prepareCreate/prepareUpdate/moduleAdminOnlyGate/requirePerm dung truoc). Xay
+      them 1 lop wrapper thuan kien truc, khong co bug cu the nao thuc day, la premature
+      abstraction -- quyet dinh KHONG lam, ghi ro trong `01-audit-findings.md` §F23 thay vi am
+      tham bo qua. Toan bo W1.ADMIN -- xem xet rieng.
+Behavior mode: TARGET-CHANGE hep (SIET quyen) -- chi anh huong vai tro `viewer` tren dung 3 route
+      nay, khong doi hanh vi cho executor/admin/super_admin.
+Risk hotspots: doi module trong `requirePerm()` lam 3 route chuyen tu module partners/awards/
+      events sang reminders trong `08-permission-matrix.md` Section A -- phai cap nhat CA danh
+      sach route CUA CA 4 module lien quan (khong chi reminders) de giu dung nguyen tac "khong
+      dung range che lap module khac" da ghi trong file do, va giu tong 145 khong doi -- xac nhan
+      qua `node scripts/verify-g0.mjs` (Section A tu doi chieu catalog voi source) truoc khi coi la
+      xong, khong tu suy dien dem tay.
+Required tests: `integration-partners.test.js` D13-090, `integration-awards.test.js` D13-091,
+      `integration-events-dashboard.test.js` D13-092 -- moi route: viewer tra 403 (truoc day 200),
+      executor van 200 (khong regression).
+Allowed known-red/TODO: khong can.
+Exit criteria: full regression (test:security 6/6, sqlite 788 total/780 pass/8 skip, mysql 788
+      total/787 pass/1 skip, verify-gate1-mapping 145/145, verify-g0.mjs PASS bao gom
+      verifyImportantDatesGate moi, verify-g0-selftest 6/6, git diff --check sach) deu xanh.
+Expected commit range/count: 1 commit.
+```

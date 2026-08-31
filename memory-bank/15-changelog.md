@@ -2587,3 +2587,39 @@ của chính 4 entity này đã gate `owner_id` từ lâu (RBAC-EXP-B4/B6).
   skip (+4), `test:verify-gate1-mapping` 145/145, `verify-g0.mjs` PASS, `verify-g0-selftest` 6/6,
   `git diff --check` sạch. Đóng backlog P2 của `W1.FILE` — xem `01-audit-findings.md` §F21,
   `04-ROADMAP.md` hàng `W1.FILE`.
+
+## Wave 1: batch W1.POLICY.2-write-side — đóng phần WRITE còn lại của W1.POLICY.2 (F23, tự phát hiện)
+
+Theo `/goal` "làm hết các vấn đề của W1" — batch contract đầy đủ ở
+`18-g1b-rbac-batch-contract.md#batch-w1policy2-write-side-2026-08-31`. Trước khi code, chạy 1 audit
+độc lập (agent) quét toàn bộ route ghi trong `routes.js`, đối chiếu module khai ở `requirePerm()`
+với bảng thực sự bị ghi — đúng tinh thần "CI static rule cấm raw SQL ghi field ngoài policy" mà
+roadmap `W1.POLICY.2` mô tả.
+
+- **F23 (P2, tự phát hiện):** `POST /partners/:id/fees/:fid/remind` (R028), `POST
+  /awards/:id/remind` (R071), `POST /events/:id/remind` (R096) đều `INSERT INTO important_dates`
+  nhưng gate theo `requirePerm(<module cha>,'view')` thay vì `requirePerm('reminders','create')`
+  như route chính thống `POST /reminders` (R040) đã dùng đúng — `viewer` (có `<module cha>:view`
+  nhưng KHÔNG có `reminders:create` theo MATRIX) tạo được `important_dates` qua lối tắt này, sai
+  ranh giới quyền. Đã sửa cả 3 route; không ảnh hưởng executor/admin/super_admin (đã có sẵn
+  `reminders:create`). Chi tiết root-cause đầy đủ: `01-audit-findings.md` §F23.
+- CI guard mới: `scripts/verify-g0.mjs#verifyImportantDatesGate()` — mọi route có thân hàm chứa
+  `INSERT INTO important_dates` phải đăng ký `requirePerm('reminders',*)`. Phạm vi hẹp có chủ đích
+  (1 bảng, không phải bộ máy tổng quát map bảng→module) — đã thử nghiệm revert tạm 1 route để xác
+  nhận verifier bắt được lỗi trước khi coi là đủ.
+- `07-route-catalog.md` sửa R028/R071/R096; `08-permission-matrix.md` Section A: chuyển 3 route
+  này từ partners/awards/events sang reminders (đếm lại: partners 41→40, awards 12→11, events
+  11→10, reminders 12→15, tổng vẫn 145).
+- Test mới: `integration-partners.test.js` D13-090, `integration-awards.test.js` D13-091,
+  `integration-events-dashboard.test.js` D13-092 (viewer trả 403 — trước đây 200 — executor vẫn
+  200, không regression).
+- **Quyết định KHÔNG làm (ghi rõ, không âm thầm bỏ qua):** không xây wrapper
+  `authorizedInsert/Update` tổng quát (phần còn lại của mô tả gốc roadmap `W1.POLICY.2`) — audit
+  độc lập xác nhận KHÔNG còn write-bypass nào khác trong `routes.js` (10 nhóm bypass gốc của F1 đã
+  đóng hết qua RBAC-EXP-B1..B6). Xây thêm 1 lớp wrapper thuần kiến trúc, không có bug cụ thể nào
+  thúc đẩy, là premature abstraction theo đúng nguyên tắc kỹ thuật của dự án — xem quyết định đầy
+  đủ ở `01-audit-findings.md` §F23, `04-ROADMAP.md` hàng `W1.POLICY.2`.
+- Verify: `test:security` 6/6, SQLite 788 total/780 pass/8 skip (+3), MySQL 788 total/787 pass/1
+  skip (+3), `test:verify-gate1-mapping` 145/145, `verify-g0.mjs` PASS (bao gồm
+  `verifyImportantDatesGate` mới), `verify-g0-selftest` 6/6, `git diff --check` sạch. **Không còn
+  backlog nào của `W1.POLICY.2`.**

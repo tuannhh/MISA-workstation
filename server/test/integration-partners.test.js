@@ -613,6 +613,15 @@ test('R028 not-found: fid không tồn tại -> f=null -> cùng nhánh 400 "chư
 test('R028 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await call('POST', '/api/partners/1/fees/1/remind', { auth: false, body: {} })).status, 401);
 });
+// D13-090 — batch W1.POLICY.2 write-side: route ghi important_dates trước đây gate theo
+// 'partners','view' thay vì 'reminders','create' thật — viewer (không có reminders:create) vẫn
+// tạo được nhắc lịch qua lối tắt này (F23). Nay đã sửa, viewer trả 403.
+test('D13-090: viewer (không có reminders:create) trả 403 khi tạo nhắc hạn hội phí; executor vẫn 200', async () => {
+  const orgId = await createOrg();
+  const created = await (await call('POST', `/api/partners/${orgId}/fees`, { body: { year: 2027, due_date: '2027-12-31' } })).json();
+  assert.equal((await call('POST', `/api/partners/${orgId}/fees/${created.id}/remind`, { body: { lead_days: 10 }, as: viewerCookie })).status, 403);
+  assert.equal((await call('POST', `/api/partners/${orgId}/fees/${created.id}/remind`, { body: { lead_days: 10 }, as: executorCookie })).status, 200);
+});
 
 // ---------------------------------------------------------------------------
 // D13-071..077 — batch RBAC-EXP-B6 (batch CUỐI CÙNG, 6/6 entity Direct còn lại): sponsorship/
