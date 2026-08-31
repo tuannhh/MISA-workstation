@@ -14,6 +14,7 @@ const scheduler = require('./scheduler');
 const monitor = require('./monitor');
 const outbound = require('./safe-fetch');
 const { sendError } = require('./error-contract');
+const { buildInsert, buildUpdate, logEdit } = require('./db-helpers');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -39,21 +40,6 @@ function jsonField(data, key) {
   if (key in data && data[key] != null && typeof data[key] !== 'string') {
     data[key] = JSON.stringify(data[key]);
   }
-}
-function buildInsert(table, data) {
-  const keys = Object.keys(data);
-  const sql = `INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`;
-  return db.prepare(sql).run(...keys.map((k) => data[k]));
-}
-function buildUpdate(table, id, data) {
-  const keys = Object.keys(data);
-  if (!keys.length) return;
-  const sql = `UPDATE ${table} SET ${keys.map((k) => `${k}=?`).join(',')} WHERE id=?`;
-  return db.prepare(sql).run(...keys.map((k) => data[k]), id);
-}
-function logEdit(req, action, entity, id, detail) {
-  const u = req.session.user;
-  audit({ user_id: u.id, username: u.username, action, entity, entity_id: id, detail });
 }
 // Kỳ ngân sách phải dạng YYYY-MM (POST /budgets)
 function isValidBudgetPeriod(period) { return /^\d{4}-\d{2}$/.test(period || ''); }
