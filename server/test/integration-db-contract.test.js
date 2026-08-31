@@ -17,6 +17,7 @@ const TABLES = [
   'event_costs', 'association_fees', 'agreements', 'work_logs', 'gifts', 'benefit_usages',
   'supplier_transactions', 'supplier_contacts', 'scan_queries', 'sources', 'mentions',
   'competitors', 'monitor_alerts', 'scan_runs', 'sentiment_audit', 'app_meta', 'campaigns', 'field_visibility',
+  'voice_proposals',
 ];
 
 // Các cột này đại diện cho schema gốc + các migration từng gây lỗi thực tế. Không lặp toàn bộ
@@ -89,7 +90,7 @@ function columnNames(table) {
   return db.prepare(`PRAGMA table_info(\`${table}\`)`).all().map((row) => row.name);
 }
 
-test('DB-CONTRACT-001: canonical schema có đủ 35 bảng trên cả hai driver', () => {
+test('DB-CONTRACT-001: canonical schema có đủ 36 bảng trên cả hai driver', () => {
   assert.deepEqual(new Set(tableNames()), new Set(TABLES));
 });
 

@@ -1,7 +1,7 @@
 # Gate 1 — Bảng ánh xạ route/job → test (G1A.9)
 
 > Yêu cầu bắt buộc theo Codex C0.6 (`memory-bank/04-ROADMAP.md` §G1A): mapping
-> `route_id/business_rule_id → test_id → trạng thái` phủ đủ 145/145 route + mọi
+> `route_id/business_rule_id → test_id → trạng thái` phủ đủ 150/150 route + mọi
 > job/scheduler/monitor flow, là **exit criterion của toàn Gate 1**, không phải optional.
 >
 > `status` dùng 1 trong 4 giá trị: `TODO` (chưa viết test — trạng thái khởi tạo của mọi
@@ -12,7 +12,7 @@
 > dòng nào `TODO`.
 >
 > Cột `test_id`/`file` để trống (`—`) cho tới khi G1A.2–G1A.8 lần lượt viết test thật.
-> Nguồn route_id: `memory-bank/07-route-catalog.md` (đã xác nhận đúng 145/145, không
+> Nguồn route_id: `memory-bank/07-route-catalog.md` (đã xác nhận đúng 150/150, không
 > lọt/trùng, bằng `scripts/verify-g0.mjs`).
 >
 > **Quy ước `business_rule_id`/`test_id` (từ G1A.2, sau remediation round 1 theo audit
@@ -197,9 +197,11 @@
 | R146 | R146 | green | server/test/integration-auth-admin.test.js | happy(đọc cấu hình field-visibility module partners)/invalid(module không hỗ trợ 400)/unauthenticated/forbidden |
 | R147 | R147 | green | server/test/integration-auth-admin.test.js | happy(siết field Public-tier full_name xuống private, GET phản ánh đúng)/invalid(D13.2b: mở public field Restricted bank_name -> 400)/unauthenticated/forbidden |
 | R148 | R148 | green | server/test/integration-auth-admin.test.js | happy(gán lại owner_id booking qua policyService.prepareUpdate())/invalid(entity lạ 400; thiếu owner_id 400; owner_id user không active 400)/not-found(id không tồn tại 404)/unauthenticated/forbidden |
+| R149 | R149 | green | server/test/integration-voice-secure-command.test.js | happy(match 1 candidate -> confidence high, tạo proposal)/happy(2 candidate trùng tên -> confidence ambiguous, trả về cả 2, không tự chọn)/CHARACTERIZATION(suggested_score_delta AI đề xuất vượt biên bị kẹp [-10,10]) |
+| R150 | R150 | green | server/test/integration-voice-secure-command.test.js | happy(propose->confirm tạo interaction + đổi relationship_score đúng 1 lần)/forbidden(user khác không confirm được proposal của người khác)/invalid(proposal hết hạn -> 410)/happy(confirm 2 lần cùng idempotencyKey -> idempotent, không tạo trùng)/invalid(confirm 2 lần khác idempotencyKey -> 409 lần 2)/CHARACTERIZATION(relationship_score bị đổi song song giữa propose/confirm -> optimistic-concurrency CAS từ chối riêng phần điểm, interaction vẫn được tạo)/happy(không có suggested_score_delta -> không đụng people)/forbidden(quyền bị rút giữa propose/confirm -> re-check tại confirm, không tin quyền lúc propose) |
 | JOB-REMINDER | — | green | server/test/integration-jobs.test.js | happy(tạo log in-app đúng ngày/seq, emailed=0 vì mailer tắt trong test)/happy(gọi tuần tự lần 2 idempotent, không trùng)/CHARACTERIZATION G1A.4 R3-02C(reminder_log KHÔNG có UNIQUE trên date_id+occur_date+seq+channel+recipient_user_id -> DB cho phép chèn 2 dòng trùng hệt, xác nhận tiền đề race hiện tại, KHÔNG phải test hành vi đích)/happy(notify_repeat_count>1 sinh đủ seq) |
 | JOB-MONITOR-SCAN | — | green | server/test/integration-jobs.test.js | happy network-safe(runScan({triggeredBy:'auto'}) không truyền queryIds -> quét TẤT CẢ scan_queries enabled, khác route thủ công luôn yêu cầu query_ids)/happy(applySchedule() gọi lặp lại không leak timer — clearInterval() timer cũ trước khi tạo mới) |
-| DB-CONTRACT-001 | DB-CONTRACT-001 | green | server/test/integration-db-contract.test.js | canonical schema có đủ 34 bảng trên cả SQLite và MySQL |
+| DB-CONTRACT-001 | DB-CONTRACT-001 | green | server/test/integration-db-contract.test.js | canonical schema có đủ 36 bảng trên cả SQLite và MySQL |
 | DB-CONTRACT-002 | DB-CONTRACT-002 | green | server/test/integration-db-contract.test.js | các cột lõi + migration quan trọng (sensitive_perms, mode, matched_group, pos/neu/neg, award_id/event_id...) tồn tại trên cả driver |
 | DB-CONTRACT-003 | DB-CONTRACT-003 | green | server/test/integration-db-contract.test.js | unique users.username được thực thi + round-trip insert/select giữ đúng giá trị |
 | DB-CONTRACT-004 | DB-CONTRACT-004 | green | server/test/integration-db-contract.test.js | app_meta upsert cập nhật đúng một key trên cả driver |

@@ -21,7 +21,7 @@ Theo `mysql-sync.js:30-45`, khi gặp `CREATE TABLE`:
 - `INSERT OR IGNORE` → `INSERT IGNORE`; `ON CONFLICT(...) DO UPDATE SET value=excluded.value` (app_meta) và `...amount=excluded.amount, note=excluded.note` (budgets) → `ON DUPLICATE KEY UPDATE ...=VALUES(...)` (dòng 25-27) — **chỉ 2 pattern `ON CONFLICT` này được nhận diện regex cứng**; thêm `upsert` mới theo cú pháp khác sẽ KHÔNG được dịch và lỗi trên MySQL.
 - Prepared statement dùng object binding kiểu SQLite (`run({ name: value })` với placeholder `@name`) được adapter chuẩn hóa qua `bindSqliteNamedParams()` (`mysql-sync.js`) thành placeholder positional `?` trước khi gửi sang mysql2. Không truyền object named binding trực tiếp xuống worker: MySQL sẽ hiểu `@name` là session user variable và có thể ghi `NULL` mà không báo lỗi (F20).
 
-## B. Danh sách bảng đầy đủ (35 bảng — 34 Gate-0 + `field_visibility` thêm ở W1.RBAC.1, xem §E)
+## B. Danh sách bảng đầy đủ (36 bảng — 34 Gate-0 + `field_visibility` thêm ở W1.RBAC.1 + `voice_proposals` thêm ở W3.VOICE.SECURE-COMMAND, xem §E)
 
 Ký hiệu: **PK** khoá chính, **FK** khoá ngoại (kèm `ON DELETE`), **U** unique, cột không ghi rõ NOT NULL/DEFAULT nghĩa là cho phép NULL.
 
@@ -516,9 +516,25 @@ Chiến dịch truyền thông.
 | created_by | INTEGER | không FK |
 | created_at | TEXT NOT NULL DEFAULT datetime('now') | |
 
+### voice_proposals (`db.js`, thêm W3.VOICE.SECURE-COMMAND 2026-08-31)
+Proposal opaque cho luồng AI voice "chuẩn bị hành động, người dùng xác nhận 1 lần" (D14.4). Không có UI (route backend/API-only, lane Codex chưa dựng UI).
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| id | TEXT PK | token đối ngẫu (crypto random hex), không phải AUTOINCREMENT — id chính là "opaque identifier" theo D14.4 |
+| user_id | INTEGER NOT NULL, FK users(id) | gắn đúng 1 principal — confirm bởi user khác bị từ chối |
+| status | TEXT NOT NULL DEFAULT `'pending'` | `pending`\|`confirmed`\|`expired` (expired kiểm tra lazy qua `expires_at`, không có job dọn riêng) |
+| payload_json | TEXT NOT NULL | JSON: interaction đề xuất + candidate đã khớp (entity-match, có thể nhiều — mỗi candidate kèm `relationship_score` snapshot lúc chuẩn bị, dùng optimistic concurrency lúc xác nhận) + `suggested_score_delta` đã kẹp biên |
+| idempotency_key | TEXT | key client gửi kèm lúc xác nhận, chống double-submit |
+| result_interaction_id | INTEGER | gán sau khi xác nhận thành công |
+| created_at | TEXT NOT NULL DEFAULT datetime('now') | |
+| expires_at | TEXT NOT NULL | hạn dùng ngắn (mặc định 10 phút, `VOICE_PROPOSAL_TTL_MS`) |
+| confirmed_at | TEXT | |
+
+Index: `idx_voiceprop_user_status(user_id,status)`.
+
 ## C. Index chỉ tồn tại trên SQLite — KHÔNG có trên MySQL production
 
-`translate()` bỏ toàn bộ `CREATE INDEX` khi `DB_CLIENT=mysql` (`mysql-sync.js:29`). **22 index** khai báo trong `init()` (sửa lại — bản trước đếm sai "21"; xác nhận bằng parser trực tiếp trên `server/db.js`: `grep -c "CREATE INDEX IF NOT EXISTS" server/db.js` → 22, Codex round-3 re-audit R3-02A) **không tồn tại trên MySQL/Cloud SQL**. Ngoại lệ: cột `UNIQUE` (`budgets.period`, `mentions.link`, `assignments(user_id,subject_type,subject_id)`) vẫn có index ngầm vì MySQL tự tạo index cho `UNIQUE`/`PRIMARY KEY`. Đây là bẫy hiệu năng — xem [`14-known-traps.md`](14-known-traps.md).
+`translate()` bỏ toàn bộ `CREATE INDEX` khi `DB_CLIENT=mysql` (`mysql-sync.js:29`). **23 index** khai báo trong `init()` (22 Gate-0 + `idx_voiceprop_user_status` thêm W3.VOICE.SECURE-COMMAND 2026-08-31; xác nhận bằng parser trực tiếp trên `server/db.js`: `grep -c "CREATE INDEX IF NOT EXISTS" server/db.js`) **không tồn tại trên MySQL/Cloud SQL**. Ngoại lệ: cột `UNIQUE`/PK (`budgets.period`, `mentions.link`, `assignments(user_id,subject_type,subject_id)`, `voice_proposals.id`) vẫn có index ngầm vì MySQL tự tạo index cho `UNIQUE`/`PRIMARY KEY`. Đây là bẫy hiệu năng — xem [`14-known-traps.md`](14-known-traps.md).
 
 ## D. Idempotent migration — cơ chế và rủi ro
 
@@ -530,7 +546,7 @@ Chiến dịch truyền thông.
 
 **Sửa lại toàn bộ (Codex round-3 re-audit, R3-02B — bản trước sai và tự mâu thuẫn: nói "22 bảng" rồi liệt kê chính các bảng giám sát bị DROP như bằng chứng "không đụng tới", và nói sai `attachments`/`supplier_quotes` không bị DROP dù thực tế có):**
 
-`dropAll()` (`db.js:868-884`) chứa đúng **28 lệnh `DROP TABLE`** (đếm bằng parser trực tiếp: `grep -o "DROP TABLE IF EXISTS [a-z_]*" server/db.js | wc -l` → 28) trên tổng **35 bảng** khai báo trong `init()` (34 Gate-0 + `field_visibility` thêm ở W1.RBAC.1, commit `9ef286a`, 2026-08-27). **7 bảng KHÔNG có trong danh sách DROP** (kiểm tra chéo `CREATE TABLE` vs `DROP TABLE`, không đoán): `agreements`, `work_logs`, `gifts`, `benefit_usages`, `supplier_transactions`, `supplier_contacts` (6 bảng Gate-0), cộng `field_visibility` (omission mới, có chủ ý — xem đoạn dưới, khác 6 bảng kia ở chỗ dropAll() bị BỎ làm cơ chế reset cho W1 chứ không phải bị sót). Ngược với bản trước: `attachments` (`db.js:881`) và `supplier_quotes` (`db.js:875`) **CÓ bị DROP** — không phải ngoại lệ.
+`dropAll()` (`db.js:868-884`) chứa đúng **28 lệnh `DROP TABLE`** (đếm bằng parser trực tiếp: `grep -o "DROP TABLE IF EXISTS [a-z_]*" server/db.js | wc -l` → 28) trên tổng **36 bảng** khai báo trong `init()` (34 Gate-0 + `field_visibility` thêm ở W1.RBAC.1, commit `9ef286a`, 2026-08-27 + `voice_proposals` thêm ở W3.VOICE.SECURE-COMMAND, 2026-08-31). **8 bảng KHÔNG có trong danh sách DROP** (kiểm tra chéo `CREATE TABLE` vs `DROP TABLE`, không đoán): `agreements`, `work_logs`, `gifts`, `benefit_usages`, `supplier_transactions`, `supplier_contacts` (6 bảng Gate-0), cộng `field_visibility` và `voice_proposals` (2 omission có chủ ý — khác 6 bảng kia ở chỗ dropAll() bị BỎ làm cơ chế reset cho W1 chứ không phải bị sót). Ngược với bản trước: `attachments` (`db.js:881`) và `supplier_quotes` (`db.js:875`) **CÓ bị DROP** — không phải ngoại lệ.
 
 **Rủi ro vận hành cụ thể:** nếu dùng `dropAll()`/`RESET_DB=1`/`npm run seed` làm cơ chế "xoá sạch + seed lại" cho W1 (RBAC v2 redesign, xem `04-ROADMAP.md` W1.RBAC.1), 6 bảng trên sẽ **giữ lại dữ liệu cũ** trong khi 28 bảng kia đã sạch — dữ liệu con mồ côi, khả năng vỡ FK khi seed lại theo thứ tự mới trên MySQL, hoặc lẫn dữ liệu cũ/mới không nhất quán. **Không dùng `dropAll()` hiện tại làm cơ chế reset sạch cho W1** — cần chuyển hẳn sang tạo database/schema mới rồi áp migration từ đầu (xem `04-ROADMAP.md` §C0.5 reset strategy).
 

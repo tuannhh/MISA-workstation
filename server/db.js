@@ -543,6 +543,23 @@ function init() {
     created_by INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  -- D14.4 (W3.VOICE.SECURE-COMMAND): proposal opaque cho luong AI chuan bi hanh dong / nguoi dung
+  -- xac nhan 1 lan. Khong dua vao dropAll() (W1.RBAC.0 da chot bo dropAll()/RESET_DB lam co che
+  -- reset, xem verify-g0.mjs).
+  CREATE TABLE IF NOT EXISTS voice_proposals (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    status TEXT NOT NULL DEFAULT 'pending',   -- pending / confirmed / expired (lazy, theo expires_at)
+    payload_json TEXT NOT NULL,               -- interaction de xuat + candidate da khop (kem snapshot
+                                               -- relationship_score tung candidate, dung optimistic
+                                               -- concurrency) + delta de xuat da kep bien
+    idempotency_key TEXT,                     -- key nguoi dung gui kem luc xac nhan
+    result_interaction_id INTEGER,            -- gan sau khi xac nhan thanh cong, phuc vu doc lai idempotent
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    confirmed_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_voiceprop_user_status ON voice_proposals(user_id, status);
   `);
   migrate();
   seedMonitoringDefaults();

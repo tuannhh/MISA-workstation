@@ -2,6 +2,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { db } = require('./db');
 const gemini = require('./gemini');
 const cfg = require('./config');
@@ -10,9 +11,16 @@ const { uploadAudio, uploadAiDocument } = require('./uploads');
 const { isSpreadsheet, parseSpreadsheet, redactTextForAi } = require('./spreadsheet-parser');
 const outbound = require('./safe-fetch');
 const aiPolicy = require('./ai-policy');
+const { buildInsert, buildUpdate, logEdit } = require('./db-helpers');
+const { createPolicyService, PolicyForbiddenError } = require('./policy-service');
+const { createVisibilityStore } = require('./policy-visibility-store');
+const { sendError } = require('./error-contract');
 
 const router = express.Router();
 router.use(requireAuth);
+// W3.VOICE.SECURE-COMMAND: instance rieng, khong dung chung voi routes.js (khong co state noi bo,
+// visibilityStore doc thang tu DB moi lan goi -- xem policy-visibility-store.js).
+const policyService = createPolicyService({ visibilityStore: createVisibilityStore(db) });
 
 // Hôm nay theo GMT+7 (YYYY-MM-DD)
 function todayGMT7() {
@@ -81,6 +89,212 @@ Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
     });
   } catch (e) {
     res.status(502).json({ error: 'Lỗi xử lý giọng nói: ' + e.message });
+  }
+});
+
+// ========================================================================
+//  W3.VOICE.SECURE-COMMAND + W3.VOICE.1 (D14.4, batch 23): AI chuan bi hanh
+//  dong (propose) -- nguoi dung xac nhan 1 lan (confirm). KHONG doi route
+//  /interaction-voice o tren (giu nguyen cho luong thu cong hien co).
+// ========================================================================
+const VOICE_PROPOSAL_TTL_MS = Number(process.env.VOICE_PROPOSAL_TTL_MS) || 10 * 60 * 1000;
+const SCORE_DELTA_MIN = -10;
+const SCORE_DELTA_MAX = 10;
+
+// AI tu de xuat muc doi diem trong loi noi (khong phai quy tac cung cua Claude -- BA chua dinh
+// nghia chinh thuc theo D14.3). Server chi kep bien an toan tren so AI tu goi y, mac dinh 0.
+function clampScoreDelta(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(SCORE_DELTA_MIN, Math.min(SCORE_DELTA_MAX, Math.round(n)));
+}
+function expiresAtString(ttlMs) {
+  return new Date(Date.now() + ttlMs).toISOString().slice(0, 19).replace('T', ' ');
+}
+function isExpired(proposal, nowMs = Date.now()) {
+  return new Date(proposal.expires_at.replace(' ', 'T') + 'Z').getTime() <= nowMs;
+}
+// D14.4 guardrail: KHONG tu chon candidate gan nhat khi >=2 khop -- tra ve toan bo de client/nguoi
+// dung tu chon. confidence: none (0 khop) | high (dung 1) | ambiguous (>=2).
+function matchCandidates(name, kind) {
+  if (!name) return { confidence: 'none', candidates: [] };
+  const like = `%${name}%`;
+  const rows = kind === 'person'
+    ? db.prepare(`SELECT p.id, p.full_name AS name, o.name AS org_name, p.relationship_score
+        FROM people p LEFT JOIN organizations o ON o.id=p.org_id
+        WHERE p.full_name LIKE ? ORDER BY p.relationship_score DESC LIMIT 5`).all(like)
+    : db.prepare(`SELECT id, name, org_type FROM organizations WHERE name LIKE ? ORDER BY name LIMIT 5`).all(like);
+  if (rows.length === 0) return { confidence: 'none', candidates: [] };
+  if (rows.length === 1) return { confidence: 'high', candidates: rows };
+  return { confidence: 'ambiguous', candidates: rows };
+}
+
+const VOICE_PROPOSAL_SCHEMA = {
+  type: 'object',
+  properties: {
+    ...VOICE_SCHEMA.properties,
+    suggested_score_delta: { type: 'integer', description: `Mức đề xuất TĂNG/GIẢM điểm quan hệ (relationship_score) dựa trên sắc thái cuộc nói chuyện, số nguyên trong khoảng ${SCORE_DELTA_MIN}..${SCORE_DELTA_MAX}. 0 nếu không có căn cứ rõ ràng để đề xuất.` },
+  },
+  required: VOICE_SCHEMA.required,
+};
+
+// Buoc 1: AI nghe + trich xuat + khop candidate, tao 1 proposal opaque gan voi principal hien tai,
+// het han sau VOICE_PROPOSAL_TTL_MS. KHONG ghi interactions/people o buoc nay.
+router.post('/interaction-voice-propose', requirePerm('interactions', 'create'), uploadAudio.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Không có dữ liệu ghi âm.' });
+    aiPolicy.assertEgressAllowed('AI-E001', req.principal);
+    const prompt = `Đây là đoạn ghi âm tiếng Việt của một nhân viên PR (quan hệ truyền thông) đang ghi nhận một hoạt động/tương tác với đối tác.
+Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
+- channel chỉ chọn 1 trong: "Gặp mặt", "Điện thoại", "Email", "Sự kiện", "Khác".
+- result chỉ chọn 1 trong: "Tích cực", "Trung lập", "Cần theo dõi" (mặc định "Tích cực" nếu không rõ).
+- person_name: tên người được nhắc tới (ví dụ "chị Minh Anh" -> "Minh Anh").
+- org_name: tên cơ quan/báo/đơn vị (ví dụ "báo VnExpress" -> "VnExpress").
+- date: chỉ điền nếu trong lời nói nói rõ ngày, định dạng YYYY-MM-DD; nếu nói "hôm nay" hoặc không nói thì để trống.
+- summary: mô tả ngắn gọn, lịch sự nội dung đã làm.
+- suggested_score_delta: nếu lời nói thể hiện rõ mối quan hệ tốt lên/xấu đi, đề xuất mức tăng/giảm điểm quan hệ hợp lý (vd tương tác rất tích cực, hợp tác tốt -> số dương nhỏ; căng thẳng/từ chối hợp tác -> số âm nhỏ); nếu không rõ ràng, để 0.`;
+    const parts = [
+      { text: prompt },
+      { inlineData: { mimeType: req.file.mimetype || 'audio/webm', data: req.file.buffer.toString('base64') } },
+    ];
+    const ai = await gemini.genJSON(parts, VOICE_PROPOSAL_SCHEMA);
+    const personMatch = matchCandidates(ai.person_name, 'person');
+    const orgMatch = matchCandidates(ai.org_name, 'org');
+    const extracted = {
+      transcript: ai.transcript || '',
+      summary: ai.summary || '',
+      channel: ai.channel || 'Gặp mặt',
+      result: ai.result || 'Tích cực',
+      date: ai.date || todayGMT7(),
+      person_name: ai.person_name || '',
+      org_name: ai.org_name || '',
+    };
+    const suggestedScoreDelta = clampScoreDelta(ai.suggested_score_delta);
+    const id = crypto.randomBytes(16).toString('hex');
+    const expiresAt = expiresAtString(VOICE_PROPOSAL_TTL_MS);
+    const payload = {
+      ...extracted,
+      personCandidates: personMatch.candidates,
+      orgCandidates: orgMatch.candidates,
+      suggested_score_delta: suggestedScoreDelta,
+    };
+    buildInsert('voice_proposals', { id, user_id: req.principal.id, payload_json: JSON.stringify(payload), expires_at: expiresAt });
+    res.json({
+      proposalId: id,
+      expiresAt,
+      extracted,
+      personCandidates: personMatch.candidates,
+      orgCandidates: orgMatch.candidates,
+      matchConfidence: { person: personMatch.confidence, org: orgMatch.confidence },
+      suggestedScoreDelta,
+    });
+  } catch (e) {
+    res.status(502).json({ error: 'Lỗi xử lý giọng nói: ' + e.message });
+  }
+});
+
+// Buoc 2: nguoi dung xac nhan -- CHI gui proposalId + idempotencyKey + edits tuong minh (khong gui
+// lai toan bo payload). Server doc lai proposal, re-check PolicyEngine + optimistic concurrency,
+// roi moi ghi 1 lan (D14.4).
+router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'), (req, res) => {
+  try {
+    const { proposalId, idempotencyKey, edits } = req.body || {};
+    if (!proposalId) return sendError(req, res, 400, 'VALIDATION_FAILED', 'Thiếu proposalId.');
+    const proposal = db.prepare('SELECT * FROM voice_proposals WHERE id=?').get(proposalId);
+    if (!proposal) return sendError(req, res, 404, 'NOT_FOUND', 'Không tìm thấy đề xuất, có thể đã hết hạn từ lâu.');
+    // D14.4: proposal gan voi dung 1 principal -- user khac khong xac nhan duoc, ke ca cung role.
+    if (Number(proposal.user_id) !== Number(req.principal.id)) {
+      return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Đề xuất này không thuộc về bạn.');
+    }
+    if (proposal.status === 'confirmed') {
+      if (proposal.idempotency_key && idempotencyKey && proposal.idempotency_key === idempotencyKey) {
+        return res.json({ ok: true, interactionId: proposal.result_interaction_id, idempotent: true });
+      }
+      return sendError(req, res, 409, 'PROPOSAL_ALREADY_CONFIRMED', 'Đề xuất đã được xác nhận trước đó.');
+    }
+    if (isExpired(proposal)) return sendError(req, res, 410, 'PROPOSAL_EXPIRED', 'Đề xuất đã hết hạn, vui lòng ghi âm lại.');
+
+    const payload = JSON.parse(proposal.payload_json);
+    const e = edits || {};
+
+    // Tampering guard: chi duoc chon trong dung candidate da de xuat, khong nhan id tuy y tu client.
+    let selectedPerson = null;
+    if (e.selected_person_id != null) {
+      selectedPerson = (payload.personCandidates || []).find((c) => Number(c.id) === Number(e.selected_person_id)) || null;
+      if (!selectedPerson) return sendError(req, res, 400, 'VALIDATION_FAILED', 'selected_person_id không nằm trong danh sách đề xuất.');
+    } else if ((payload.personCandidates || []).length === 1) {
+      selectedPerson = payload.personCandidates[0];
+    }
+    let selectedOrg = null;
+    if (e.selected_org_id != null) {
+      selectedOrg = (payload.orgCandidates || []).find((c) => Number(c.id) === Number(e.selected_org_id)) || null;
+      if (!selectedOrg) return sendError(req, res, 400, 'VALIDATION_FAILED', 'selected_org_id không nằm trong danh sách đề xuất.');
+    } else if ((payload.orgCandidates || []).length === 1) {
+      selectedOrg = payload.orgCandidates[0];
+    }
+
+    const partnerType = selectedPerson ? 'person' : (selectedOrg ? 'org' : 'person');
+    const partnerId = selectedPerson ? selectedPerson.id : (selectedOrg ? selectedOrg.id : 0);
+    const partnerName = selectedPerson ? selectedPerson.name : (selectedOrg ? selectedOrg.name : (payload.person_name || payload.org_name || ''));
+    const interactionInput = {
+      partner_type: partnerType,
+      partner_id: partnerId,
+      partner_name: partnerName,
+      date: e.date || payload.date,
+      channel: e.channel || payload.channel,
+      summary: e.summary != null ? e.summary : payload.summary,
+      result: e.result || payload.result,
+    };
+    let preparedInteraction;
+    try {
+      preparedInteraction = policyService.prepareCreate({ principal: req.principal, entity: 'interaction', input: interactionInput });
+    } catch (err) {
+      if (err instanceof PolicyForbiddenError) return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền create trên interactions.');
+      throw err;
+    }
+
+    const scoreDelta = clampScoreDelta(e.score_delta != null ? e.score_delta : payload.suggested_score_delta);
+    let personEditAllowed = false;
+    if (scoreDelta !== 0 && selectedPerson) {
+      try {
+        policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
+        personEditAllowed = true;
+      } catch (err) {
+        if (!(err instanceof PolicyForbiddenError)) throw err;
+        // Khong tu choi ca request vi 1 phan (doi diem) khong du quyen -- van cho tao interaction,
+        // chi bo qua phan doi diem (an toan hon: khong mat du lieu tuong tac vi 1 quyen phu).
+      }
+    }
+
+    // Chot gate duy nhat chong double-confirm: chi request nao thang atomic UPDATE nay moi duoc ghi
+    // tiep. Khong dung transaction da-cau-lenh (codebase hien khong co helper transaction()) nen ghi
+    // interaction LUON thanh cong sau khi claim (INSERT thuan, khong CAS); phan doi diem la buoc
+    // rieng, best-effort optimistic-concurrency (CAS) o duoi -- neu stale thi CHI phan diem khong
+    // ap dung, khong lam mat interaction da xac nhan.
+    const claimed = db.prepare(`UPDATE voice_proposals SET status='confirmed', confirmed_at=datetime('now'), idempotency_key=? WHERE id=? AND status='pending'`)
+      .run(idempotencyKey || null, proposalId).changes;
+    if (claimed !== 1) return sendError(req, res, 409, 'PROPOSAL_ALREADY_CONFIRMED', 'Đề xuất đã được xác nhận hoặc hết hạn.');
+
+    const r = buildInsert('interactions', preparedInteraction);
+    logEdit(req, 'CREATE', 'interaction', r.lastInsertRowid, interactionInput.summary);
+    buildUpdate('voice_proposals', proposalId, { result_interaction_id: r.lastInsertRowid });
+
+    let personResult = null;
+    if (personEditAllowed) {
+      const newScore = Math.max(0, Math.min(100, Number(selectedPerson.relationship_score || 0) + scoreDelta));
+      const cas = db.prepare('UPDATE people SET relationship_score=? WHERE id=? AND relationship_score=?')
+        .run(newScore, selectedPerson.id, selectedPerson.relationship_score);
+      if (cas.changes === 1) {
+        logEdit(req, 'EDIT', 'person', selectedPerson.id, `AI voice: relationship_score ${selectedPerson.relationship_score} -> ${newScore} (proposal ${proposalId})`);
+        personResult = { id: selectedPerson.id, relationship_score: newScore, scoreApplied: true };
+      } else {
+        personResult = { id: selectedPerson.id, relationship_score: selectedPerson.relationship_score, scoreApplied: false, reason: 'STALE_SCORE_SNAPSHOT' };
+      }
+    }
+
+    res.json({ ok: true, interactionId: r.lastInsertRowid, person: personResult });
+  } catch (e) {
+    res.status(502).json({ error: 'Lỗi xác nhận: ' + e.message });
   }
 });
 
@@ -285,6 +499,10 @@ router.get('/status', (req, res) => res.json({ enabled: cfg.hasKey(), textModel:
 
 // Thêm để unit test (G1A.2) — hàm thuần/DI-được + schema JSON (đối tượng bất biến, không có
 // hành vi để "đổi"), không đổi hành vi router (giống routes.js.testables).
-router.testables = { stripHtml, limitEventExtract, VOICE_SCHEMA, AWARD_SCHEMA, ADVICE_SCHEMA, EVENT_SCHEMA };
+router.testables = {
+  stripHtml, limitEventExtract, VOICE_SCHEMA, AWARD_SCHEMA, ADVICE_SCHEMA, EVENT_SCHEMA,
+  VOICE_PROPOSAL_SCHEMA, clampScoreDelta, matchCandidates, isExpired, expiresAtString,
+  SCORE_DELTA_MIN, SCORE_DELTA_MAX, VOICE_PROPOSAL_TTL_MS,
+};
 
 module.exports = router;

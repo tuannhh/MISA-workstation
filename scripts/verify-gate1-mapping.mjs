@@ -24,8 +24,8 @@ function fail(message) {
   process.exitCode = 1;
 }
 
-if (routeIds.length !== 148 || new Set(routeIds).size !== 148) {
-  fail(`route catalog phải có 148 ID duy nhất, nhận ${routeIds.length}`);
+if (routeIds.length !== 150 || new Set(routeIds).size !== 150) {
+  fail(`route catalog phải có 150 ID duy nhất, nhận ${routeIds.length}`);
 }
 const counts = new Map();
 for (const line of routeRows) {
@@ -90,5 +90,5 @@ for (const id of allowlistCounts.keys()) {
 if (!process.exitCode) {
   const todo = rows.filter((line) => statusOf(line) === 'TODO').length;
   const knownRed = knownRedRows.length;
-  console.log(`PASS Gate 1 mapping: ${routeIds.length}/148 route, ${rows.length} mapped rows, TODO=${todo}, known-red=${knownRed} (allowlist ${allowlistCounts.size} entry, đã đối chiếu)`);
+  console.log(`PASS Gate 1 mapping: ${routeIds.length}/150 route, ${rows.length} mapped rows, TODO=${todo}, known-red=${knownRed} (allowlist ${allowlistCounts.size} entry, đã đối chiếu)`);
 }

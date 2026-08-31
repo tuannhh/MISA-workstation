@@ -211,16 +211,16 @@ function verifyRoutesAndMatrices() {
   const catalog = read('memory-bank/07-route-catalog.md');
   const matrix = read('memory-bank/08-permission-matrix.md');
   const catalogRows = markdownRows(catalog, /^\| R\d{3} \|/);
-  ok(catalogRows.length === 148, `catalog rows=${catalogRows.length}, expected 148`);
+  ok(catalogRows.length === 150, `catalog rows=${catalogRows.length}, expected 150`);
 
   const ids = catalogRows.map((row) => row[0]);
-  const expectedIds = Array.from({ length: 148 }, (_, index) => `R${String(index + 1).padStart(3, '0')}`);
+  const expectedIds = Array.from({ length: 150 }, (_, index) => `R${String(index + 1).padStart(3, '0')}`);
   assertPartition(ids, expectedIds, 'route catalog IDs');
 
   const source = sourceRoutes();
-  ok(source.length === 148, `source literal routes=${source.length}, expected 148`);
+  ok(source.length === 150, `source literal routes=${source.length}, expected 150`);
   const sourceByKey = new Map(source.map((route) => [`${route.method} ${route.fullPath}`, route]));
-  ok(sourceByKey.size === 148, 'source contains duplicate method/path pairs');
+  ok(sourceByKey.size === 150, 'source contains duplicate method/path pairs');
 
   const catalogById = new Map();
   for (const row of catalogRows) {
@@ -242,7 +242,7 @@ function verifyRoutesAndMatrices() {
     }
     catalogById.set(id, route);
   }
-  pass('route catalog: 148 unique IDs and exact source method/path/auth');
+  pass('route catalog: 150 unique IDs and exact source method/path/auth');
 
   const sectionA = matrix.slice(matrix.indexOf('## A.'), matrix.indexOf('## B.'));
   const sectionARows = markdownRows(sectionA, /^\| (partners|reminders|interactions|reports|awards|suppliers|events|admin|monitoring|dashboard|\*\(không)/);
@@ -255,10 +255,10 @@ function verifyRoutesAndMatrices() {
         `${id} Section A module=${documentedModule}, source=${catalogById.get(id).module}`);
     }
   }
-  pass('authorization matrix Section A: 148 unique IDs and exact source module partition');
+  pass('authorization matrix Section A: 150 unique IDs and exact source module partition');
 
   const flowRows = markdownRows(matrix, /^\| F\d{3} \|/);
-  ok(flowRows.length === 35, `UI flow rows=${flowRows.length}, expected 35`);
+  ok(flowRows.length === 36, `UI flow rows=${flowRows.length}, expected 36`);
   const flowIds = flowRows.map((row) => row[0]);
   ok(new Set(flowIds).size === flowRows.length, 'duplicate flow_id in UI-flow matrix');
   const mappedIds = [];
@@ -270,17 +270,22 @@ function verifyRoutesAndMatrices() {
     ok(row[7].length > 0, `${row[0]} missing disabled/masked evidence status`);
   }
   assertPartition(mappedIds, expectedIds, 'UI-flow route mapping');
-  pass('UI-flow matrix: 148 routes -> exactly 1 of 35 flows; 2 roles x Desktop/Native present');
+  pass('UI-flow matrix: 150 routes -> exactly 1 of 36 flows; 2 roles x Desktop/Native present');
 }
 
 function verifyGemini() {
   const count = (file) => [...read(file).matchAll(/\bgemini\.(?:genJSON|genText|genImage|groundedSearch)\s*\(/g)].length;
   const ai = count('server/ai.js');
   const monitor = count('server/monitor.js');
-  ok(ai === 6 && monitor === 7, `Gemini expressions ai=${ai}, monitor=${monitor}; expected 6/7`);
+  // W3.VOICE.SECURE-COMMAND (2026-08-31): them 1 call expression moi (interaction-voice-propose)
+  // nhung KHONG phai logical flow moi -- dung lai dung egress id AI-E001 (aiPolicy.assertEgressAllowed
+  // 'AI-E001'), cung 1 ban chat "voice -> Gemini trich xuat tuong tac" nhu route /interaction-voice
+  // cu, chi la lan goi thu 2 cua cung 1 flow. Vi vay ai.js 6->7 (expression), nhung "12 logical" giu
+  // nguyen khong doi.
+  ok(ai === 7 && monitor === 7, `Gemini expressions ai=${ai}, monitor=${monitor}; expected 7/7`);
   ok(read('memory-bank/06-threat-model.md').includes('12 logical') || read('memory-bank/06-threat-model.md').includes('12 luồng'),
     'threat model must document 12 logical Gemini flows');
-  pass('Gemini inventory: ai.js=6, monitor.js=7, 13 expressions / 12 logical flows');
+  pass('Gemini inventory: ai.js=7, monitor.js=7, 14 expressions / 12 logical flows');
 }
 
 function verifySchema() {
@@ -292,14 +297,16 @@ function verifySchema() {
   // `field_visibility` — KHÔNG đưa vào dropAll() vì W1.RBAC.0 đã chốt bỏ dropAll()/RESET_DB làm
   // cơ chế reset cho migration RBAC v2 (dùng fresh database/schema cutover thay thế, xem
   // 09-db-schema.md §E + 04-ROADMAP.md W1.RBAC.1) — nên đây là 1 omission MỚI có chủ ý, không
-  // phải regression giống 6 omission Gate-0 cũ.
-  ok(new Set(tables).size === 35, `tables=${new Set(tables).size}, expected 35`);
-  ok(new Set(indexes).size === 22, `indexes=${new Set(indexes).size}, expected 22`);
+  // phải regression giống 6 omission Gate-0 cũ. W3.VOICE.SECURE-COMMAND (2026-08-31) thêm bảng
+  // `voice_proposals` — cùng lý do (dropAll()/RESET_DB không còn là cơ chế reset), thêm omission
+  // thứ 8, có chủ ý.
+  ok(new Set(tables).size === 36, `tables=${new Set(tables).size}, expected 36`);
+  ok(new Set(indexes).size === 23, `indexes=${new Set(indexes).size}, expected 23`);
   ok(new Set(drops).size === 28, `drop targets=${new Set(drops).size}, expected 28`);
   const omissions = [...new Set(tables)].filter((table) => !new Set(drops).has(table)).sort();
-  const expected = ['agreements', 'benefit_usages', 'gifts', 'supplier_contacts', 'supplier_transactions', 'work_logs', 'field_visibility'].sort();
+  const expected = ['agreements', 'benefit_usages', 'gifts', 'supplier_contacts', 'supplier_transactions', 'work_logs', 'field_visibility', 'voice_proposals'].sort();
   ok(JSON.stringify(omissions) === JSON.stringify(expected), `drop omissions=${omissions}, expected=${expected}`);
-  pass(`schema facts: 35 tables, 22 indexes, 28 drops; omissions=${omissions.join(',')}`);
+  pass(`schema facts: 36 tables, 23 indexes, 28 drops; omissions=${omissions.join(',')}`);
 }
 
 function verifyErrorExample() {

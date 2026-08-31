@@ -15,11 +15,11 @@
 >
 > **Sửa lần 2 sau Codex re-audit round 2 (F1, vẫn FAIL/P0 MDS ở lần 1).** Lỗi lần 1 đã sửa đúng 1 phần (bỏ `N/A` cho admin, tách 5 trục runtime) nhưng vẫn **chưa machine-checkable**: dùng range liên tục che lấp route thật (`R038-R061` cho reminders "nuốt" luôn interactions/bookings/reports; `R096` gán chồng cả events và reminders), **lọt 9 route** (`R001,R046-R049,R097,R143-R145`) khỏi Section A, và `partners` vẫn ghi `N/A` cho OS-permission dù có 2 route upload file thật (`R016`,`R017`).
 >
-> **Nguyên tắc bản hiện tại:** giữ hai view độc lập nhưng join được: §A là auth partition theo middleware source; §B là UI/business-flow partition; §C là runtime capability. Cả §A và §B đều phủ đúng 148/148 route, không trùng/lọt, được kiểm bằng `node scripts/verify-g0.mjs`.
+> **Nguyên tắc bản hiện tại:** giữ hai view độc lập nhưng join được: §A là auth partition theo middleware source; §B là UI/business-flow partition; §C là runtime capability. Cả §A và §B đều phủ đúng 150/150 route, không trùng/lọt, được kiểm bằng `node scripts/verify-g0.mjs`.
 >
 > **Codex round 4, 2026-08-25:** C0.3 đã được thực hiện: 34 `flow_id`, bốn cột role/surface, state profiles Desktop, baseline Native-Mobile `FAIL/MISSING`, và host-capability tách khỏi OS permission. Trong lúc verify phát hiện thêm drift R144/R145: route được mount trực tiếp, R144 không có auth middleware còn R145 tự kiểm tra session trong handler; catalog/§A đã sửa đúng source.
 
-## A. Role coverage theo module — partition từ `07-route-catalog.md`, đã tự-verify tổng = 148
+## A. Role coverage theo module — partition từ `07-route-catalog.md`, đã tự-verify tổng = 150
 
 Lệnh tự-verify (chạy lại được):
 ```bash
@@ -30,7 +30,7 @@ awk -F'|' 'NR>4 && $2 ~ /R[0-9]{3}/ {gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$5
 |---|---|---|---|---|
 | partners | view/create/edit/delete | view/create/edit/delete (sensitive theo `sensitive_perms`) | R001-R027, R029-R036, R046-R049, R097 | 40 |
 | reminders | view/create/edit/delete | view/create/edit/delete | R028,R038,R039,R040,R041,R042,R057,R058,R059,R060,R061,R071,R096,R137,R138 | 15 |
-| interactions | view/create/edit/delete | view/create/edit/delete | R043,R044,R045,R136 | 4 |
+| interactions | view/create/edit/delete | view/create/edit/delete | R043,R044,R045,R136,R149,R150 | 6 |
 | reports | view | **[] — không có quyền nào** | R050,R051,R052,R053,R054,R055,R056 | 7 |
 | awards | view/create/edit/delete | view/create/edit/delete | R062-R070, R139, R140 | 11 |
 | suppliers | view/create/edit/delete | view/create/edit/delete | R072-R086 | 15 |
@@ -40,7 +40,7 @@ awk -F'|' 'NR>4 && $2 ~ /R[0-9]{3}/ {gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$5
 | dashboard | view | view | R098 | 1 |
 | *(không thuộc module nào — đặc biệt)* | — | — | R037 (`requireAuth` qua router — file serving đa-owner), R142 (`requireAuth` qua router, ai/status), R143 (public login), R144 (không auth middleware; logout destroy session nếu có), R145 (handler `auth.me` tự kiểm tra session) | 5 |
 
-**Tổng: 40+15+4+7+11+15+10+8+32+1+5 = 148.** Không route nào trùng 2 module (khác lỗi lần 1: `R096` chỉ thuộc `events`, không thuộc `reminders`; `R001/R046-R049/R097` thuộc `partners` — trước đây bị lọt hoàn toàn khỏi bảng). **N2 ĐÃ SỬA (Wave 1, 2026-08-30):** `R098` tách khỏi hàng đặc biệt sang module `dashboard` riêng (`requirePerm('dashboard','view')`, cấp cho cả 2 role). **SỬA 2026-08-31 (batch `W1.POLICY.2 write-side`, F1-class module/action mismatch):** `R028`/`R071`/`R096` chuyển từ `partners`/`awards`/`events` (đều đang `view`) sang `reminders` (`create`) — cả 3 route ghi `important_dates` nhưng trước đây gate theo quyền `view` của module cha thay vì `reminders:create` thật, khiến `viewer` (không có `reminders:create`) vẫn tạo được nhắc lịch qua lối tắt này. Xem `01-audit-findings.md` §F23. **THÊM 2026-08-31 (batch `W1.ADMIN` backend): `R146`/`R147`/`R148`** — 3 route MỚI (`GET`/`PUT /admin/field-visibility`, `PUT /admin/records/:entity/:id/owner`), nâng tổng route từ 145 lên **148**.
+**Tổng: 40+15+6+7+11+15+10+8+32+1+5 = 150.** Không route nào trùng 2 module (khác lỗi lần 1: `R096` chỉ thuộc `events`, không thuộc `reminders`; `R001/R046-R049/R097` thuộc `partners` — trước đây bị lọt hoàn toàn khỏi bảng). **N2 ĐÃ SỬA (Wave 1, 2026-08-30):** `R098` tách khỏi hàng đặc biệt sang module `dashboard` riêng (`requirePerm('dashboard','view')`, cấp cho cả 2 role). **SỬA 2026-08-31 (batch `W1.POLICY.2 write-side`, F1-class module/action mismatch):** `R028`/`R071`/`R096` chuyển từ `partners`/`awards`/`events` (đều đang `view`) sang `reminders` (`create`) — cả 3 route ghi `important_dates` nhưng trước đây gate theo quyền `view` của module cha thay vì `reminders:create` thật, khiến `viewer` (không có `reminders:create`) vẫn tạo được nhắc lịch qua lối tắt này. Xem `01-audit-findings.md` §F23. **THÊM 2026-08-31 (batch `W1.ADMIN` backend): `R146`/`R147`/`R148`** — 3 route MỚI (`GET`/`PUT /admin/field-visibility`, `PUT /admin/records/:entity/:id/owner`), nâng tổng route từ 145 lên 148. **THÊM 2026-08-31 (batch `W3.VOICE.SECURE-COMMAND`): `R149`/`R150`** — 2 route MỚI (`POST /ai/interaction-voice-propose`, `POST /ai/interaction-voice-confirm`), cả 2 `requirePerm(interactions,create)`, nâng tổng route từ 148 lên **150**.
 
 > **Sửa cụ thể theo evidence Codex:** `R046-R049` (bookings) và `R097` (press-overview) dùng `requirePerm('partners', ...)` thật trong source (`server/routes.js:611,618,623,1148`), không phải route riêng biệt — nay đã gộp đúng vào `partners`. `R001` (assignable-users) cũng `partners:view` (`routes.js:82`).
 
@@ -55,7 +55,7 @@ Section A trả lời “middleware hiện tại kiểm tra module nào”. Sect
 - `S0` = không có field mật trong response chính; `S1` = có mask/gate theo `sensitive_perms`; `S2` = tiền/file đang mask ad-hoc hoặc thiếu gate, thuộc F1/F9; `S3` = UI ẩn/hiện control bằng `can(module,action)`, nhưng chưa có access-denied page.
 - `N/A` chỉ dùng khi trạng thái không có ý nghĩa với loại flow và luôn kèm lý do trong profile. Không dùng `N/A` để che surface hoặc capability chưa có.
 
-### B.2 Route → business/UI flow (partition 148/148)
+### B.2 Route → business/UI flow (partition 150/150)
 
 | Flow ID | Business/UI flow | Route IDs (mỗi ID đúng một flow) | Desktop `super_admin` | Desktop `pr_staff` | Native `super_admin` | Native `pr_staff` | Sensitive/disabled evidence |
 |---|---|---|---|---|---|---|---|
@@ -94,6 +94,7 @@ Section A trả lời “middleware hiện tại kiểm tra module nào”. Sect
 | F033 | Chiến dịch monitor và đánh giá AI | R129,R130,R131,R132,R133,R134,R135 | V/C/E/D/AI · D-LIST | V/C/E/D/AI · D-LIST | N-MISSING | N-MISSING | S0; S3 |
 | F034 | AI tạo nội dung/ảnh thiệp nhắc | R137,R138 | AI hiện dùng `reminders:view` · D-EMBED | AI hiện dùng `reminders:view` · D-EMBED | N-MISSING | N-MISSING | S0; action AI chưa tách |
 | F035 | Cấu hình field-visibility & gán lại owner (W1.ADMIN, backend/API-only) | R146,R147,R148 | DENY · D-MISSING | DENY · D-MISSING | N-MISSING | N-MISSING | Mới 2026-08-31; chưa có UI (lane Codex, CLAUDE.md mục 6) |
+| F036 | Voice secure-command: AI đề xuất tương tác + đổi điểm quan hệ chờ xác nhận (W3.VOICE.SECURE-COMMAND, backend/API-only) | R149,R150 | AI/C qua `interactions:create` · D-MISSING | AI/C qua `interactions:create` · D-MISSING | N-MISSING | N-MISSING | Mới 2026-08-31; contract-ready cho slice Voice Wave 3, chưa có UI (lane Codex, CLAUDE.md mục 6) |
 
 ### B.3 State profiles — mọi ô loading/empty/error/403 đều có status
 
@@ -114,7 +115,7 @@ Section A trả lời “middleware hiện tại kiểm tra module nào”. Sect
 
 ## C. Native/WebView runtime capability — tách host capability khỏi OS permission
 
-### C.1 Baseline Native-Mobile áp dụng 148/148 route
+### C.1 Baseline Native-Mobile áp dụng 150/150 route
 
 | Trục | Current status | Target evidence trước khi PASS |
 |---|---|---|
@@ -145,7 +146,7 @@ Chạy:
 node scripts/verify-g0.mjs
 ```
 
-Script phải xác nhận: catalog 148 unique; Section A phủ 148 unique; Section B.2 map 148 route đúng một flow; đủ 35 flow, mỗi flow có hai role × hai surface; Gemini/schema/error/link facts. Native vẫn `FAIL/MISSING` là kết quả audit đúng, không phải lỗi của script.
+Script phải xác nhận: catalog 150 unique; Section A phủ 150 unique; Section B.2 map 150 route đúng một flow; đủ 36 flow, mỗi flow có hai role × hai surface; Gemini/schema/error/link facts. Native vẫn `FAIL/MISSING` là kết quả audit đúng, không phải lỗi của script.
 
 ## E. Role model drift và quyết định đã đóng
 

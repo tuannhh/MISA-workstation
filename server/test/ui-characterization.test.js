@@ -44,13 +44,13 @@ test('UI-CHAR-002: Vue shell nạp legacy UI sau khi tạo đủ DOM mount point
     'legacy app.js phải chỉ nạp sau khi Vue shell render xong');
 });
 
-test('UI-CHAR-003: ma trận hiện trạng phủ 35 flow/148 route và ghi Native-Mobile là missing cho hai role', () => {
+test('UI-CHAR-003: ma trận hiện trạng phủ 36 flow/150 route và ghi Native-Mobile là missing cho hai role', () => {
   const flowRows = tableRows(matrix, 'F\\d{3}\\s*\\|');
-  assert.equal(flowRows.length, 35, 'G1A.6 phải kiểm soát toàn bộ 35 business/UI flow, không chỉ nav');
+  assert.equal(flowRows.length, 36, 'G1A.6 phải kiểm soát toàn bộ 36 business/UI flow, không chỉ nav');
 
   const routeIds = flowRows.flatMap((line) => [...line.matchAll(/R\d{3}/g)].map((match) => match[0]));
-  assert.equal(routeIds.length, 148, '35 flow phải ánh xạ đủ 148 route');
-  assert.equal(new Set(routeIds).size, 148, 'không route nào được trùng flow UI');
+  assert.equal(routeIds.length, 150, '36 flow phải ánh xạ đủ 150 route');
+  assert.equal(new Set(routeIds).size, 150, 'không route nào được trùng flow UI');
   for (const row of flowRows) {
     assert.equal((row.match(/N-MISSING/g) || []).length, 2,
       `${row.match(/F\d{3}/)?.[0]} phải ghi missing cho cả super_admin và executor, không suy diễn PASS`);
