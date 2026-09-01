@@ -1049,6 +1049,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > Users. User CRUD, field visibility và reassign owner vẫn là các slice mutation riêng kế tiếp, đều
 > cần confirmation + kiểm tra PolicyEngine/server-error; Native host/device vẫn **UNVERIFIED** tới
 > O3/W4.
+>
+> **Execution update — 2026-09-01 (W3.ADMIN.USERS.WRITE):** bổ sung create/edit/delete User trên
+> Desktop MDS và Native composition riêng. Form chỉ gửi allowlist account/name/role/email/password/
+> active/notify; tuyệt đối không có `sensitive_perms` hay bất kỳ owner/created-by nào. UI thu hẹp
+> role option cho Admin thường, chặn self-delete và dùng MDialog danger trước xoá; đây là affordance,
+> server vẫn thực thi D13.1 và trả 403/409 nếu role/principal thay đổi. Field visibility và reassign
+> owner tiếp tục là hai mutation PolicyEngine slice riêng; native host/device vẫn **UNVERIFIED** tới
+> O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

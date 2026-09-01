@@ -3063,3 +3063,25 @@ Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **25/25 p
 build:ui` pass (Admin lazy chunk 11.45 kB, entry 438.97 kB); `git diff --check` sạch. User CRUD,
 field visibility và reassign owner vẫn là các mutation slice kế tiếp; native AMIS host/device test
 vẫn **UNVERIFIED** tới O3/W4.
+
+## W3.ADMIN.USERS.WRITE — User CRUD MDS (Desktop + Native)
+
+Mở create/edit/delete User trên API hiện hữu `POST/PUT/DELETE /api/admin/users`. Đây là UI
+affordance theo `/api/me`, không thay thế D13.1 ở server: Admin thường không thể tạo/nâng/sửa/xóa
+tài khoản Admin/Super Admin trái quyền; mọi thay đổi quyền giữa lúc form mở vẫn trả 403 từ API.
+
+- `admin-user-write.mjs` tạo draft có thể reactive và payload allowlist. Create chỉ gửi
+  `username/password/full_name/role/email`; update chỉ gửi `full_name/role/email/active/
+  notify_opt_in/password`, không đưa `sensitive_perms`, `owner_id` hay `created_by` vào browser.
+- Desktop dùng form page MDS có footer sticky; Native có mini-app form/top bar/safe-area/footer và
+  discard confirmation. Người dùng sửa không phải nhập lại mật khẩu; để trống nghĩa là không đổi.
+- Action list chỉ hiện khi permission summary cho phép. Role picker của Admin thường chỉ có Viewer/
+  Executor (hoặc đúng role hiện tại khi sửa chính mình); Super Admin mới nhìn thấy đủ bốn role.
+  Delete không hiện cho chính mình và luôn qua `MDialog` danger trước khi gọi API.
+- `UI-ADMIN-003` kiểm chứng payload, POST/PUT/DELETE protected, confirmation, hai composition MDS
+  và server-authority copy.
+
+Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **26/26 pass**; `npm run
+build:ui` pass (Admin lazy chunk 24.99 kB, entry 438.96 kB); `git diff --check` sạch. Field
+visibility và reassign owner còn là mutation slice riêng; Native AMIS runtime/device test vẫn
+**UNVERIFIED** tới O3/W4.
