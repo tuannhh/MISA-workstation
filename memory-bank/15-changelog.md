@@ -3103,3 +3103,22 @@ table; Native dùng mini-app, `MMobileTopBar` và safe-area — không dùng des
 Reassign owner chưa được gộp vào đây: nó cần UI đặt trong context của từng record để Admin nhìn thấy
 entity/current owner/new owner trước khi xác nhận. Native AMIS runtime/device evidence vẫn
 **UNVERIFIED** tới O3/W4.
+
+## W3.ADMIN.REASSIGN-OWNER — Award Detail pilot (Desktop + Native)
+
+Mở pilot gán lại người phụ trách cho **Award** — một entity Direct — ngay tại Award Detail, không
+tạo form generic mù cho 14 loại record.
+
+- Chỉ role có `admin.edit` mới thấy affordance. Khi mở, browser lấy roster qua
+  `GET /api/admin/users`, project xuống `id/label/active` và chỉ cho chọn tài khoản active;
+  metadata quyền ngoài scope không đi vào form.
+- Gán lại gọi duy nhất `PUT /api/admin/records/award/:id/owner` với allowlist `{ owner_id }`.
+  UI hiển thị owner hiện tại, chặn no-op và yêu cầu MDialog danger trước request. Server vẫn là
+  authority cho principal, target active, record tồn tại và `PolicyEngine.prepareUpdate()`.
+- `UI-AWARD-006` kiểm chứng payload, endpoint, roster projection, affordance `admin.edit`,
+  confirmation và hai MDS composition. Award lazy chunk sau build: **73.29 kB** (gzip 14.37 kB);
+  entry bundle giữ 438.96 kB.
+
+Các entity Direct khác chưa được nhân rộng tự động: mỗi entity cần đưa action vào đúng detail context
+và re-check projection/owner column (đặc biệt `gift.responsible_user_id`). Native AMIS runtime/device
+evidence vẫn **UNVERIFIED** tới O3/W4.

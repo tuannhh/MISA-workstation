@@ -1068,6 +1068,16 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > được đặt trong ngữ cảnh chi tiết entity thay vì một form generic; native host/device tiếp tục
 > **UNVERIFIED** tới O3/W4.
 
+> **Execution update — 2026-09-01 (W3.ADMIN.REASSIGN-OWNER pilot):** mở pilot gán lại owner trên
+> **Award Detail** (một entity Direct) qua `GET /admin/users` và `PUT
+> /admin/records/award/:id/owner`. Đây không phải generic form cho 14 entity: Admin/Super Admin mở
+> từ chính record, thấy chủ sở hữu hiện tại, chọn duy nhất tài khoản active và xác nhận danger trước
+> khi gửi payload allowlist `{ owner_id }`. UI không cho gửi thay đổi no-op về chính owner hiện tại;
+> server vẫn chạy `requirePerm('admin','edit')`, xác nhận record/tài khoản active và PolicyEngine
+> `prepareUpdate()` ở thời điểm write. Desktop form/card và Native mini-app/safe-area là hai
+> composition tách biệt. Các entity Direct còn lại chỉ được nhân rộng sau khi pilot được review;
+> native host/device tiếp tục **UNVERIFIED** tới O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
