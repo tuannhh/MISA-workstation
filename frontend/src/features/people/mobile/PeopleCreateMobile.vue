@@ -8,7 +8,7 @@ import MSelect from '../../../components/mds/MSelect.vue';
 import { toPeopleCreateDraft, toPeopleCreatePayload, validatePeopleEditDraft } from '../domain/people-write.mjs';
 
 const props = defineProps({ organizations: { type: Array, default: () => [] }, saving: { type: Boolean, default: false }, serverError: { type: String, default: '' }, safeAreaStyle: { type: Object, default: () => ({}) } });
-const emit = defineEmits(['cancel', 'save']); const draft = reactive(toPeopleCreateDraft()); const errors = reactive({}); const discard = ref(false); const initialDraft = JSON.stringify(draft);
+const emit = defineEmits(['cancel', 'save']); const draft = reactive({ ...toPeopleCreateDraft() }); const errors = reactive({}); const discard = ref(false); const initialDraft = JSON.stringify(draft);
 const levels = ['', 'Lãnh đạo', 'Quản lý', 'Chuyên viên', 'Phóng viên', 'Khác'].map((value) => ({ value, label: value || 'Chọn cấp bậc' })); const categories = ['', 'VIP', 'Thường', 'Khác'].map((value) => ({ value, label: value || 'Chọn nhóm' })); const statuses = ['Đang hoạt động', 'Tạm ngừng', 'Ngừng hợp tác'].map((value) => ({ value, label: value })); const isDirty = computed(() => JSON.stringify(draft) !== initialDraft);
 function validate() { const next = { ...validatePeopleEditDraft(draft) }; if (!Number.isInteger(Number(draft.org_id)) || Number(draft.org_id) < 1) next.org_id = 'Cơ quan là bắt buộc.'; Object.keys(errors).forEach((key) => delete errors[key]); Object.assign(errors, next); return next; }
 function requestCancel() { if (props.saving) return; if (isDirty.value) { discard.value = true; return; } emit('cancel'); }

@@ -238,6 +238,20 @@ Phát hiện ngay trong chính vòng re-audit ACCEPTED F27: `fetchPersonSnapshot
 - Test mới (`integration-voice-secure-command.test.js`, tăng 15→17, MySQL-only qua `{ skip: !isMysql }`): 2 connection `mysql2/promise` độc lập với app — connA giữ `SELECT ... FOR UPDATE` (đúng câu SQL fix thêm), connB thử `UPDATE`/`DELETE` cùng row phải bị CHẶN cho tới khi connA COMMIT/ROLLBACK. Không đi qua HTTP route thật được vì `MySQLSyncDatabase` chặn đồng bộ main thread bằng `Atomics.wait` — nếu giữ lock trước rồi gọi HTTP trên cùng process sẽ tự deadlock chính test process (test đã giải thích rõ trong comment).
 - **Trạng thái:** CLOSED (commit `d8ff14b`). Codex re-audit 2026-08-31 ACCEPTED — tự chạy lại độc lập SQLite 15/15, MySQL 17/17 (bao gồm 2 test dùng 2 connection độc lập chứng minh `FOR UPDATE` chặn `UPDATE` tới `COMMIT` và chặn `DELETE` tới `ROLLBACK`), `verify-g0`/route mapping/`git diff --check` đều pass. Quyết định của Codex: **`W3.VOICE.SECURE-COMMAND` backend đủ điều kiện CLOSED** — transaction rollback (F25), TTL atomic, idempotency (P2), stale terminal (F26), parent re-check (F27) và multi-instance lock (F28) đều đã có bằng chứng. Xem `24-audit-bundle-w3voice-securecommand.md` mục "Remediation F28" cho evidence đầy đủ.
 
+### F29 — Form Vue dùng trực tiếp draft bất biến nên không nhận giá trị nhập · **P1 High / browser-production — FIXED (2026-09-01)**
+
+- **Bằng chứng:** `toEventDraft()`/`toAwardDraft()`/`toEventCostDraft()`/`toInteractionCreateDraft()` và
+  các draft People/Booking trả `Object.freeze(...)`, nhưng một số form đưa thẳng kết quả vào
+  `reactive(...)`. Vue không proxy object non-extensible: thí nghiệm Node `isReactive(reactive(Object.freeze({ name: '' })))`
+  trả `false`; gán `name` không đổi giá trị. Vì vậy người dùng có thể mở form nhưng không nhập được,
+  sau đó bị validation từ chối — khớp triệu chứng "không thêm được".
+- **Resolution:** mọi form bị ảnh hưởng sao chép draft (`reactive({ ...toXxxDraft(...) })`) trước khi
+  bind `v-model`, vẫn giữ `Object.freeze` ở boundary domain/payload. Phạm vi gồm Event core/cost,
+  Award core, Interaction create, People create, Booking create/edit trên Desktop và Native.
+- **Regression evidence:** `UI-FORM-001` kiểm tra 14 composition: tái hiện trap bằng Vue thật, xác
+  nhận copy là reactive/có thể gán và khóa source form vào pattern copy. Không làm client trở thành
+  nơi phân quyền; payload vẫn qua allowlist và PolicyEngine server-side.
+
 ## E. Điểm mạnh nên bảo toàn
 - Mô hình nghiệp vụ PR phong phú, liên hệ nhiều thực thể.
 - RBAC server-side + audit + per-user `sensitive_perms` (biểu cảm hơn role cứng).

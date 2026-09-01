@@ -26,6 +26,16 @@
 - Mở pilot read-only cho Award List/Detail qua R062/R063. UI giữ nguyên mask do PolicyEngine trả về,
   không render owner/caretaker/budget participation; dữ liệu file chỉ là metadata tồn tại và nội dung
   vẫn phải đi qua endpoint được server kiểm quyền. CRUD/AI/reminder Award chưa bị kéo vào pilot này.
+- Mở Award create/edit qua R064/R065 ở hai composition MDS riêng. Nút tạo/sửa chỉ hiện theo
+  permission từ `/api/me`; payload core chỉ dùng allowlist và không chứa owner, caretaker hay file,
+  nên máy chủ/PolicyEngine vẫn là nơi quyết định cuối cùng. Các trường nâng cao và flow
+  participation/file/reminder/AI extract tiếp tục tách sang slice sau để không làm mờ ranh giới
+  authorization hoặc mất dữ liệu nghiệp vụ trong một lần thay đổi lớn.
+- Sửa F29: các form từng chuyển draft `Object.freeze` thẳng vào `Vue.reactive`, khiến Vue giữ object
+  không proxy được và `v-model` không nhận giá trị mới. Form Event, Award, Interaction, Person và
+  Booking nay sao chép draft trước khi reactive; `UI-FORM-001` tái hiện lỗi bằng Vue thật và khóa 14
+  composition Desktop/Native. Đây là nguyên nhân trực tiếp có thể làm người dùng tưởng chức năng
+  "Thêm" bị thiếu dù route/API đã tồn tại.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 

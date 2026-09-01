@@ -106,3 +106,36 @@ test('UI-EVENT-006: Event Delete yêu cầu confirm ở cả hai surface và qua
   for (const component of [desktopDetail, mobileDetail]) { assert.match(component, /<MDialog/); assert.match(component, /Xóa sự kiện\?/); assert.match(component, /v-if="canDelete"/); }
   assert.match(featureEvent, /events\?\.includes\('delete'\)/); assert.match(featureEvent, /api\.delete\(props\.eventId\)/); assert.match(featureEvent, /@delete="deleteEvent"/);
 });
+
+test('UI-AWARD-002: Award core create/edit dùng allowlist, API protected và hai composition MDS riêng', async () => {
+  const awardRoot = path.join(root, 'frontend', 'src', 'features', 'awards'); const domainRoot = path.join(awardRoot, 'domain'); const featureAward = fs.readFileSync(path.join(awardRoot, 'AwardsListFeature.vue'), 'utf8'); const listDesktop = fs.readFileSync(path.join(awardRoot, 'desktop', 'AwardsListDesktop.vue'), 'utf8'); const listMobile = fs.readFileSync(path.join(awardRoot, 'mobile', 'AwardsListMobile.vue'), 'utf8'); const detailDesktop = fs.readFileSync(path.join(awardRoot, 'desktop', 'AwardDetailDesktop.vue'), 'utf8'); const detailMobile = fs.readFileSync(path.join(awardRoot, 'mobile', 'AwardDetailMobile.vue'), 'utf8'); const desktopForm = fs.readFileSync(path.join(awardRoot, 'desktop', 'AwardFormDesktop.vue'), 'utf8'); const mobileForm = fs.readFileSync(path.join(awardRoot, 'mobile', 'AwardFormMobile.vue'), 'utf8');
+  const { AWARD_PUBLIC_FIELDS, toAwardDraft, toAwardPayload } = await import(pathToFileURL(path.join(domainRoot, 'award-write.mjs')).href); const { createAwardsApi } = await import(pathToFileURL(path.join(domainRoot, 'awards-api.mjs')).href);
+  const payload = toAwardPayload({ ...toAwardDraft(), name: 'Giải PR 2026', cost: '2500000', owner_id: 99, caretaker_ids: [8], attachments: ['private.pdf'] }); assert.equal(payload.name, 'Giải PR 2026'); assert.equal(payload.cost, 2500000); for (const forbidden of ['owner_id', 'caretaker_ids', 'attachments', 'org_id']) assert.equal(forbidden in payload, false); assert.deepEqual(Object.keys(payload), AWARD_PUBLIC_FIELDS); assert.throws(() => toAwardPayload({ ...toAwardDraft(), name: ' ' }), /Tên giải thưởng/); assert.throws(() => toAwardPayload({ ...toAwardDraft(), name: 'Hợp lệ', cost: '-1' }), /không âm/);
+  const calls = []; const api = createAwardsApi({ fetchFn: async (url, init = {}) => { calls.push({ url, init }); return new Response(JSON.stringify(init.method === 'POST' ? { id: 41 } : { ok: true }), { status: 200, headers: { 'content-type': 'application/json' } }); } }); assert.equal((await api.save(payload)).id, 41); assert.equal((await api.save(payload, 41)).id, 41); assert.deepEqual(calls.map((call) => [call.url, call.init.method]), [['/api/awards', 'POST'], ['/api/awards/41', 'PUT']]);
+  assert.match(featureAward, /awards.*includes\('create'\)/); assert.match(featureAward, /awards.*includes\('edit'\)/); assert.match(featureAward, /api\.save\(input,props\.awardId\)/); assert.match(featureAward, /:can-create="canCreate"/); assert.match(featureAward, /:can-edit="canEdit"/); assert.match(featureAward, /@create="create"/); assert.match(featureAward, /@edit="edit"/); assert.match(featureAward, /@page="load\(\{page:\$event\}\)"/);
+  for (const component of [desktopForm, mobileForm]) { assert.match(component, /toAwardPayload/); assert.match(component, /<MInput/); assert.match(component, /<MSelect/); assert.match(component, /<MTextarea/); assert.doesNotMatch(component, /owner_id|caretaker_ids|attachments/); } assert.match(desktopForm, /sticky bottom-0/); assert.match(mobileForm, /<MMobileTopBar/); assert.match(mobileForm, /<MDialog/); assert.match(mobileForm, /--mds-mobile-safe-bottom/); for (const component of [listDesktop, listMobile]) assert.match(component, /v-if="canCreate"/); for (const component of [detailDesktop, detailMobile]) assert.match(component, /v-if="canEdit"/);
+});
+
+test('UI-FORM-001: mọi form dùng draft bất biến đều sao chép trước khi đưa vào Vue reactive', async () => {
+  const { reactive, isReactive } = require('vue');
+  const targets = [
+    ['features/events/domain/event-write.mjs', 'toEventDraft', 'frontend/src/features/events/desktop/EventCreateDesktop.vue', 'name'],
+    ['features/events/domain/event-write.mjs', 'toEventDraft', 'frontend/src/features/events/mobile/EventCreateMobile.vue', 'name'],
+    ['features/events/domain/event-cost-write.mjs', 'toEventCostDraft', 'frontend/src/features/events/desktop/EventCostFormDesktop.vue', 'title'],
+    ['features/events/domain/event-cost-write.mjs', 'toEventCostDraft', 'frontend/src/features/events/mobile/EventCostFormMobile.vue', 'title'],
+    ['features/awards/domain/award-write.mjs', 'toAwardDraft', 'frontend/src/features/awards/desktop/AwardFormDesktop.vue', 'name'],
+    ['features/awards/domain/award-write.mjs', 'toAwardDraft', 'frontend/src/features/awards/mobile/AwardFormMobile.vue', 'name'],
+    ['features/interactions/domain/interaction-write.mjs', 'toInteractionCreateDraft', 'frontend/src/features/interactions/desktop/InteractionCreateDesktop.vue', 'summary'],
+    ['features/interactions/domain/interaction-write.mjs', 'toInteractionCreateDraft', 'frontend/src/features/interactions/mobile/InteractionCreateMobile.vue', 'summary'],
+    ['features/people/domain/people-write.mjs', 'toPeopleCreateDraft', 'frontend/src/features/people/desktop/PeopleCreateDesktop.vue', 'full_name'],
+    ['features/people/domain/people-write.mjs', 'toPeopleCreateDraft', 'frontend/src/features/people/mobile/PeopleCreateMobile.vue', 'full_name'],
+    ['features/people/domain/booking-write.mjs', 'toBookingCreateDraft', 'frontend/src/features/people/desktop/BookingCreateDesktop.vue', 'title'],
+    ['features/people/domain/booking-write.mjs', 'toBookingCreateDraft', 'frontend/src/features/people/mobile/BookingCreateMobile.vue', 'title'],
+    ['features/people/domain/booking-write.mjs', 'toBookingEditDraft', 'frontend/src/features/people/desktop/BookingEditDesktop.vue', 'title'],
+    ['features/people/domain/booking-write.mjs', 'toBookingEditDraft', 'frontend/src/features/people/mobile/BookingEditMobile.vue', 'title'],
+  ];
+  for (const [modulePath, factoryName, componentPath, field] of targets) {
+    const module = await import(pathToFileURL(path.join(root, 'frontend', 'src', modulePath)).href); const immutable = module[factoryName](); const unsafe = reactive(immutable); const safe = reactive({ ...immutable });
+    assert.equal(Object.isFrozen(immutable), true, `${factoryName} must keep its immutable boundary`); assert.equal(isReactive(unsafe), false, `${factoryName} reproduces the Vue non-extensible-object trap`); assert.equal(isReactive(safe), true, `${factoryName} copy must be editable`); safe[field] = 'đã nhập'; assert.equal(safe[field], 'đã nhập'); assert.match(fs.readFileSync(path.join(root, componentPath), 'utf8'), new RegExp(`reactive\\(\\{\\s*\\.\\.\\.${factoryName}`));
+  }
+});

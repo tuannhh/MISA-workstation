@@ -8,7 +8,7 @@ import MSelect from '../../../components/mds/MSelect.vue';
 import MTextarea from '../../../components/mds/MTextarea.vue';
 import { toBookingCreateDraft, toBookingCreatePayload, validateBookingCreateDraft } from '../domain/booking-write.mjs';
 const props = defineProps({ personId: { type: Number, required: true }, personName: { type: String, required: true }, saving: { type: Boolean, default: false }, serverError: { type: String, default: '' }, safeAreaStyle: { type: Object, default: () => ({}) } });
-const emit = defineEmits(['cancel', 'save']); const draft = reactive(toBookingCreateDraft()); const errors = reactive({}); const confirmDiscard = ref(false); const initialDraft = JSON.stringify(draft);
+const emit = defineEmits(['cancel', 'save']); const draft = reactive({ ...toBookingCreateDraft() }); const errors = reactive({}); const confirmDiscard = ref(false); const initialDraft = JSON.stringify(draft);
 const contentTypes = ['', 'Bài PR', 'Bài phỏng vấn', 'Thông cáo báo chí', 'Advertorial', 'Social post', 'Khác'].map((value) => ({ value, label: value || 'Chọn loại nội dung' })); const statuses = ['Đã đặt', 'Đã đăng', 'Đã nghiệm thu', 'Hủy'].map((value) => ({ value, label: value })); const isDirty = computed(() => JSON.stringify(draft) !== initialDraft);
 function requestCancel() { if (props.saving) return; if (isDirty.value) { confirmDiscard.value = true; return; } emit('cancel'); }
 function submit() { const nextErrors = validateBookingCreateDraft(draft); Object.keys(errors).forEach((key) => delete errors[key]); Object.assign(errors, nextErrors); if (Object.keys(nextErrors).length) return; emit('save', toBookingCreatePayload(draft, props)); }

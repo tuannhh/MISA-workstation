@@ -8,7 +8,7 @@ import { toBookingEditDraft, toBookingUpdatePayload, validateBookingCreateDraft 
 
 const props = defineProps({ record: { type: Object, required: true }, saving: { type: Boolean, default: false }, serverError: { type: String, default: '' } });
 const emit = defineEmits(['cancel', 'save']);
-const draft = reactive(toBookingEditDraft(props.record)); const errors = reactive({}); const titleInput = ref(null);
+const draft = reactive({ ...toBookingEditDraft(props.record) }); const errors = reactive({}); const titleInput = ref(null);
 const contentTypes = ['', 'Bài PR', 'Bài phỏng vấn', 'Thông cáo báo chí', 'Advertorial', 'Social post', 'Khác'].map((value) => ({ value, label: value || 'Chọn loại nội dung' }));
 const statuses = ['Đã đặt', 'Đã đăng', 'Đã nghiệm thu', 'Hủy'].map((value) => ({ value, label: value }));
 async function submit() { const nextErrors = validateBookingCreateDraft(draft); Object.keys(errors).forEach((key) => delete errors[key]); Object.assign(errors, nextErrors); if (Object.keys(nextErrors).length) { await nextTick(); titleInput.value?.focus(); return; } emit('save', toBookingUpdatePayload(draft)); }

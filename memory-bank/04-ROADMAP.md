@@ -976,6 +976,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > kiểm tra quyền. CRUD Award/participation, upload, reminder và AI extract là slice sau; native host,
 > accessibility thiết bị và bridge vẫn **UNVERIFIED** tới O3/W4.
 
+> **Execution update — 2026-09-01 (W3.AWARDS.CORE.WRITE):** mở create/edit Award qua R064/R065.
+> Cả Desktop MDS và Native composition đều gate action bằng `awards:create`/`awards:edit`, nhưng đây
+> chỉ là affordance: payload core dùng allowlist, không có owner/caretaker/file; `POST`/`PUT` vẫn để
+> PolicyEngine quyết định quyền và ownership. Form hiện ưu tiên trường nghiệp vụ lõi; các trường nâng
+> cao (liên kết tổ chức, AI/review, cơ cấu giải và cách đánh giá) được giữ nguyên khi sửa và sẽ mở
+> trong slice form mở rộng, cùng participation/file/reminder/AI extract. Native host bridge,
+> accessibility thiết bị và production AMIS runtime vẫn **UNVERIFIED** tới O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

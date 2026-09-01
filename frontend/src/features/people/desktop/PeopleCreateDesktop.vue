@@ -6,7 +6,7 @@ import MSelect from '../../../components/mds/MSelect.vue';
 import { toPeopleCreateDraft, toPeopleCreatePayload, validatePeopleEditDraft } from '../domain/people-write.mjs';
 
 const props = defineProps({ organizations: { type: Array, default: () => [] }, saving: { type: Boolean, default: false }, serverError: { type: String, default: '' } });
-const emit = defineEmits(['cancel', 'save']); const draft = reactive(toPeopleCreateDraft()); const errors = reactive({}); const nameInput = ref(null);
+const emit = defineEmits(['cancel', 'save']); const draft = reactive({ ...toPeopleCreateDraft() }); const errors = reactive({}); const nameInput = ref(null);
 const levels = ['', 'Lãnh đạo', 'Quản lý', 'Chuyên viên', 'Phóng viên', 'Khác'].map((value) => ({ value, label: value || 'Chọn cấp bậc' }));
 const categories = ['', 'VIP', 'Thường', 'Khác'].map((value) => ({ value, label: value || 'Chọn nhóm' }));
 const statuses = ['Đang hoạt động', 'Tạm ngừng', 'Ngừng hợp tác'].map((value) => ({ value, label: value }));
