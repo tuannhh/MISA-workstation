@@ -951,6 +951,11 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > /events/:id`. Client không tự quyết ownership/role, nhận lỗi 403 từ server như state hiển thị;
 > cost/file và Smart Intake vẫn là slice độc lập.
 
+> **Execution update — 2026-09-01 (W3.EVENTS.COST.READ):** Detail hiển thị 4 tổng chi phí
+> (tài trợ/tổ chức/truyền thông/tổng) đúng nguyên văn projection `totals` của R088. Không cộng từ
+> dòng chi phí tại browser; giá trị mask được giữ nguyên. Tạo/sửa/xóa từng cost line và file metadata
+> vẫn tách slice vì route/file policy còn cần contract riêng.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

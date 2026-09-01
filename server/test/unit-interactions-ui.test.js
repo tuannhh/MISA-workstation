@@ -60,10 +60,11 @@ test('UI-EVENT-003: Event Create dùng MDS, có gate quyền và không đưa co
 test('UI-EVENT-004: Event Detail dùng projection public, có route Desktop/Native riêng và không suy ra chi phí/tệp', async () => {
   const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events'); const domainRoot = path.join(eventRoot, 'domain'); const desktopDetail = fs.readFileSync(path.join(eventRoot, 'desktop', 'EventDetailDesktop.vue'), 'utf8'); const mobileDetail = fs.readFileSync(path.join(eventRoot, 'mobile', 'EventDetailMobile.vue'), 'utf8'); const featureEvent = fs.readFileSync(path.join(eventRoot, 'EventsListFeature.vue'), 'utf8');
   const { eventDetailViewModel } = await import(pathToFileURL(path.join(domainRoot, 'event-detail.mjs')).href);
-  const model = eventDetailViewModel({ record: { id: 4, name: 'Hội nghị PR', organizer: 'MISA', location: 'Hà Nội', owner_id: 99, status: 'Đang chuẩn bị' }, totals: { grand: '●●● (đã ẩn)' }, attachments: [{ id: 2 }] });
-  assert.equal(model.title, 'Hội nghị PR'); assert.equal(model.totalCost, '●●● (đã ẩn)'); assert.equal('ownerId' in model, false); assert.equal('attachments' in model, false);
+  const model = eventDetailViewModel({ record: { id: 4, name: 'Hội nghị PR', organizer: 'MISA', location: 'Hà Nội', owner_id: 99, status: 'Đang chuẩn bị' }, totals: { sponsor: '●●● (đã ẩn)', organization: 2500000, media: 0, grand: '●●● (đã ẩn)' }, attachments: [{ id: 2 }] });
+  assert.equal(model.title, 'Hội nghị PR'); assert.equal(model.totalCost, '●●● (đã ẩn)'); assert.equal(model.costTotals[0].value, '●●● (đã ẩn)'); assert.equal(model.costTotals[1].value, 2500000); assert.equal('ownerId' in model, false); assert.equal('attachments' in model, false);
   for (const component of [desktopDetail, mobileDetail]) { assert.doesNotMatch(component, /owner_id|attachments|totalCost|event_cost/); }
   assert.match(desktopDetail, /shadow-\[var\(--mds-shadow-card\)\]/); assert.match(mobileDetail, /class="mds-mobile-app/); assert.match(mobileDetail, /<MMobileTopBar/); assert.doesNotMatch(mobileDetail, /MHeaderBar|MSidebar/);
+  for (const component of [desktopDetail, mobileDetail]) { assert.match(component, /costTotals/); assert.match(component, /PolicyEngine|Máy chủ quyết định/); assert.doesNotMatch(component, /reduce\(|\.sum\(/); }
   assert.match(featureEvent, /eventDetailViewModel/); assert.match(featureEvent, /location\.hash=`events\/\$\{Number\(id\)\}`/); assert.match(appVue, /\^events\(\?:\\\/\(\\d\+\)\)\?\$/);
 });
 

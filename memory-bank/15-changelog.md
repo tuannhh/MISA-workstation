@@ -14,6 +14,8 @@
 - Mở Event Delete với dialog xác nhận MDS riêng ở Desktop/Native. Nút theo `events:delete` chỉ là
   affordance; client gọi `DELETE /events/:id` và hiển thị lỗi từ server, không suy diễn ownership.
   `UI-EVENT-006` khóa contract API và confirm trước thao tác phá hủy.
+- Detail hiển thị tổng chi phí theo projection `R088` (bao gồm giá trị MASK) mà không tự cộng row
+  ở client. Đây chỉ là cost-read; cost line/file metadata và mọi thao tác ghi giữ ở slice policy riêng.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 

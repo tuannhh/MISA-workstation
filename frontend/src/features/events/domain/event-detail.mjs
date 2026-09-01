@@ -15,6 +15,15 @@ function text(value, fallback = '—') {
 export function eventDetailViewModel(payload = {}) {
   const record = payload?.record || {};
   const fields = Object.fromEntries(DETAIL_FIELDS.map((key) => [key, text(record[key]) ]));
+  const totals = payload?.totals || {};
+  // Không cộng từ row ở client: tổng có thể là sentinel MASK do PolicyEngine
+  // trả về. Mỗi giá trị giữ nguyên đúng projection của API.
+  const costTotals = Object.freeze([
+    Object.freeze({ label: 'Tài trợ', value: totals.sponsor ?? '—' }),
+    Object.freeze({ label: 'Tổ chức', value: totals.organization ?? '—' }),
+    Object.freeze({ label: 'Truyền thông', value: totals.media ?? '—' }),
+    Object.freeze({ label: 'Tổng chi phí', value: totals.grand ?? '—' }),
+  ]);
   return Object.freeze({
     id: Number(record.id) || null,
     title: fields.name,
@@ -24,6 +33,7 @@ export function eventDetailViewModel(payload = {}) {
     organizer: fields.organizer !== '—' ? fields.organizer : fields.org_name,
     fields: Object.freeze(fields),
     // Có thể là số hoặc sentinel MASK do API quyết định. Không cộng/tính lại ở UI.
-    totalCost: payload?.totals?.grand ?? '—',
+    totalCost: totals.grand ?? '—',
+    costTotals,
   });
 }
