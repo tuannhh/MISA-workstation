@@ -1034,6 +1034,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > được tạo bởi hàm thuần có test ngày cuối tháng/quý (bao gồm tháng 2), tránh sai phạm vi tính tiền.
 > Slice lazy-load độc lập; report theo nhân sự/đơn vị/award/care-alert chi tiết là phần sau. Native
 > AMIS bridge/device evidence tiếp tục **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-01 (W3.ADMIN.USERS.READ):** thêm Admin Users list read-only,
+> feature-flagged `adminUsersRead` (local harness: `uiAdminPilot=1`). Desktop và Native MDS chỉ
+> render projection tài khoản/tên/email/role/trạng thái từ `GET /admin/users`; `sensitive_perms`
+> không đi qua view-model hoặc UI. Create/edit/delete user, audit log, field visibility và reassign
+> owner tiếp tục là slice mutation riêng với confirmation/PolicyEngine test; Native host/device vẫn
+> **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

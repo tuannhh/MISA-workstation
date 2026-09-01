@@ -3030,3 +3030,15 @@ tự tổng hợp tiền từ dữ liệu dòng ở client và không đưa acti
 Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **23/23 pass**; `npm run
 build:ui` pass (không warning chunk size); `git diff --check` sạch. Báo cáo chi tiết và native
 runtime evidence vẫn là slice sau/O3-W4.
+
+## W3.ADMIN.USERS.READ — Admin Users MDS (Desktop + Native)
+
+Thêm danh sách người dùng read-only, feature-flagged `adminUsersRead` (local harness:
+`uiAdminPilot=1`), qua `GET /api/admin/users`. View-model chỉ giữ id/tài khoản/tên/email/role/trạng
+thái/nhắc; đặc biệt **không** đưa `sensitive_perms` vào model hoặc render mặc dù endpoint được Admin
+đọc. Desktop/Native là hai composition MDS riêng, Native có topbar/safe-area; feature lazy-load thành
+chunk 5.95 kB, không nở entry bundle.
+
+`UI-ADMIN-001` khóa endpoint/projection omission, cấm mutation, MDS/native split và route flag.
+Create/edit/delete user, audit log, field visibility và reassign owner không bị giả lập ở UI read
+pilot — sẽ đi batch mutation có confirmation, server 403 và PolicyEngine evidence riêng.
