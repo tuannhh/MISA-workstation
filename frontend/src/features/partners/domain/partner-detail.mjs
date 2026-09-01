@@ -32,6 +32,8 @@ function parseStringList(value) {
     return [];
   }
 }
+export function fileUrl(id) { return Number.isInteger(Number(id)) && Number(id) > 0 ? `/api/files/${Number(id)}` : null; }
+function files(value) { return Array.isArray(value) ? value.map((file) => Object.freeze({ id: Number(file.id), original_name: file.original_name || '', mime: file.mime || '' })).filter((file) => Number.isInteger(file.id) && file.id > 0) : []; }
 
 function present(fields) {
   return Object.freeze(fields.filter(([, value]) => value !== null && value !== undefined && value !== ''));
@@ -66,10 +68,10 @@ export function partnerDetailViewModel(payload) {
   // Không đưa file metadata/nội dung vào slice read này: GET /files/:id phải tiếp
   // tục đi qua policy file riêng ở slice W3.PARTNER.FILE.
   const agreements = Array.isArray(payload?.agreements) ? payload.agreements.map((agreement) => Object.freeze({
-    id: Number(agreement.id), ownerId: Number.isInteger(Number(agreement.owner_id)) ? Number(agreement.owner_id) : null, title: text(agreement.title), signedDate: formatDate(agreement.signed_date), signedDateValue: agreement.signed_date || '', validUntil: formatDate(agreement.valid_until), validUntilValue: agreement.valid_until || '', terms: agreement.terms || '', note: agreement.note || '',
+    id: Number(agreement.id), ownerId: Number.isInteger(Number(agreement.owner_id)) ? Number(agreement.owner_id) : null, title: text(agreement.title), signedDate: formatDate(agreement.signed_date), signedDateValue: agreement.signed_date || '', validUntil: formatDate(agreement.valid_until), validUntilValue: agreement.valid_until || '', terms: agreement.terms || '', note: agreement.note || '', files: Object.freeze(files(agreement.files)),
   })) : [];
   const workLogs = Array.isArray(payload?.workLogs) ? payload.workLogs.map((workLog) => Object.freeze({
-    id: Number(workLog.id), ownerId: Number.isInteger(Number(workLog.owner_id)) ? Number(workLog.owner_id) : null, title: text(workLog.topic), category: text(workLog.category), date: formatDate(workLog.work_date), workDateValue: workLog.work_date || '', status: text(workLog.status), result: workLog.result || '', staff: workLog.staff || '', note: workLog.note || '',
+    id: Number(workLog.id), ownerId: Number.isInteger(Number(workLog.owner_id)) ? Number(workLog.owner_id) : null, title: text(workLog.topic), category: text(workLog.category), date: formatDate(workLog.work_date), workDateValue: workLog.work_date || '', status: text(workLog.status), result: workLog.result || '', staff: workLog.staff || '', note: workLog.note || '', files: Object.freeze(files(workLog.files)),
   })) : [];
   return Object.freeze({
     id: Number(record.id), name: text(record.name), type, typeLabel: PARTNER_TYPE_META[type].label,

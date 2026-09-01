@@ -1,6 +1,6 @@
 # 27 — Batch Contract: W3.PARTNER.READ + WRITE-CORE (Partner Detail strangler)
 
-> **Status:** READ + WRITE-CORE + COOPERATION-CREATE/DELETE + COOPERATION-EDIT IMPLEMENTED / local visual review PASS; chưa cutover tệp hay Native production.
+> **Status:** READ + WRITE-CORE + COOPERATION-CREATE/DELETE/EDIT + FILE-UPLOAD/READ IMPLEMENTED / local visual review PASS; Native production chưa được xác thực.
 
 ## 1. Mục tiêu và phạm vi
 
@@ -25,6 +25,8 @@ Các phần sau **giữ nguyên legacy** khi cờ `partnerDetailRead` tắt và 
 
 **Cooperation edit (R011/R014):** model giữ `owner_id` chỉ để gợi ý UX: executor thấy Sửa khi owner trùng principal hiện tại, Admin/Super Admin thấy Sửa theo module permission. MOU form gửi đúng allowlist `title`, `signed_date`, `valid_until`, `terms`, `note`; Work Log form gửi `category`, `work_date`, `topic`, `result`, `status`, `staff`, `note`. Ba trạng thái dùng `MRadioGroup`, bốn loại làm việc dùng `MSelect`; không gửi owner/created-by/tệp. Máy chủ vẫn gọi `assertWritable()` và trả 403 nếu quyền bị thay đổi sau khi UI đã render. Mọi tệp chưa được claim.
 
+**Cooperation file (R016/R017 + R037):** UI chiếu metadata tệp từ Partner Detail, tải lên bằng `MUpload` chỉ khi cùng predicate ownership UX của `edit`, và mở qua `/api/files/:id`. Cả upload lẫn open đều bị server gate lại; metadata không suy diễn quyền đọc nội dung. Không có nút xoá, vì API delete attachment hiện fail-closed với owner khác `person` — không dựng một action UI không thể hoàn tất. Native dùng cùng leaf component trong composition mini-app riêng, nhưng file picker/runtime bridge thật vẫn **UNVERIFIED** tới O3/W4.
+
 ## 3. Route × surface × role
 
 | Route/flow | Desktop | Native fake provider | Native AMIS thật | viewer | executor | admin/super_admin |
@@ -34,7 +36,7 @@ Các phần sau **giữ nguyên legacy** khi cờ `partnerDetailRead` tắt và 
 | R010 create agreement / R013 create work log (`gov`) | Vue MDS form | Vue native composition | **UNVERIFIED — O3/W4.1** | server PolicyEngine/403 | server PolicyEngine/allow khi có `partners.create` | server PolicyEngine |
 | R012/R015 delete MOU/work log (`gov`) | Vue MDS confirm | Vue native confirm | **UNVERIFIED — O3/W4.1** | server PolicyEngine/403 | server PolicyEngine/403 | server PolicyEngine + confirm |
 | R011 edit agreement / R014 edit work-log (`gov`) | Vue MDS form | Vue native form | **UNVERIFIED — O3/W4.1** | server PolicyEngine/403 | owner-only UX + server PolicyEngine | server PolicyEngine |
-| R016/R017 file sub-resources | Legacy, không claim | Legacy, không claim | N/A batch này | server PolicyEngine | server PolicyEngine | server PolicyEngine |
+| R016/R017 upload file, R037 open file (`gov`) | Vue MDS upload/list | Vue native leaf trong mini-app | **UNVERIFIED — O3/W4.1 file bridge** | server PolicyEngine/403 | owner-only UX + server PolicyEngine | server PolicyEngine |
 
 Native 403/404/lỗi mạng vẫn là native shell, không fallback Desktop. Cờ có default `false`; local harness `?uiPartnerPilot=1&uiPeopleSurface=native` chỉ hoạt động trên localhost/127.0.0.1, không thay thế AMIS bridge O3.
 
@@ -43,5 +45,5 @@ Native 403/404/lỗi mạng vẫn là native shell, không fallback Desktop. C�
 1. Hai cây page Desktop/Native độc lập, không chọn shell theo UA/viewport/role.
 2. View model không hiển thị trường nhạy cảm không có trong projection; person rows không đưa contact cá nhân.
 3. Loading/403/404/network ở đúng shell; Back/deep link/lifecycle qua W2.5 adapter.
-4. `UI-PAR-001..011`, build và regression xanh; rollback = tắt `partnerDetailRead`.
+4. `UI-PAR-001..012`, build và regression xanh; rollback = tắt `partnerDetailRead`.
 5. Không tuyên bố Native production pass trước O3/W4 device evidence.

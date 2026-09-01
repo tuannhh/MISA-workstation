@@ -19,6 +19,7 @@ const desktopWorkLogCreate = fs.readFileSync(path.join(featureRoot, 'desktop', '
 const mobileAgreementCreate = fs.readFileSync(path.join(featureRoot, 'mobile', 'PartnerAgreementCreateMobile.vue'), 'utf8');
 const mobileWorkLogCreate = fs.readFileSync(path.join(featureRoot, 'mobile', 'PartnerWorkLogCreateMobile.vue'), 'utf8');
 const mSelect = fs.readFileSync(path.join(root, 'frontend', 'src', 'components', 'mds', 'MSelect.vue'), 'utf8');
+const cooperationFiles = fs.readFileSync(path.join(featureRoot, 'PartnerCooperationFilesPanel.vue'), 'utf8');
 
 async function domain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'partner-detail.mjs')).href);
@@ -93,10 +94,10 @@ test('UI-PAR-006: write Desktop/Native dùng MDS form, confirm destructive và s
 test('UI-PAR-007: MOU/work log chỉ hiển thị metadata đã có trong API, không đưa file vào slice read', async () => {
   const { partnerDetailViewModel } = await domain();
   const model = partnerDetailViewModel({ record: { id: 4, name: 'Bộ MISA', org_type: 'gov' }, agreements: [{ id: 2, title: 'MOU 2026', signed_date: '2026-01-02', valid_until: '2027-01-02', files: [{ id: 99 }] }], workLogs: [{ id: 3, topic: 'Làm việc định kỳ', category: 'Làm việc', work_date: '2026-02-03', status: 'Hoàn thành', files: [{ id: 100 }] }] });
-  assert.deepEqual(model.agreements[0], { id: 2, ownerId: null, title: 'MOU 2026', signedDate: '02/01/2026', signedDateValue: '2026-01-02', validUntil: '02/01/2027', validUntilValue: '2027-01-02', terms: '', note: '' });
-  assert.deepEqual(model.workLogs[0], { id: 3, ownerId: null, title: 'Làm việc định kỳ', category: 'Làm việc', date: '03/02/2026', workDateValue: '2026-02-03', status: 'Hoàn thành', result: '', staff: '', note: '' });
-  assert.doesNotMatch(desktopPage, /\/api\/files\//, 'file phải đợi slice Policy/File riêng');
-  assert.doesNotMatch(mobilePage, /\/api\/files\//, 'native cũng không được bypass policy file');
+  assert.deepEqual(model.agreements[0], { id: 2, ownerId: null, title: 'MOU 2026', signedDate: '02/01/2026', signedDateValue: '2026-01-02', validUntil: '02/01/2027', validUntilValue: '2027-01-02', terms: '', note: '', files: [{ id: 99, original_name: '', mime: '' }] });
+  assert.deepEqual(model.workLogs[0], { id: 3, ownerId: null, title: 'Làm việc định kỳ', category: 'Làm việc', date: '03/02/2026', workDateValue: '2026-02-03', status: 'Hoàn thành', result: '', staff: '', note: '', files: [{ id: 100, original_name: '', mime: '' }] });
+  assert.doesNotMatch(desktopPage, /window\.open|location\.assign/, 'desktop không bypass protected file route bằng imperative navigation');
+  assert.doesNotMatch(mobilePage, /window\.open|location\.assign/, 'native không bypass protected file route bằng imperative navigation');
 });
 
 test('UI-PAR-008: tạo MOU/lịch sử là slice create hẹp, dùng MDS desktop/native và không gửi owner hay tệp', async () => {
@@ -168,4 +169,21 @@ test('UI-PAR-011: chỉnh sửa work log dùng đúng MDS dropdown/radio và PUT
   assert.match(feature, /api\.updateWorkLog\(state\.editingWorkLog\.id, payload\)/);
   assert.match(desktopPage, /canEditCooperation\(work\)/);
   assert.match(mobilePage, /canEditCooperation\(work\)/);
+});
+
+test('UI-PAR-012: tệp MOU/work log dùng MDS upload, chỉ mở API protected và không dựng xóa khi API chưa có policy', async () => {
+  const { fileUrl, partnerDetailViewModel } = await domain();
+  const model = partnerDetailViewModel({ record: { id: 4, name: 'Bộ MISA', org_type: 'gov' }, agreements: [{ id: 2, title: 'MOU', files: [{ id: 22, original_name: 'mou.pdf', mime: 'application/pdf' }] }], workLogs: [{ id: 3, topic: 'Họp', files: [{ id: 23, original_name: 'hop.pdf' }] }] });
+  assert.equal(fileUrl(22), '/api/files/22');
+  assert.equal(fileUrl('x'), null);
+  assert.equal(model.agreements[0].files[0].original_name, 'mou.pdf');
+  assert.equal(model.workLogs[0].files[0].id, 23);
+  assert.match(cooperationFiles, /<MUpload/, 'chọn tệp phải dùng MDS upload');
+  assert.match(cooperationFiles, /fileUrl\(file\.id\)/, 'mở tệp phải đi qua GET /api/files/:id protected');
+  assert.match(cooperationFiles, /Xóa tệp chưa có API chính sách/, 'không dựng action xóa không được backend hỗ trợ');
+  assert.doesNotMatch(cooperationFiles, /deleteAttachment|\/attachments\//, 'panel không gọi delete route không hỗ trợ owner agreement/work-log');
+  assert.match(feature, /api\.uploadAgreementFiles\(id, files\)/);
+  assert.match(feature, /api\.uploadWorkLogFiles\(id, files\)/);
+  assert.match(desktopPage, /<PartnerCooperationFilesPanel/);
+  assert.match(mobilePage, /<PartnerCooperationFilesPanel/);
 });

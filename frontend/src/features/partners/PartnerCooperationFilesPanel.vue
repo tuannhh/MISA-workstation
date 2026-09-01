@@ -1,0 +1,18 @@
+<script setup>
+import { ref } from 'vue';
+import MEmptyState from '../../components/mds/MEmptyState.vue';
+import MTag from '../../components/mds/MTag.vue';
+import MUpload from '../../components/mds/MUpload.vue';
+import { fileUrl } from './domain/partner-detail.mjs';
+
+const props = defineProps({ agreements: { type: Array, default: () => [] }, workLogs: { type: Array, default: () => [] }, canUpload: { type: Function, default: () => false }, uploadingId: { type: Number, default: null }, error: { type: String, default: '' } });
+const emit = defineEmits(['upload-agreement', 'upload-work-log']);
+const localError = ref('');
+function upload(type, item, files) { localError.value = ''; if (type === 'agreement') emit('upload-agreement', { id: item.id, files }); else emit('upload-work-log', { id: item.id, files }); }
+function oversized(files) { localError.value = `${files.length} tệp vượt quá 5MB nên chưa được tải lên.`; }
+function displayName(file) { return file?.original_name || `Tệp #${file?.id || ''}`; }
+</script>
+
+<template>
+  <section class="space-y-5 border-t border-[var(--mds-border-light)] pt-5"><div><h2 class="text-[16px] font-semibold leading-[22px]">Tệp đính kèm hợp tác</h2><p class="mt-1 text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">Mỗi tệp được máy chủ kiểm tra quyền lại khi mở. Xóa tệp chưa có API chính sách nên không hiển thị thao tác này.</p></div><div class="grid gap-5 lg:grid-cols-2"><section><h3 class="text-[14px] font-semibold leading-5">Tệp MOU</h3><div v-if="agreements.length" class="mt-2 space-y-3"><article v-for="agreement in agreements" :key="agreement.id" class="rounded-lg bg-[var(--mds-bg-page)] p-3"><p class="truncate text-[13px] font-medium">{{ agreement.title }}</p><div v-if="agreement.files.length" class="mt-2 space-y-1"><a v-for="file in agreement.files" :key="file.id" :href="fileUrl(file.id)" target="_blank" rel="noopener" class="block truncate text-[13px] text-[var(--mds-brand-700)] hover:underline">{{ displayName(file) }}</a></div><MTag v-else color="neutral" class="mt-2">Chưa có tệp</MTag><MUpload v-if="canUpload(agreement)" class="mt-3" label="Tải tệp MOU" accept="application/pdf,image/jpeg,image/png,image/webp,.doc,.docx,.xlsx" :disabled="uploadingId === agreement.id" @select-files="upload('agreement', agreement, $event)" @oversized="oversized" /></article></div><MEmptyState v-else title="Chưa có MOU" description="Tạo MOU trước khi đính kèm hồ sơ liên quan." /></section><section><h3 class="text-[14px] font-semibold leading-5">Tệp lịch sử làm việc</h3><div v-if="workLogs.length" class="mt-2 space-y-3"><article v-for="workLog in workLogs" :key="workLog.id" class="rounded-lg bg-[var(--mds-bg-page)] p-3"><p class="truncate text-[13px] font-medium">{{ workLog.title }}</p><div v-if="workLog.files.length" class="mt-2 space-y-1"><a v-for="file in workLog.files" :key="file.id" :href="fileUrl(file.id)" target="_blank" rel="noopener" class="block truncate text-[13px] text-[var(--mds-brand-700)] hover:underline">{{ displayName(file) }}</a></div><MTag v-else color="neutral" class="mt-2">Chưa có tệp</MTag><MUpload v-if="canUpload(workLog)" class="mt-3" label="Tải tệp lịch sử" accept="application/pdf,image/jpeg,image/png,image/webp,.doc,.docx,.xlsx" :disabled="uploadingId === workLog.id" @select-files="upload('work-log', workLog, $event)" @oversized="oversized" /></article></div><MEmptyState v-else title="Chưa có lịch sử" description="Ghi nhận làm việc trước khi đính kèm tệp." /></section></div><p v-if="localError || error" role="alert" class="rounded-lg bg-[var(--mds-danger-bg)] px-3 py-2 text-[13px] leading-[18px] text-[var(--mds-danger)]">{{ localError || error }}</p></section>
+</template>

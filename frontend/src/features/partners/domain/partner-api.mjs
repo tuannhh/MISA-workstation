@@ -81,5 +81,21 @@ export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api'
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async uploadAgreementFiles(agreementId, files) {
+      const form = new FormData();
+      for (const file of files || []) form.append('files', file);
+      const response = await fetchFn(`${basePath}/agreements/${Number(agreementId)}/files`, { method: 'POST', credentials: 'same-origin', body: form });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
+    async uploadWorkLogFiles(workLogId, files) {
+      const form = new FormData();
+      for (const file of files || []) form.append('files', file);
+      const response = await fetchFn(`${basePath}/work-logs/${Number(workLogId)}/files`, { method: 'POST', credentials: 'same-origin', body: form });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
   });
 }

@@ -851,6 +851,11 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > `MRadioGroup` MDS. Native là form riêng có safe-area và confirm bỏ draft. Tệp R016/R017 là slice
 > cuối của Partner sub-resource và chưa được claim.
 
+> **Execution update — 2026-09-01 (W3.PARTNER.FILE):** nối R016/R017 upload và R037 mở tệp bằng
+> `MUpload` MDS, metadata từ Partner Detail và `/api/files/:id` protected. Không dựng xoá vì
+> endpoint delete attachment cho agreement/work-log đang fail-closed đúng thiết kế. Native chỉ được
+> xác thực bằng fake host; chọn tệp thực trong AMIS WebView tiếp tục chờ O3/W4 bridge/device test.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
