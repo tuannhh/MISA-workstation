@@ -1,13 +1,15 @@
 <script setup>
 import { ref } from 'vue';
 import MButton from '../../../components/mds/MButton.vue';
+import MDialog from '../../../components/mds/MDialog.vue';
 import MEmptyState from '../../../components/mds/MEmptyState.vue';
 import MTag from '../../../components/mds/MTag.vue';
 import MTabs from '../../../components/mds/MTabs.vue';
 
-defineProps({ detail: { type: Object, required: true } });
-const emit = defineEmits(['back', 'navigate']);
+defineProps({ detail: { type: Object, required: true }, canEdit: { type: Boolean, default: false }, canDelete: { type: Boolean, default: false }, deleteWorking: { type: Boolean, default: false }, deleteError: { type: String, default: '' } });
+const emit = defineEmits(['back', 'navigate', 'edit', 'delete-partner']);
 const activeTab = ref('overview');
+const deleteOpen = ref(false);
 const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'people', label: 'Nhân sự' }, { key: 'dates', label: 'Ngày nhắc' }];
 </script>
 
@@ -15,7 +17,7 @@ const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'people', l
   <section class="min-h-0 bg-[var(--mds-bg-page)] p-4">
     <header class="mb-4 flex min-w-0 items-center justify-between gap-4 rounded-lg bg-[var(--mds-bg)] px-4 py-3 shadow-[var(--mds-shadow-card)]">
       <div class="min-w-0"><div class="flex min-w-0 items-center gap-2"><h1 class="truncate text-[20px] font-semibold leading-7 text-[var(--mds-text)]">{{ detail.name }}</h1><MTag color="brand" class="shrink-0">{{ detail.typeLabel }}</MTag></div><p class="mt-1 truncate text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">{{ detail.subtitle }}</p></div>
-      <MButton variant="neutral" class="shrink-0" @click="emit('back')">Danh sách</MButton>
+      <div class="flex shrink-0 items-center gap-2"><MButton variant="neutral" @click="emit('back')">Danh sách</MButton><MButton v-if="canDelete" variant="danger" :disabled="deleteWorking" @click="deleteOpen = true">Xóa</MButton><MButton v-if="canEdit" variant="primary" @click="emit('edit')">Chỉnh sửa</MButton></div>
     </header>
     <div class="rounded-lg bg-[var(--mds-bg)] shadow-[var(--mds-shadow-card)]">
       <MTabs v-model="activeTab" :tabs="tabs" class="[&>[role=tablist]]:px-4">
@@ -27,5 +29,7 @@ const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'people', l
         <section v-else class="p-4"><h2 class="text-[16px] font-semibold leading-[22px]">Ngày nhắc liên quan</h2><div v-if="detail.dates.length" class="mt-3 divide-y divide-[var(--mds-border-light)]"><div v-for="date in detail.dates" :key="date.id" class="flex min-h-14 items-center justify-between gap-4 py-3"><span class="min-w-0"><strong class="block truncate text-[13px]">{{ date.title }}</strong><span v-if="date.recurring" class="mt-1 block text-[12px] text-[var(--mds-text-secondary)]">Lặp lại hằng năm</span></span><span class="shrink-0 text-[13px] font-medium">{{ date.date }}</span></div></div><MEmptyState v-else title="Chưa có ngày nhắc" description="Ngày thành lập và các mốc hợp tác sẽ xuất hiện tại đây khi được tạo." /></section>
       </MTabs>
     </div>
+    <p v-if="deleteError" role="alert" class="mx-auto mt-3 max-w-[960px] rounded-lg bg-[var(--mds-danger-bg)] px-3 py-2 text-[13px] leading-[18px] text-[var(--mds-danger)]">{{ deleteError }}</p>
+    <MDialog v-model="deleteOpen" title="Xóa cơ quan?" type="danger" confirm-text="Xóa cơ quan" @confirm="emit('delete-partner')"><p>Hồ sơ cơ quan và các dữ liệu liên quan có thể bị xóa. Thao tác này không thể hoàn tác.</p></MDialog>
   </section>
 </template>

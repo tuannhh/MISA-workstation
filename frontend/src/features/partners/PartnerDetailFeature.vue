@@ -7,12 +7,14 @@ import { HostEvent, HostSurface } from '../../platform/host-adapter.mjs';
 import { createPartnerApi, PartnerApiError } from './domain/partner-api.mjs';
 import { partnerDetailViewModel } from './domain/partner-detail.mjs';
 import PartnerDetailPage from './desktop/PartnerDetailPage.vue';
+import PartnerEditFormDesktop from './desktop/PartnerEditFormDesktop.vue';
+import PartnerEditFormMobile from './mobile/PartnerEditFormMobile.vue';
 import PartnerDetailPageMobile from './mobile/PartnerDetailPageMobile.vue';
 
 const props = defineProps({ partnerId: { type: Number, required: true }, surface: { type: String, required: true }, adapter: { type: Object, default: null }, hostUnavailable: { type: Boolean, default: false } });
 const emit = defineEmits(['back', 'navigate']);
 const api = createPartnerApi();
-const state = reactive({ phase: 'loading', detail: null, error: null });
+const state = reactive({ phase: 'loading', detail: null, record: null, permissions: null, error: null, mode: 'read', saving: false, saveError: null, deleting: false, deleteError: null });
 const safeArea = ref(props.adapter?.getSafeArea?.() || {});
 const unsubscribers = [];
 const isNative = computed(() => props.surface === HostSurface.NATIVE);
@@ -28,9 +30,13 @@ async function load() {
     return;
   }
   state.phase = 'loading'; state.error = null;
-  try { state.detail = partnerDetailViewModel(await api.getDetail(props.partnerId)); state.phase = 'ready'; }
+  try { const [payload, session] = await Promise.all([api.getDetail(props.partnerId), api.getCurrentUser()]); state.record = payload.record; state.detail = partnerDetailViewModel(payload); state.permissions = session?.permissions || null; state.mode = 'read'; state.phase = 'ready'; }
   catch (error) { setError(error); }
 }
+const canEdit = computed(() => state.permissions?.modules?.partners?.includes('edit') === true);
+const canDelete = computed(() => state.permissions?.modules?.partners?.includes('delete') === true && ['admin', 'super_admin'].includes(state.permissions?.role));
+async function saveEdit(payload) { state.saving = true; state.saveError = null; try { await api.update(props.partnerId, payload); await load(); } catch (error) { state.saveError = error instanceof PartnerApiError ? error.message : 'Không thể lưu cơ quan. Vui lòng thử lại.'; } finally { state.saving = false; } }
+async function deletePartner() { state.deleting = true; state.deleteError = null; try { await api.deletePartner(props.partnerId); await goBack(); } catch (error) { state.deleteError = error instanceof PartnerApiError ? error.message : 'Không thể xóa cơ quan. Vui lòng thử lại.'; } finally { state.deleting = false; } }
 async function goBack() {
   if (isNative.value) { if (props.adapter) await props.adapter.goBack({ reason: 'partner-detail' }); return; }
   emit('back', state.detail?.listingHash || 'press');
@@ -38,7 +44,7 @@ async function goBack() {
 function listenToHost() {
   if (!props.adapter || props.hostUnavailable) return;
   unsubscribers.push(props.adapter.subscribe(HostEvent.VIEWPORT, (payload) => { if (payload?.safeArea) safeArea.value = { ...safeArea.value, ...payload.safeArea }; }));
-  unsubscribers.push(props.adapter.subscribe(HostEvent.LIFECYCLE, (payload) => { if (payload?.state === 'foreground') load(); }));
+  unsubscribers.push(props.adapter.subscribe(HostEvent.LIFECYCLE, (payload) => { if (payload?.state === 'foreground' && state.mode === 'read') load(); }));
   unsubscribers.push(props.adapter.subscribe(HostEvent.DEEP_LINK, (payload) => { const match = /^\/?partner\/(\d+)$/.exec(String(payload?.path || '').replace(/^#/, '')); if (match) emit('navigate', Number(match[1])); }));
 }
 watch(() => props.partnerId, load);
@@ -49,6 +55,8 @@ onBeforeUnmount(() => { while (unsubscribers.length) unsubscribers.pop()(); });
 <template>
   <div v-if="state.phase === 'loading'" :class="isNative ? 'mds-mobile-app grid h-[100dvh] place-items-center bg-[var(--mds-bg)]' : 'grid min-h-[360px] place-items-center bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MSpinner :size="28" class="text-[var(--mds-brand-600)]" /></div>
   <section v-else-if="state.phase === 'error'" :class="isNative ? 'mds-mobile-app min-h-[100dvh] bg-[var(--mds-bg)]' : 'min-h-[360px] bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MMobileTopBar v-if="isNative" title="Hồ sơ cơ quan" @back="goBack" /><MEmptyState :title="state.error.status === 404 ? 'Không tìm thấy cơ quan' : state.error.status === 403 ? 'Bạn không có quyền xem cơ quan này' : 'Không thể mở hồ sơ'" :description="state.error.message" /></section>
-  <PartnerDetailPageMobile v-else-if="isNative" :detail="state.detail" :safe-area-style="safeAreaStyle" @back="goBack" @navigate="emit('navigate', $event)" />
-  <PartnerDetailPage v-else :detail="state.detail" @back="goBack" @navigate="emit('navigate', $event)" />
+  <PartnerEditFormMobile v-else-if="isNative && state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveEdit" />
+  <PartnerDetailPageMobile v-else-if="isNative" :detail="state.detail" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :safe-area-style="safeAreaStyle" @back="goBack" @edit="state.mode = 'edit'" @delete-partner="deletePartner" @navigate="emit('navigate', $event)" />
+  <PartnerEditFormDesktop v-else-if="state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" @cancel="state.mode = 'read'" @save="saveEdit" />
+  <PartnerDetailPage v-else :detail="state.detail" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" @back="goBack" @edit="state.mode = 'edit'" @delete-partner="deletePartner" @navigate="emit('navigate', $event)" />
 </template>

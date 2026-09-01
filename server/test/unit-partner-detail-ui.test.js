@@ -11,10 +11,15 @@ const featureRoot = path.join(root, 'frontend', 'src', 'features', 'partners');
 const appVue = fs.readFileSync(path.join(root, 'frontend', 'src', 'App.vue'), 'utf8');
 const desktopPage = fs.readFileSync(path.join(featureRoot, 'desktop', 'PartnerDetailPage.vue'), 'utf8');
 const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'PartnerDetailPageMobile.vue'), 'utf8');
+const desktopEdit = fs.readFileSync(path.join(featureRoot, 'desktop', 'PartnerEditFormDesktop.vue'), 'utf8');
+const mobileEdit = fs.readFileSync(path.join(featureRoot, 'mobile', 'PartnerEditFormMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PartnerDetailFeature.vue'), 'utf8');
 
 async function domain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'partner-detail.mjs')).href);
+}
+async function writeDomain() {
+  return import(pathToFileURL(path.join(featureRoot, 'domain', 'partner-write.mjs')).href);
 }
 
 test('UI-PAR-001: Partner Detail chỉ claim route qua cờ host/local harness, trước legacy renderer', () => {
@@ -51,4 +56,28 @@ test('UI-PAR-004: lifecycle, deep link và Back đều đi qua host adapter cont
     assert.match(feature, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${token} phải đi qua adapter`);
   }
   assert.doesNotMatch(feature, /navigator\.mediaDevices|window\.addEventListener\(['"](resize|popstate)/, 'feature không tự gọi device/browser bridge ngoài contract');
+  assert.match(feature, /state\.mode === 'read'/, 'foreground không được tự reload làm mất draft đang sửa');
+});
+
+test('UI-PAR-005: write compact chỉ gửi field công khai chung, không ghi đè hội phí hay type', async () => {
+  const { PARTNER_COMPACT_EDIT_FIELDS, toPartnerEditDraft, toPartnerUpdatePayload, validatePartnerEditDraft } = await writeDomain();
+  const draft = toPartnerEditDraft({ name: 'Cơ quan MISA', website: 'https://misa.vn', membership_fee: 999, org_type: 'association' });
+  const payload = toPartnerUpdatePayload(draft);
+  assert.deepEqual(PARTNER_COMPACT_EDIT_FIELDS, ['name', 'website', 'address']);
+  assert.equal('membership_fee' in payload, false);
+  assert.equal('org_type' in payload, false);
+  assert.equal(validatePartnerEditDraft({ name: '' }).name, 'Tên cơ quan không được để trống.');
+});
+
+test('UI-PAR-006: write Desktop/Native dùng MDS form, confirm destructive và server vẫn là source quyền', () => {
+  assert.match(desktopEdit, /<MInput/);
+  assert.match(desktopEdit, /<MButton variant="primary"/);
+  assert.match(mobileEdit, /class="mds-mobile-app/);
+  assert.match(mobileEdit, /<MMobileTopBar/);
+  assert.match(mobileEdit, /<MDialog/);
+  assert.match(desktopPage, /<MDialog/);
+  assert.match(mobilePage, /<MDialog/);
+  assert.match(feature, /api\.update\(props\.partnerId, payload\)/);
+  assert.match(feature, /api\.deletePartner\(props\.partnerId\)/);
+  assert.match(feature, /permissions\?\.modules\?\.partners\?\.includes\('edit'\)/);
 });

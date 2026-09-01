@@ -26,5 +26,24 @@ export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api'
       }
       return payload;
     },
+    async getCurrentUser() {
+      const response = await fetchFn(`${basePath}/me`, { credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
+    async update(partnerId, input) {
+      const id = Number(partnerId);
+      const response = await fetchFn(`${basePath}/partners/${id}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
+    async deletePartner(partnerId) {
+      const response = await fetchFn(`${basePath}/partners/${Number(partnerId)}`, { method: 'DELETE', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
   });
 }

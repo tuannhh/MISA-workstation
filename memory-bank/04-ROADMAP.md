@@ -822,6 +822,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > MOU/tệp/write ở legacy cho đến slice policy riêng, chỉ chuyển record đã projection + person rows
 > + ngày nhắc qua Desktop MDS và Native composition độc lập.
 
+> **Execution update — 2026-09-01 (W3.PARTNER.WRITE-CORE):** mở rộng chính batch Partner Detail
+> bằng form lõi an toàn cho R005/R006: chỉ `name`/`website`/`address`, không `membership_fee`,
+> `org_type`, owner/role hay sub-resource. UI chỉ gợi ý action theo `GET /api/me`; PolicyEngine
+> vẫn là nguồn quyền cuối cùng khi PUT/DELETE. Desktop/Native form đều đã visual review local;
+> phần hội phí/MOU/tệp/tài trợ/booking/tương tác vẫn là slice riêng.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
