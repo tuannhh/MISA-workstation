@@ -3222,3 +3222,18 @@ database row mà chạy mọi record qua `PolicyEngine.projectRecord()` với en
 
 Direct UI chưa rollout: Award participation, Sponsorship, Gift, Association fee và Benefit usage.
 Native AMIS runtime/device evidence vẫn **UNVERIFIED** tới O3/W4.
+
+## W3.ADMIN.REASSIGN-OWNER — Award Participation
+
+Hoàn thiện reassignment cho `award_participation`, entity Direct còn thiếu trong Award Detail, bằng
+context của chính kỳ tham gia thay vì một màn hình mutation chung.
+
+- `awards-api.mjs` chỉ nhận award/participation/owner id hợp lệ và gọi `PUT
+  /api/admin/records/award_participation/:id/owner` với payload allowlist `{ owner_id }`.
+- Desktop và Native gắn `Gán` tại card Kỳ tham gia khi principal có `admin.edit`; shared flow hiển
+  thị năm/trạng thái, owner hiện tại và roster active, chặn no-op rồi yêu cầu MDialog danger. Native
+  là composition riêng, toàn bộ thao tác card dùng touch target MDS 48px.
+- `D13-082` kiểm chứng executor bị 403, Admin chuyển được owner và response Award sau đó chỉ lấy
+  owner từ projection server; `UI-AWARD-007` kiểm chứng API, gate, confirmation và hai composition.
+  `integration-awards` đạt **45/45** trên SQLite và MySQL; runtime AMIS/device vẫn **UNVERIFIED** tới
+  O3/W4.

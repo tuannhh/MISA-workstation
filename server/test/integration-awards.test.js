@@ -324,6 +324,18 @@ test('D13-058: executor DELETE award_participation (kể cả của chính mình
   assert.equal((await call('DELETE', `/api/awards/${id}/participations/${pid}`, { as: executorCookie })).status, 403);
   assert.equal((await call('DELETE', `/api/awards/${id}/participations/${pid}`)).status, 200);
 });
+test('D13-082: Admin gán lại owner award_participation qua R148, executor bị chặn; GET award phản ánh owner server-derived', async () => {
+  const awardId = await createAward();
+  const participationId = (await (await call('POST', `/api/awards/${awardId}/participations`, { body: { year: 2029 }, as: executorCookie })).json()).id;
+  const { db } = require('../db');
+  const adminId = db.prepare("SELECT id FROM users WHERE username LIKE 'awards_admin_%' ORDER BY id DESC LIMIT 1").get().id;
+  const denied = await call('PUT', `/api/admin/records/award_participation/${participationId}/owner`, { body: { owner_id: adminId }, as: executorCookie });
+  assert.equal(denied.status, 403);
+  const changed = await call('PUT', `/api/admin/records/award_participation/${participationId}/owner`, { body: { owner_id: adminId } });
+  assert.equal(changed.status, 200);
+  const detail = await (await call('GET', `/api/awards/${awardId}`)).json();
+  assert.equal(detail.participations.find((part) => part.id === participationId).owner_id, adminId);
+});
 
 // ---------------------------------------------------------------------------
 // D13-078..079 — remediation P0 audit F19: GET /api/files/:id trước đây phục vụ file private của

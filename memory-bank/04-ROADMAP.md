@@ -1127,6 +1127,17 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > trên SQLite/MySQL; `UI-INT-004` khóa endpoint/payload/gate/composition. Direct còn lại: Award
 > participation, Sponsorship, Gift, Association fee và Benefit usage; Native device vẫn
 > **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-02 (W3.ADMIN.REASSIGN-OWNER Award Participation):** rollout đúng
+> ngữ cảnh từng Kỳ tham gia trong Award Detail, không dùng form chuyển owner mù. Action `Gán` chỉ
+> xuất hiện khi `admin.edit`; Desktop và Native truyền id/title của kỳ được chọn vào shared ownership
+> flow, lấy roster active từ endpoint protected, chặn no-op và xác nhận MDialog trước payload
+> `{ owner_id }` tới `PUT /admin/records/award_participation/:id/owner`. Native dùng composition
+> riêng và mọi action tạo/sửa/gán/xóa có touch target MDS 48px. `D13-082` xác nhận executor bị chặn,
+> Admin ghi được và GET Award phản ánh owner server-derived trên SQLite/MySQL (45/45 mỗi driver);
+> `UI-AWARD-007` khóa endpoint, payload, permission/context, confirmation và Native composition.
+> Direct còn lại: Sponsorship, Gift, Association fee, Benefit usage. Native host/device vẫn
+> **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
