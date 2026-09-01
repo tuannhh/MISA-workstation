@@ -1058,6 +1058,16 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > owner tiếp tục là hai mutation PolicyEngine slice riêng; native host/device vẫn **UNVERIFIED** tới
 > O3/W4.
 
+> **Execution update — 2026-09-01 (W3.ADMIN.FIELD-VISIBILITY):** bổ sung cấu hình hiển thị trường
+> cho module `partners`, dùng `GET /admin/field-visibility?module=partners` và `PUT
+> /admin/field-visibility`. UI chỉ cho phép **siết** quyền bằng payload cố định
+> `{ module, field, is_public: false }`; không có affordance công khai/khôi phục, nên không thể biến
+> thao tác client thành đường nới classification. Mỗi lần ẩn đều qua MDialog; PolicyEngine và server
+> vẫn là authority cuối cùng cho role/tier và trả lỗi đúng hợp đồng. Desktop table/card và Native
+> mini-app có top bar/safe-area là hai composition riêng. Reassign owner vẫn là slice kế tiếp, cần
+> được đặt trong ngữ cảnh chi tiết entity thay vì một form generic; native host/device tiếp tục
+> **UNVERIFIED** tới O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

@@ -3085,3 +3085,21 @@ Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **26/26 p
 build:ui` pass (Admin lazy chunk 24.99 kB, entry 438.96 kB); `git diff --check` sạch. Field
 visibility và reassign owner còn là mutation slice riêng; Native AMIS runtime/device test vẫn
 **UNVERIFIED** tới O3/W4.
+
+## W3.ADMIN.FIELD-VISIBILITY — Field visibility MDS (Desktop + Native)
+
+Mở cấu hình hiển thị field cho module `partners` trên hai composition MDS riêng. Desktop dùng card/
+table; Native dùng mini-app, `MMobileTopBar` và safe-area — không dùng desktop shell trên mobile.
+
+- Browser chỉ gọi `GET /api/admin/field-visibility?module=partners` để đọc projection và `PUT
+  /api/admin/field-visibility` khi đã xác nhận. Payload write được khóa ở client thành
+  `{ module, field, is_public: false }`.
+- Không có action “công khai” hay khôi phục visibility trong UI. Đây là lựa chọn an toàn: client chỉ
+  có thể siết exposure; PolicyEngine/server vẫn quyết định role, classification tier và phản hồi
+  403/400 nếu principal hoặc hợp đồng thay đổi.
+- `UI-ADMIN-004` khóa endpoint/payload một chiều, MDialog confirmation, view model không lẫn dữ liệu
+  nhạy cảm và MDS Desktop/Native split.
+
+Reassign owner chưa được gộp vào đây: nó cần UI đặt trong context của từng record để Admin nhìn thấy
+entity/current owner/new owner trước khi xác nhận. Native AMIS runtime/device evidence vẫn
+**UNVERIFIED** tới O3/W4.
