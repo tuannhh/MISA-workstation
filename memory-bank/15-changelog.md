@@ -8,6 +8,9 @@
 - List/Desktop và Native list mở route detail bằng thao tác có bàn phím/touch; build UI và test
   `UI-EVENT-004` đã chạy xanh. Runtime trong native AMIS, deep link host và accessibility OS còn
   **UNVERIFIED** cho tới O3/W4, nên không ghi là hoàn thành release mobile.
+- Mở Event Edit cho người có `events:edit`: action chỉ là UX, request vẫn qua `PUT /events/:id`
+  PolicyEngine; Desktop/Native form chỉ gửi public allowlist. `UI-EVENT-005` khóa route/permission/
+  payload, còn cost/file/delete và Smart Intake không bị kéo vào patch này.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 

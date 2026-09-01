@@ -940,6 +940,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > Browser/local đã kiểm tra Event List; native AMIS runtime, accessibility thiết bị và host bridge
 > cho Detail vẫn **UNVERIFIED**, chờ O3/W4.
 
+> **Execution update — 2026-09-01 (W3.EVENTS.CORE.EDIT):** Detail mở action Sửa khi `/api/me`
+> có `events:edit`; đây chỉ là affordance, lưu lại vẫn đi `PUT /events/:id` qua PolicyEngine. Form
+> Desktop/Native tái dùng allowlist core đã khóa (`EVENT_PUBLIC_FIELDS`), không nhận owner,
+> caretaker, chi phí hay file. Xóa, cost/file flows và Smart Intake tiếp tục tách slice để không
+> trộn authorization/data classification vào core edit.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

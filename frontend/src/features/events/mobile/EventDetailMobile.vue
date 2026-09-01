@@ -1,13 +1,13 @@
 <script setup>
-import MMobileTopBar from '../../../components/mds/MMobileTopBar.vue';
+import MButton from '../../../components/mds/MButton.vue'; import MMobileTopBar from '../../../components/mds/MMobileTopBar.vue';
 import MTag from '../../../components/mds/MTag.vue';
-defineProps({ detail: { type: Object, required: true }, safeAreaStyle: Object });
-const emit = defineEmits(['back']);
+defineProps({ detail: { type: Object, required: true }, canEdit: Boolean, safeAreaStyle: Object });
+const emit = defineEmits(['back', 'edit']);
 </script>
 
 <template>
   <section class="mds-mobile-app flex h-[100dvh] min-w-0 flex-col overflow-hidden bg-[var(--mds-bg)]" :style="safeAreaStyle">
-    <MMobileTopBar :title="detail.title" @back="emit('back')"><template #actions><MTag color="neutral">{{ detail.status }}</MTag></template></MMobileTopBar>
+    <MMobileTopBar :title="detail.title" @back="emit('back')"><template #actions><MButton v-if="canEdit" variant="link" @click="emit('edit')">Sửa</MButton><MTag color="neutral">{{ detail.status }}</MTag></template></MMobileTopBar>
     <main class="min-h-0 flex-1 overflow-y-auto"><section class="mds-mobile-gutter-x border-b border-[var(--mds-border-light)] py-4"><p class="text-[13px] text-[var(--mds-text-secondary)]">{{ detail.time }}</p><p class="mt-1 text-[14px]">{{ detail.location }}</p></section><section class="mds-mobile-gutter-x divide-y divide-[var(--mds-border-light)]"><div class="py-4"><h2 class="text-[16px] font-semibold">Thông tin chung</h2><dl class="mt-3 space-y-3"><div><dt class="text-[12px] text-[var(--mds-text-secondary)]">Đơn vị tổ chức</dt><dd class="mt-1 text-[14px]">{{ detail.organizer }}</dd></div><div><dt class="text-[12px] text-[var(--mds-text-secondary)]">Hình thức · định dạng</dt><dd class="mt-1 text-[14px]">{{ detail.fields.mode }} · {{ detail.fields.format }}</dd></div><div><dt class="text-[12px] text-[var(--mds-text-secondary)]">Lĩnh vực · quy mô</dt><dd class="mt-1 text-[14px]">{{ detail.fields.field }} · {{ detail.fields.scale_attendees }}</dd></div></dl></div><div class="py-4"><h2 class="text-[16px] font-semibold">Đánh giá & ghi chú</h2><dl class="mt-3 space-y-3"><div><dt class="text-[12px] text-[var(--mds-text-secondary)]">Đánh giá</dt><dd class="mt-1 whitespace-pre-wrap text-[14px]">{{ detail.fields.evaluation }}</dd></div><div><dt class="text-[12px] text-[var(--mds-text-secondary)]">Điểm nhấn MISA</dt><dd class="mt-1 whitespace-pre-wrap text-[14px]">{{ detail.fields.misa_keynotes }}</dd></div><div><dt class="text-[12px] text-[var(--mds-text-secondary)]">Ghi chú</dt><dd class="mt-1 whitespace-pre-wrap text-[14px]">{{ detail.fields.note }}</dd></div></dl></div></section></main>
   </section>
 </template>

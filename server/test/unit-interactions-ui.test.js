@@ -66,3 +66,11 @@ test('UI-EVENT-004: Event Detail dùng projection public, có route Desktop/Nati
   assert.match(desktopDetail, /shadow-\[var\(--mds-shadow-card\)\]/); assert.match(mobileDetail, /class="mds-mobile-app/); assert.match(mobileDetail, /<MMobileTopBar/); assert.doesNotMatch(mobileDetail, /MHeaderBar|MSidebar/);
   assert.match(featureEvent, /eventDetailViewModel/); assert.match(featureEvent, /location\.hash=`events\/\$\{Number\(id\)\}`/); assert.match(appVue, /\^events\(\?:\\\/\(\\d\+\)\)\?\$/);
 });
+
+test('UI-EVENT-005: Event Edit chỉ là affordance theo quyền và vẫn gửi allowlist về PUT PolicyEngine', () => {
+  const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events'); const featureEvent = fs.readFileSync(path.join(eventRoot, 'EventsListFeature.vue'), 'utf8'); const desktopDetail = fs.readFileSync(path.join(eventRoot, 'desktop', 'EventDetailDesktop.vue'), 'utf8'); const mobileDetail = fs.readFileSync(path.join(eventRoot, 'mobile', 'EventDetailMobile.vue'), 'utf8'); const desktopForm = fs.readFileSync(path.join(eventRoot, 'desktop', 'EventCreateDesktop.vue'), 'utf8'); const mobileForm = fs.readFileSync(path.join(eventRoot, 'mobile', 'EventCreateMobile.vue'), 'utf8');
+  assert.match(featureEvent, /events\?\.includes\('edit'\)/); assert.match(featureEvent, /api\.save\(input, props\.eventId\)/); assert.match(featureEvent, /@edit="beginEdit"/);
+  for (const component of [desktopDetail, mobileDetail]) assert.match(component, /v-if="canEdit"/);
+  for (const component of [desktopForm, mobileForm]) { assert.match(component, /toEventDraft\(props\.record\)/); assert.match(component, /toEventPayload\(draft\)/); assert.doesNotMatch(component, /owner_id|caretaker_ids|total_cost|attachments/); }
+  assert.match(mobileForm, /<MMobileTopBar/); assert.match(mobileForm, /<MDialog/); assert.match(desktopForm, /sticky bottom-0/);
+});
