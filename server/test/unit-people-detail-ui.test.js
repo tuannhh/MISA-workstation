@@ -16,6 +16,7 @@ const mobileEditForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleE
 const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
 const editForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleEditFormDesktop.vue'), 'utf8');
 const attachmentPanel = fs.readFileSync(path.join(featureRoot, 'PeopleAttachmentsPanel.vue'), 'utf8');
+const bookingsPanel = fs.readFileSync(path.join(featureRoot, 'PeopleBookingsPanel.vue'), 'utf8');
 
 async function domain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'people-detail.mjs')).href);
@@ -123,4 +124,18 @@ test('UI-PARTNER-ADD-001: bốn loại cơ quan đều mở đúng form và gử
     'nút Thêm của màn danh sách cơ quan phải luôn mở form theo đúng loại');
   assert.match(appJs, /data\.org_type = type;[\s\S]*?api\('POST', '\/partners', data\)/,
     'form tạo mới phải gắn loại cơ quan ở client và gọi đúng API tạo');
+});
+
+test('UI-PPL-010: Booking trong People Detail chỉ nhận projection, không tự tổng hợp tiền ở client', async () => {
+  const { peopleBookingsViewModel } = await domain();
+  const viewer = peopleBookingsViewModel({ rows: [{ id: 7, title: 'Bài viết', status: 'Đã đặt' }], total_amount: '••••' });
+  assert.equal(viewer.rows[0].hasAmount, false);
+  assert.equal(viewer.totalAmount, '••••');
+  const owner = peopleBookingsViewModel({ rows: [{ id: 8, title: 'Booking của tôi', amount: 1200000, status: 'Đã đăng' }], total_amount: '••••' });
+  assert.equal(owner.rows[0].amount, 1200000, 'chỉ property API trả về mới được hiện');
+  assert.equal(owner.totalAmount, '••••', 'aggregate giữ nguyên server response, không tính lại từ row');
+  assert.match(bookingsPanel, /Số tiền chỉ hiển thị khi máy chủ đã projection/);
+  assert.match(bookingsPanel, /Tổng tiền không được tự tính/);
+  assert.doesNotMatch(bookingsPanel, /reduce\(|\.sum\(/, 'component không được tự tính tổng tiền');
+  assert.match(feature, /api\.getBookings\(props\.personId\)/, 'booking luôn tải qua API có PolicyEngine');
 });

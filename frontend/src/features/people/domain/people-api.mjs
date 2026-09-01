@@ -37,6 +37,15 @@ export function createPeopleApi({ fetchFn = globalThis.fetch, basePath = '/api' 
       }
       return payload;
     },
+    async getBookings(personId) {
+      const id = Number(personId);
+      if (!Number.isInteger(id) || id < 1) throw new TypeError('personId phải là số nguyên dương.');
+      const response = await fetchFn(`${basePath}/bookings?subject_type=person&subject_id=${id}`, { credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      if (!Array.isArray(payload?.rows)) throw new PeopleApiError({ status: 502, code: 'BOOKING_LIST_INVALID_RESPONSE', message: 'Dữ liệu booking trả về không hợp lệ.' });
+      return payload;
+    },
     async update(personId, input) {
       const id = Number(personId);
       const response = await fetchFn(`${basePath}/people/${id}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });

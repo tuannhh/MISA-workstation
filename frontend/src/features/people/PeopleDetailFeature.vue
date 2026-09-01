@@ -5,7 +5,7 @@ import MMobileTopBar from '../../components/mds/MMobileTopBar.vue';
 import MSpinner from '../../components/mds/MSpinner.vue';
 import { HostEvent, HostSurface } from '../../platform/host-adapter.mjs';
 import { createPeopleApi, PeopleApiError } from './domain/people-api.mjs';
-import { peopleDetailViewModel } from './domain/people-detail.mjs';
+import { peopleBookingsViewModel, peopleDetailViewModel } from './domain/people-detail.mjs';
 import PeopleDetailPage from './desktop/PeopleDetailPage.vue';
 import PeopleEditFormDesktop from './desktop/PeopleEditFormDesktop.vue';
 import PeopleEditFormMobile from './mobile/PeopleEditFormMobile.vue';
@@ -14,7 +14,7 @@ import PeopleDetailPageMobile from './mobile/PeopleDetailPageMobile.vue';
 const props = defineProps({ personId: { type: Number, required: true }, surface: { type: String, required: true }, adapter: { type: Object, default: null }, hostUnavailable: { type: Boolean, default: false } });
 const emit = defineEmits(['back', 'navigate']);
 const api = createPeopleApi();
-const state = reactive({ phase: 'loading', detail: null, record: null, permissions: null, error: null, mode: 'read', saving: false, saveError: null, deleting: false, deleteError: null, attachmentWorking: false, attachmentError: null });
+const state = reactive({ phase: 'loading', detail: null, bookings: null, bookingError: null, record: null, permissions: null, error: null, mode: 'read', saving: false, saveError: null, deleting: false, deleteError: null, attachmentWorking: false, attachmentError: null });
 const safeArea = ref(props.adapter?.getSafeArea?.() || {});
 const unsubscribers = [];
 const isNative = computed(() => props.surface === HostSurface.NATIVE);
@@ -29,7 +29,8 @@ async function load() {
   state.phase = 'loading'; state.error = null;
   try {
     const [payload, session] = await Promise.all([api.getDetail(props.personId), api.getCurrentUser()]);
-    state.record = payload.record; state.detail = peopleDetailViewModel(payload); state.permissions = session?.permissions || null; state.mode = 'read'; state.phase = 'ready';
+    state.record = payload.record; state.detail = peopleDetailViewModel(payload); state.permissions = session?.permissions || null; state.mode = 'read'; state.bookings = null; state.bookingError = null; state.phase = 'ready';
+    try { state.bookings = peopleBookingsViewModel(await api.getBookings(props.personId)); } catch (error) { state.bookingError = error instanceof PeopleApiError ? error.message : 'Không thể tải booking.'; }
   } catch (error) { setError(error); }
 }
 async function saveEdit(payload) {
@@ -69,7 +70,7 @@ onBeforeUnmount(() => { while (unsubscribers.length) unsubscribers.pop()(); });
   <div v-if="state.phase === 'loading'" :class="isNative ? 'mds-mobile-app grid h-[100dvh] place-items-center bg-[var(--mds-bg)]' : 'grid min-h-[360px] place-items-center bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MSpinner :size="28" class="text-[var(--mds-brand-600)]" /></div>
   <section v-else-if="state.phase === 'error'" :class="isNative ? 'mds-mobile-app min-h-[100dvh] bg-[var(--mds-bg)]' : 'min-h-[360px] bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MMobileTopBar v-if="isNative" title="Hồ sơ nhân sự" @back="goBack" /><MEmptyState :title="state.error.status === 404 ? 'Không tìm thấy hồ sơ' : state.error.status === 403 ? 'Bạn không có quyền xem hồ sơ này' : 'Không thể mở hồ sơ'" :description="state.error.message" /></section>
   <PeopleEditFormMobile v-else-if="isNative && state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveEdit" />
-  <PeopleDetailPageMobile v-else-if="isNative" :detail="state.detail" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :can-manage-id-docs="canManageIdDocs" :attachment-working="state.attachmentWorking" :attachment-error="state.attachmentError" :safe-area-style="safeAreaStyle" @back="goBack" @edit="state.mode = 'edit'" @delete-person="deletePerson" @upload="uploadAttachments" @set-primary="setPrimaryAttachment" @delete-attachment="deleteAttachment" />
+  <PeopleDetailPageMobile v-else-if="isNative" :detail="state.detail" :bookings="state.bookings?.rows || []" :booking-total="state.bookings?.totalAmount" :booking-error="state.bookingError" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :can-manage-id-docs="canManageIdDocs" :attachment-working="state.attachmentWorking" :attachment-error="state.attachmentError" :safe-area-style="safeAreaStyle" @back="goBack" @edit="state.mode = 'edit'" @delete-person="deletePerson" @upload="uploadAttachments" @set-primary="setPrimaryAttachment" @delete-attachment="deleteAttachment" />
   <PeopleEditFormDesktop v-else-if="state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" @cancel="state.mode = 'read'" @save="saveEdit" />
-  <PeopleDetailPage v-else :detail="state.detail" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :can-manage-id-docs="canManageIdDocs" :attachment-working="state.attachmentWorking" :attachment-error="state.attachmentError" @back="goBack" @edit="state.mode = 'edit'" @delete-person="deletePerson" @upload="uploadAttachments" @set-primary="setPrimaryAttachment" @delete-attachment="deleteAttachment" />
+  <PeopleDetailPage v-else :detail="state.detail" :bookings="state.bookings?.rows || []" :booking-total="state.bookings?.totalAmount" :booking-error="state.bookingError" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :can-manage-id-docs="canManageIdDocs" :attachment-working="state.attachmentWorking" :attachment-error="state.attachmentError" @back="goBack" @edit="state.mode = 'edit'" @delete-person="deletePerson" @upload="uploadAttachments" @set-primary="setPrimaryAttachment" @delete-attachment="deleteAttachment" />
 </template>

@@ -875,6 +875,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > Upload vẫn bị server kiểm tra lại; không dựng xóa do API hiện fail-closed. Native file bridge thật
 > vẫn **UNVERIFIED** tới O3/W4.
 
+> **Execution update — 2026-09-01 (W3.BOOKING.READ):** thay tab trống trong People Detail bằng
+> danh sách Booking MDS Desktop/Native lấy từ R046. Component chỉ hiện `amount` nếu property đã
+> qua projection, giữ `total_amount` nguyên vẹn từ server (không tính aggregate ở client); do đó
+> viewer/executor không lộ tổng tiền của bản ghi người khác. Create/edit/delete Booking và org
+> detail booking tiếp tục là slice ownership/form kế tiếp.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

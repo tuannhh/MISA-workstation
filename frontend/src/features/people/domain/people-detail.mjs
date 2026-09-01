@@ -20,6 +20,13 @@ export function fileUrl(attachmentId) {
   const id = Number(attachmentId);
   return Number.isInteger(id) && id > 0 ? `/api/files/${id}` : null;
 }
+function bookingDate(value) { const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || '')); return match ? `${match[3]}/${match[2]}/${match[1]}` : '—'; }
+export function peopleBookingsViewModel(payload) {
+  return Object.freeze({
+    rows: Object.freeze((payload?.rows || []).map((row) => Object.freeze({ id: Number(row.id), title: text(row.title), contentType: text(row.content_type), bookedDate: bookingDate(row.booked_date), publishDate: bookingDate(row.publish_date), status: text(row.status), hasAmount: Object.prototype.hasOwnProperty.call(row, 'amount'), amount: row.amount })).filter((row) => Number.isInteger(row.id) && row.id > 0)),
+    totalAmount: payload?.total_amount ?? null,
+  });
+}
 
 export function peopleDetailViewModel(payload) {
   const record = payload?.record || {};
