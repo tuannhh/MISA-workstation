@@ -40,5 +40,15 @@ export function createSupplierApi({ fetchFn = globalThis.fetch, basePath = '/api
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async uploadFiles(supplierId, files) {
+      const id = Number(supplierId);
+      if (!Number.isInteger(id) || id < 1) throw new TypeError('supplierId phải là số nguyên dương.');
+      const form = new FormData();
+      for (const file of files || []) form.append('files', file);
+      const response = await fetchFn(`${basePath}/suppliers/${id}/files`, { method: 'POST', credentials: 'same-origin', body: form });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
   });
 }

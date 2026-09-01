@@ -1,6 +1,6 @@
 # 28 — Batch Contract: W3.SUPPLIER.READ (Supplier Detail strangler)
 
-> **Status:** READ + WRITE-CORE IMPLEMENTED / pending local build and regression verification. Native production remains **UNVERIFIED**.
+> **Status:** READ + WRITE-CORE + FILE-METADATA/UPLOAD IMPLEMENTED / pending local build and regression verification. Native production remains **UNVERIFIED**.
 
 ## Scope
 
@@ -14,12 +14,15 @@ Quotes, transactions, contacts, dates, files, and every create/edit/delete/uploa
 
 **Write core (R082):** the Desktop/Native forms send only the explicit Public allowlist `name`, `industry`, `address`, `services`, `tax_code`, `invoice_type`, `note`. They never send commercial percentages, contact fields, `order_group_link`, owner/role or sub-resource data. `GET /api/me` only suggests whether to show Edit; `PUT` remains server-enforced. Native has safe-area footer and confirms discarding an unsaved draft.
 
+**File metadata/upload (R086 + R037):** metadata (`id`, name, MIME) follows D13's approved “existence vs content” rule and is rendered without file content. Supplier is Global and quote files are private: only Admin/Super Admin get an open link, while others see the metadata plus an explicit restricted state. Users with `suppliers.edit` may upload through MDS `MUpload`; the upload and download endpoints enforce permission again. No delete action is rendered because the existing attachment-delete endpoint fails closed for supplier files.
+
 ## Surface and security contract
 
 | Flow | Desktop | Native fake host | AMIS Native host |
 |---|---|---|---|
 | R072 Supplier Detail read | MDS detail page | independent `.mds-mobile-app` composition | **UNVERIFIED — O3/W4.1** |
 | R082 Supplier core edit | MDS compact form | independent Native form + discard confirmation | **UNVERIFIED — O3/W4.1** |
+| R086 upload and R037 download supplier file | MDS metadata/upload panel | panel in Native mini-app | **UNVERIFIED — O3/W4.1 file bridge** |
 | Missing/invalid native adapter | n/a | explicit native recovery shell | never falls back to Desktop |
 
 Lifecycle, viewport/safe-area, deep-link and Back use the W2.5 host-adapter contract. The localhost fake-native route is `?uiSupplierPilot=1&uiSupplierSurface=native`; it is not production-device evidence.

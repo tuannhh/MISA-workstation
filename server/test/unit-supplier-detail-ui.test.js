@@ -13,6 +13,7 @@ const desktopPage = fs.readFileSync(path.join(featureRoot, 'desktop', 'SupplierD
 const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'SupplierDetailPageMobile.vue'), 'utf8');
 const desktopEdit = fs.readFileSync(path.join(featureRoot, 'desktop', 'SupplierEditFormDesktop.vue'), 'utf8');
 const mobileEdit = fs.readFileSync(path.join(featureRoot, 'mobile', 'SupplierEditFormMobile.vue'), 'utf8');
+const filesPanel = fs.readFileSync(path.join(featureRoot, 'SupplierFilesPanel.vue'), 'utf8');
 async function domain() { return import(pathToFileURL(path.join(featureRoot, 'domain', 'supplier-detail.mjs')).href); }
 async function writeDomain() { return import(pathToFileURL(path.join(featureRoot, 'domain', 'supplier-write.mjs')).href); }
 
@@ -64,4 +65,16 @@ test('UI-SUP-006: form Desktop/Native dùng MDS và PUT vẫn do server kiểm t
   assert.match(mobileEdit, /--mds-mobile-safe-bottom/, 'native footer tôn trọng safe area');
   assert.match(feature, /api\.update\(props\.supplierId, payload\)/, 'lưu luôn qua API server-enforced');
   assert.match(feature, /permissions\?\.modules\?\.suppliers\?\.includes\('edit'\)/, 'UI permission chỉ gợi ý UX');
+});
+test('UI-SUP-007: metadata tệp hiện theo D13 existence/content, tải và upload đều do API kiểm tra lại', async () => {
+  const { supplierDetailViewModel, fileUrl } = await domain();
+  const model = supplierDetailViewModel({ record: { id: 4, name: 'NCC MISA' }, files: [{ id: 12, original_name: 'bao-gia.pdf', mime: 'application/pdf' }] });
+  assert.equal(model.files[0].originalName, 'bao-gia.pdf');
+  assert.equal(fileUrl(12), '/api/files/12');
+  assert.match(filesPanel, /<MUpload/, 'picker dùng MDS upload');
+  assert.match(filesPanel, /v-if="canOpen"/, 'link tải chỉ render theo policy UX');
+  assert.match(filesPanel, /Hạn chế/, 'role không được tải thấy trạng thái rõ ràng');
+  assert.match(feature, /api\.uploadFiles\(props\.supplierId, files\)/, 'upload qua API server-enforced');
+  assert.match(feature, /\['admin', 'super_admin'\]/, 'Global supplier private file chỉ gợi ý mở cho quản trị');
+  assert.doesNotMatch(JSON.stringify(model), /content|base64/i, 'model chỉ chứa metadata, không chứa nội dung tệp');
 });

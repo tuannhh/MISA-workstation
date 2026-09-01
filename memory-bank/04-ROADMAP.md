@@ -869,6 +869,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > hàng; UI chỉ gợi ý quyền, PUT vẫn do PolicyEngine/server kiểm tra. Quote/transaction/file và
 > create/delete vẫn thuộc slice policy sau.
 
+> **Execution update — 2026-09-01 (W3.SUPPLIER.FILE):** bổ sung metadata/upload tệp báo giá
+> bằng `MUpload` MDS. Theo D13 “existence vs content”, metadata hiện được; file private của
+> Supplier Global chỉ có link mở cho Admin/Super Admin, role khác thấy trạng thái Hạn chế rõ ràng.
+> Upload vẫn bị server kiểm tra lại; không dựng xóa do API hiện fail-closed. Native file bridge thật
+> vẫn **UNVERIFIED** tới O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
