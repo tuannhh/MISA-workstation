@@ -32,6 +32,9 @@ async function domain() {
 async function writeDomain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'people-write.mjs')).href);
 }
+async function peopleApiDomain() {
+  return import(pathToFileURL(path.join(featureRoot, 'domain', 'people-api.mjs')).href);
+}
 
 test('UI-PPL-001: People Detail có hai composition MDS độc lập, Native không chứa desktop shell', () => {
   assert.match(desktopPage, /shadow-\[var\(--mds-shadow-card\)\]/, 'desktop card phải dùng token shadow MDS');
@@ -214,4 +217,21 @@ test('UI-PPL-016: People Create Desktop/Native dùng MDS, không đưa dữ li�
   assert.match(peopleCreateMobile, /<MMobileTopBar/); assert.match(peopleCreateMobile, /<MDialog/); assert.match(peopleCreateMobile, /--mds-mobile-safe-bottom/);
   assert.match(peopleListDesktop, /emit\('create'\)/); assert.match(peopleListMobile, /emit\('create'\)/);
   assert.match(fs.readFileSync(path.join(featureRoot, 'PeopleListFeature.vue'), 'utf8'), /api\.createPerson\(payload\)/);
+});
+
+test('UI-PPL-017: Booking chỉ mở gán owner trong record context, dùng allowlist và hai composition MDS', async () => {
+  const { createPeopleApi } = await peopleApiDomain();
+  const ownershipRoot = path.join(root, 'frontend', 'src', 'features', 'ownership');
+  const calls = []; const api = createPeopleApi({ fetchFn: async (url, init = {}) => { calls.push({ url, init }); const payload = url.endsWith('/admin/users') ? { rows: [] } : { ok: true }; return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } }); } });
+  await api.getAdminUsers(); await api.reassignBookingOwner(12, 4);
+  assert.deepEqual(calls.map(({ url, init }) => [url, init.method || 'GET']), [['/api/admin/users', 'GET'], ['/api/admin/records/booking/12/owner', 'PUT']]);
+  assert.deepEqual(JSON.parse(calls[1].init.body), { owner_id: 4 });
+  for (const component of [desktopPage, mobilePage]) { assert.match(component, /canReassignBooking/); assert.match(component, /reassign-booking/); }
+  assert.match(bookingsPanel, /canReassign\(booking\)/); assert.match(bookingsPanel, /emit\('reassign', booking\)/);
+  assert.match(feature, /\(booking\) => Boolean\(booking\?\.id\) && state\.permissions\?\.modules\?\.admin\?\.includes\('edit'\)/);
+  assert.match(feature, /ownerReassignBooking = \{ id: Number\(booking\.id\), title: booking\.title \}/);
+  assert.match(feature, /api\.reassignBookingOwner\(booking\.id/);
+  assert.match(feature, /OwnerReassignDesktop/); assert.match(feature, /OwnerReassignMobile/); assert.match(feature, /Xác nhận gán lại người phụ trách/);
+  assert.match(fs.readFileSync(path.join(ownershipRoot, 'desktop', 'OwnerReassignDesktop.vue'), 'utf8'), /<MSelect/);
+  assert.match(fs.readFileSync(path.join(ownershipRoot, 'mobile', 'OwnerReassignMobile.vue'), 'utf8'), /class="mds-mobile-app/);
 });

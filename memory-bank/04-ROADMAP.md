@@ -1097,6 +1097,15 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > `UI-PAR-013` khóa hai endpoint, payload, gate, confirmation và Native composition. Các Direct
 > entity còn lại chỉ được rollout khi feature của chúng có projection owner và context detail đủ
 > để người quản trị đánh giá việc chuyển giao; native host/device vẫn **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-02 (W3.ADMIN.REASSIGN-OWNER Booking):** mở gán lại owner từ đúng
+> dòng Booking trong People Detail. Feature giữ record id/title cục bộ, dùng shared owner
+> projection/composition cho Desktop và Native, chỉ hiển thị action theo `admin.edit`, và xác nhận
+> MDialog trước payload `{ owner_id }` tới `PUT /admin/records/booking/:id/owner`. Booking amount
+> vẫn là projection PolicyEngine và không bị client tính lại/lộ thêm vì mutation này. `UI-PPL-017`
+> kiểm chứng roster, endpoint, payload, context, confirmation và Native composition. Các entity
+> Direct còn lại tiếp tục phải qua checklist projection/context riêng; native host/device vẫn
+> **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

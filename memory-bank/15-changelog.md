@@ -3163,3 +3163,25 @@ Rollout reassign owner chưa coi là phủ hết 14 entity Direct: Booking, Inte
 participation, Sponsorship, Gift, Association fee, Supplier quote/transaction/contact và Benefit
 usage tiếp tục cần được mở theo detail/projection riêng. Runtime Native AMIS trên thiết bị thật vẫn
 **UNVERIFIED** tới O3/W4.
+
+## W3.ADMIN.REASSIGN-OWNER — People Detail Booking
+
+Mở gán lại người phụ trách từ từng dòng Booking bài viết trong People Detail. Luồng không dựa vào
+form generic: feature giữ `booking.id`/title cục bộ, còn shared ownership flow chỉ nhận projection
+owner và roster active.
+
+- `people-api.mjs` thêm roster protected `GET /api/admin/users` và mutation allowlist duy nhất
+  `PUT /api/admin/records/booking/:id/owner` với `{ owner_id }`.
+- People Detail Desktop/Native truyền action vào Booking panel khi principal có `admin.edit`; chọn
+  chính owner bị chặn, MDialog danger là bước bắt buộc và màn hình reload dữ liệu sau success.
+  Amount/tổng booking vẫn giữ nguyên projection server, không tính lại hoặc mở rộng dữ liệu ở
+  browser.
+- `UI-PPL-017` kiểm chứng endpoint, payload, record context, permission gate, confirmation và hai
+  composition MDS. `node --test server/test/unit-people-detail-ui.test.js
+  server/test/unit-partner-detail-ui.test.js server/test/unit-interactions-ui.test.js` **61/61
+  pass**; `npm run build:ui` pass (entry `vue-app.js` 458,76 kB, gzip 110,08 kB); `git diff --check`
+  sạch.
+
+Các entity Direct chưa có rollout UI vẫn là Interaction, Award participation, Sponsorship, Gift,
+Association fee, Supplier quote/transaction/contact và Benefit usage; mỗi entity cần projection và
+detail context riêng trước khi mở transfer. Runtime Native AMIS vẫn **UNVERIFIED** tới O3/W4.

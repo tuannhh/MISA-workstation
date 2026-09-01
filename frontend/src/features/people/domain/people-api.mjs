@@ -46,6 +46,22 @@ export function createPeopleApi({ fetchFn = globalThis.fetch, basePath = '/api' 
       if (!Array.isArray(payload?.rows)) throw new PeopleApiError({ status: 502, code: 'BOOKING_LIST_INVALID_RESPONSE', message: 'Dữ liệu booking trả về không hợp lệ.' });
       return payload;
     },
+    async getAdminUsers() {
+      const response = await fetchFn(`${basePath}/admin/users`, { credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      if (!Array.isArray(payload?.rows)) throw new PeopleApiError({ status: 502, code: 'OWNER_USERS_INVALID_RESPONSE', message: 'Danh sách người phụ trách trả về không hợp lệ.' });
+      return payload;
+    },
+    async reassignBookingOwner(bookingId, ownerId) {
+      const id = Number(bookingId); const target = Number(ownerId);
+      if (!Number.isInteger(id) || id < 1) throw new TypeError('bookingId phải là số nguyên dương.');
+      if (!Number.isInteger(target) || target < 1) throw new TypeError('Hãy chọn người phụ trách đang hoạt động.');
+      const response = await fetchFn(`${basePath}/admin/records/booking/${id}/owner`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner_id: target }) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload || Object.freeze({ ok: true });
+    },
     async getList({ page = 1, pageSize = 20, search = '' } = {}) {
       const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
       const safePageSize = Math.min(100, Math.max(1, Number.parseInt(pageSize, 10) || 20));
