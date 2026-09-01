@@ -8,6 +8,7 @@ import {
   HostSurface,
   assertHostAdapter,
   createFakeBrowserHostAdapter,
+  createFakeNativeHostAdapter,
   createHostAdapterRegistry,
 } from './platform/host-adapter.mjs';
 
@@ -19,14 +20,17 @@ const density = ref(localStorage.getItem('mds-density') || 'medium');
 const headerMode = ref(localStorage.getItem('mds-header-mode') || 'brand');
 const peopleFeatureRoute = ref(null);
 const desktopAdapter = createFakeBrowserHostAdapter();
+const isLocalUiHarness = ['localhost', '127.0.0.1'].includes(location.hostname);
+const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : null;
 
 // W3.PEOPLE.READ chỉ là strangler pilot. Host/staging bật cờ này sau khi
 // kiểm chứng; mặc định false để không làm mất các thao tác write/file legacy.
 function isPeoplePilotEnabled() {
-  return window.__MISA_UI_FEATURE_FLAGS__?.peopleDetailRead === true;
+  return window.__MISA_UI_FEATURE_FLAGS__?.peopleDetailRead === true || localUiParams?.get('uiPeoplePilot') === '1';
 }
 
 function requestedSurface() {
+  if (localUiParams?.get('uiPeopleSurface') === HostSurface.NATIVE) return HostSurface.NATIVE;
   return window.__MISA_UI_HOST_BOOTSTRAP__?.surface === HostSurface.NATIVE
     ? HostSurface.NATIVE
     : HostSurface.DESKTOP;
@@ -34,7 +38,11 @@ function requestedSurface() {
 
 function selectPeopleAdapter(surface) {
   const nativeCandidate = window.__MISA_UI_HOST_ADAPTER__;
-  const native = nativeCandidate ? assertHostAdapter(nativeCandidate) : null;
+  // Chỉ harness localhost mới có fake native. Deploy luôn đòi adapter host thật
+  // và vẫn fail-closed nếu O3 chưa cấp bridge contract.
+  const native = nativeCandidate ? assertHostAdapter(nativeCandidate)
+    : (isLocalUiHarness && localUiParams?.get('uiPeopleSurface') === HostSurface.NATIVE
+      ? createFakeNativeHostAdapter({ safeArea: { top: 24, bottom: 20 } }) : null);
   return createHostAdapterRegistry({ browser: desktopAdapter, native }).select(surface);
 }
 

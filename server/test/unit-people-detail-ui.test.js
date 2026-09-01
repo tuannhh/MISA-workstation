@@ -37,6 +37,8 @@ test('UI-PPL-002: route chỉ được strangler claim qua cờ host, trước l
   assert.match(appVue, /__MISA_UI_FEATURE_FLAGS__\?\.peopleDetailRead === true/, 'pilot phải opt-in qua cờ host, mặc định không cướp write/file legacy');
   assert.doesNotMatch(appVue, /userAgent|innerWidth|matchMedia|role.*HostSurface|HostSurface.*role/, 'surface không được suy diễn từ UA, viewport hay role');
   assert.match(appVue, /surface !== HostSurface\.NATIVE[\s\S]*hostUnavailable: true/, 'Native thiếu adapter phải fail-closed, không fallback desktop');
+  assert.match(appVue, /\['localhost', '127\.0\.0\.1'\]\.includes\(location\.hostname\)/, 'test harness chỉ được bật ở localhost');
+  assert.match(appVue, /uiPeoplePilot/, 'visual review local phải dùng cờ query tường minh');
   const seam = appJs.indexOf('window.__misaUiFeatureRouter?.resolve?.(key)');
   const legacyRender = appJs.indexOf("$('#view').innerHTML");
   assert.ok(seam >= 0 && seam < legacyRender, 'feature seam phải chạy trước legacy DOM render');
@@ -111,4 +113,14 @@ test('UI-PPL-009: Xóa hồ sơ có UX confirm nhưng luôn thực thi lại qua
   assert.match(mobilePage, /<MDialog/);
   assert.match(feature, /api\.deletePerson\(props\.personId\)/);
   assert.match(feature, /\['admin', 'super_admin'\]/, 'UI chỉ gợi ý delete cho role phù hợp, không thay thế policy server');
+});
+
+test('UI-PARTNER-ADD-001: bốn loại cơ quan đều mở đúng form và gửi POST /partners', () => {
+  for (const type of ['press', 'association', 'gov', 'other']) {
+    assert.match(appJs, new RegExp(`${type}: \\{ label:`), `${type} phải còn trong danh mục cơ quan`);
+  }
+  assert.match(appJs, /\$\('#addBtn'\)\.onclick = \(\) => orgForm\(type, \{\}\)/,
+    'nút Thêm của màn danh sách cơ quan phải luôn mở form theo đúng loại');
+  assert.match(appJs, /data\.org_type = type;[\s\S]*?api\('POST', '\/partners', data\)/,
+    'form tạo mới phải gắn loại cơ quan ở client và gọi đúng API tạo');
 });

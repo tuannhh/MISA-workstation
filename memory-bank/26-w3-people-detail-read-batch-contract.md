@@ -15,6 +15,7 @@ Nguồn dữ liệu duy nhất là `GET /api/people/:id` (R030). API đã chiế
 ## 2. Rollout và giữ hành vi cũ
 
 - Cờ host/staging `window.__MISA_UI_FEATURE_FLAGS__ = { peopleDetailRead: true }` mới kích hoạt island. Mặc định `false`.
+- Chỉ trên `localhost`/`127.0.0.1`, visual harness có thể dùng `?uiPeoplePilot=1` và `?uiPeopleSurface=native`; đây là fake provider W2.5 dành cho test, không hoạt động trên deploy và không thay thế O3/AMIS bridge.
 - Khi cờ tắt, hash tiếp tục chạy `VIEWS.person` legacy, gồm mọi thao tác R032–R037, gifts, interactions và bookings như trước.
 - Khi host khai báo Native nhưng provider không hợp lệ/chưa có O3, UI hiển thị native error shell và **không** fallback sang desktop.
 - Không dùng role, user-agent hoặc viewport để chọn surface. Server session/RBAC vẫn quyết định dữ liệu và 403.
@@ -64,3 +65,9 @@ Batch kế tiếp `W3.PEOPLE.WRITE-FILE` dùng `domain/people-write.mjs`: compac
 allowlist UX; không có `owner_id`, role hoặc policy quyết định ở client. `createPeopleApi()` có
 seam `getCurrentUser`/`update`/`upload`, nhưng UI gọi write/upload chỉ sau khi có composition
 form MDS đầy đủ và test action/403 tương ứng. API server vẫn là nguồn quyền duy nhất.
+
+## 9. Kiểm tra hồi quy legacy — tạo cơ quan đối tác (2026-09-01)
+
+- Đã thao tác thật ở bản local hiện hành với cả **Cơ quan báo chí**, **Hiệp hội** và **Đối tác bộ ngành**: nút `+ Thêm` hiển thị với principal có `partners.create` và mở đúng form theo từng loại. Không gửi form tạo mới trong browser để tránh tạo dữ liệu demo; R004 đã chạy HTTP thật trên SQLite và MySQL.
+- Test `UI-PARTNER-ADD-001` khóa lại nối dây legacy: bốn loại `press/association/gov/other` phải còn nút mở `orgForm(type,{})`, payload phải có `org_type` và tạo qua `POST /partners`.
+- Vì vậy lỗi người dùng báo là **không tái hiện được trên HEAD local**. Khi xảy ra ở môi trường khác, cần đối chiếu commit/build đang chạy và quyền `partners.create`: thiếu quyền thì nút bị ẩn; nếu modal mở nhưng Lưu thất bại, thu thập status/message của `POST /api/partners` để tái hiện chính xác.
