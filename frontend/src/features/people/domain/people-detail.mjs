@@ -23,7 +23,7 @@ export function fileUrl(attachmentId) {
 function bookingDate(value) { const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || '')); return match ? `${match[3]}/${match[2]}/${match[1]}` : '—'; }
 export function peopleBookingsViewModel(payload) {
   return Object.freeze({
-    rows: Object.freeze((payload?.rows || []).map((row) => Object.freeze({ id: Number(row.id), title: text(row.title), contentType: text(row.content_type), bookedDate: bookingDate(row.booked_date), publishDate: bookingDate(row.publish_date), status: text(row.status), hasAmount: Object.prototype.hasOwnProperty.call(row, 'amount'), amount: row.amount })).filter((row) => Number.isInteger(row.id) && row.id > 0)),
+    rows: Object.freeze((payload?.rows || []).map((row) => Object.freeze({ id: Number(row.id), ownerId: Number.isInteger(Number(row.owner_id)) ? Number(row.owner_id) : null, title: text(row.title), contentType: text(row.content_type), contentTypeValue: row.content_type || '', bookedDate: bookingDate(row.booked_date), bookedDateValue: row.booked_date || '', publishDate: bookingDate(row.publish_date), publishDateValue: row.publish_date || '', status: text(row.status), hasAmount: Object.prototype.hasOwnProperty.call(row, 'amount'), amount: row.amount, articleLink: row.article_link || '', note: row.note || '' })).filter((row) => Number.isInteger(row.id) && row.id > 0)),
     totalAmount: payload?.total_amount ?? null,
   });
 }

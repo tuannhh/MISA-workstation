@@ -12,11 +12,13 @@ import PeopleEditFormMobile from './mobile/PeopleEditFormMobile.vue';
 import PeopleDetailPageMobile from './mobile/PeopleDetailPageMobile.vue';
 import BookingCreateDesktop from './desktop/BookingCreateDesktop.vue';
 import BookingCreateMobile from './mobile/BookingCreateMobile.vue';
+import BookingEditDesktop from './desktop/BookingEditDesktop.vue';
+import BookingEditMobile from './mobile/BookingEditMobile.vue';
 
 const props = defineProps({ personId: { type: Number, required: true }, surface: { type: String, required: true }, adapter: { type: Object, default: null }, hostUnavailable: { type: Boolean, default: false } });
 const emit = defineEmits(['back', 'navigate']);
 const api = createPeopleApi();
-const state = reactive({ phase: 'loading', detail: null, bookings: null, bookingError: null, record: null, permissions: null, error: null, mode: 'read', saving: false, saveError: null, bookingSaving: false, bookingSaveError: null, deleting: false, deleteError: null, attachmentWorking: false, attachmentError: null });
+const state = reactive({ phase: 'loading', detail: null, bookings: null, bookingError: null, record: null, currentUser: null, permissions: null, editingBooking: null, error: null, mode: 'read', saving: false, saveError: null, bookingSaving: false, bookingSaveError: null, deleting: false, deleteError: null, attachmentWorking: false, attachmentError: null });
 const safeArea = ref(props.adapter?.getSafeArea?.() || {});
 const unsubscribers = [];
 const isNative = computed(() => props.surface === HostSurface.NATIVE);
@@ -32,7 +34,7 @@ async function load() {
   state.phase = 'loading'; state.error = null;
   try {
     const [payload, session] = await Promise.all([api.getDetail(props.personId), api.getCurrentUser()]);
-    state.record = payload.record; state.detail = peopleDetailViewModel(payload); state.permissions = session?.permissions || null; state.mode = 'read'; state.bookings = null; state.bookingError = null; state.phase = 'ready';
+    state.record = payload.record; state.detail = peopleDetailViewModel(payload); state.currentUser = session?.user || null; state.permissions = session?.permissions || null; state.editingBooking = null; state.mode = 'read'; state.bookings = null; state.bookingError = null; state.phase = 'ready';
     try { state.bookings = peopleBookingsViewModel(await api.getBookings(props.personId)); } catch (error) { state.bookingError = error instanceof PeopleApiError ? error.message : 'Không thể tải booking.'; }
   } catch (error) { setError(error); }
 }
@@ -43,6 +45,9 @@ async function saveEdit(payload) {
   finally { state.saving = false; }
 }
 async function saveBooking(payload) { state.bookingSaving = true; state.bookingSaveError = null; try { await api.createBooking(payload); await load(); } catch (error) { state.bookingSaveError = error instanceof PeopleApiError ? error.message : 'Không thể tạo booking. Vui lòng thử lại.'; } finally { state.bookingSaving = false; } }
+function canEditBooking(booking) { return state.permissions?.modules?.partners?.includes('edit') === true && (['admin', 'super_admin'].includes(state.currentUser?.role) || (state.currentUser?.role === 'executor' && Number(booking?.ownerId) === Number(state.currentUser?.id))); }
+function beginBookingEdit(booking) { if (!canEditBooking(booking)) return; state.editingBooking = booking; state.bookingSaveError = null; state.mode = 'booking-edit'; }
+async function saveBookingEdit(payload) { if (!state.editingBooking) return; state.bookingSaving = true; state.bookingSaveError = null; try { await api.updateBooking(state.editingBooking.id, payload); await load(); } catch (error) { state.bookingSaveError = error instanceof PeopleApiError ? error.message : 'Không thể cập nhật booking. Vui lòng thử lại.'; } finally { state.bookingSaving = false; } }
 async function changeAttachment(operation) {
   state.attachmentWorking = true; state.attachmentError = null;
   try { await operation(); await load(); }
@@ -75,8 +80,10 @@ onBeforeUnmount(() => { while (unsubscribers.length) unsubscribers.pop()(); });
   <section v-else-if="state.phase === 'error'" :class="isNative ? 'mds-mobile-app min-h-[100dvh] bg-[var(--mds-bg)]' : 'min-h-[360px] bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MMobileTopBar v-if="isNative" title="Hồ sơ nhân sự" @back="goBack" /><MEmptyState :title="state.error.status === 404 ? 'Không tìm thấy hồ sơ' : state.error.status === 403 ? 'Bạn không có quyền xem hồ sơ này' : 'Không thể mở hồ sơ'" :description="state.error.message" /></section>
   <PeopleEditFormMobile v-else-if="isNative && state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveEdit" />
   <BookingCreateMobile v-else-if="isNative && state.mode === 'booking-create'" :person-id="props.personId" :person-name="state.detail.name" :saving="state.bookingSaving" :server-error="state.bookingSaveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveBooking" />
-  <PeopleDetailPageMobile v-else-if="isNative" :detail="state.detail" :bookings="state.bookings?.rows || []" :booking-total="state.bookings?.totalAmount" :booking-error="state.bookingError" :can-create-bookings="canCreateBookings" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :can-manage-id-docs="canManageIdDocs" :attachment-working="state.attachmentWorking" :attachment-error="state.attachmentError" :safe-area-style="safeAreaStyle" @back="goBack" @edit="state.mode = 'edit'" @create-booking="state.mode = 'booking-create'" @delete-person="deletePerson" @upload="uploadAttachments" @set-primary="setPrimaryAttachment" @delete-attachment="deleteAttachment" />
+  <BookingEditMobile v-else-if="isNative && state.mode === 'booking-edit'" :record="state.editingBooking" :saving="state.bookingSaving" :server-error="state.bookingSaveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveBookingEdit" />
+  <PeopleDetailPageMobile v-else-if="isNative" :detail="state.detail" :bookings="state.bookings?.rows || []" :booking-total="state.bookings?.totalAmount" :booking-error="state.bookingError" :can-create-bookings="canCreateBookings" :can-edit-booking="canEditBooking" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :can-manage-id-docs="canManageIdDocs" :attachment-working="state.attachmentWorking" :attachment-error="state.attachmentError" :safe-area-style="safeAreaStyle" @back="goBack" @edit="state.mode = 'edit'" @create-booking="state.mode = 'booking-create'" @edit-booking="beginBookingEdit" @delete-person="deletePerson" @upload="uploadAttachments" @set-primary="setPrimaryAttachment" @delete-attachment="deleteAttachment" />
   <PeopleEditFormDesktop v-else-if="state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" @cancel="state.mode = 'read'" @save="saveEdit" />
   <BookingCreateDesktop v-else-if="state.mode === 'booking-create'" :person-id="props.personId" :person-name="state.detail.name" :saving="state.bookingSaving" :server-error="state.bookingSaveError" @cancel="state.mode = 'read'" @save="saveBooking" />
-  <PeopleDetailPage v-else :detail="state.detail" :bookings="state.bookings?.rows || []" :booking-total="state.bookings?.totalAmount" :booking-error="state.bookingError" :can-create-bookings="canCreateBookings" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :can-manage-id-docs="canManageIdDocs" :attachment-working="state.attachmentWorking" :attachment-error="state.attachmentError" @back="goBack" @edit="state.mode = 'edit'" @create-booking="state.mode = 'booking-create'" @delete-person="deletePerson" @upload="uploadAttachments" @set-primary="setPrimaryAttachment" @delete-attachment="deleteAttachment" />
+  <BookingEditDesktop v-else-if="state.mode === 'booking-edit'" :record="state.editingBooking" :saving="state.bookingSaving" :server-error="state.bookingSaveError" @cancel="state.mode = 'read'" @save="saveBookingEdit" />
+  <PeopleDetailPage v-else :detail="state.detail" :bookings="state.bookings?.rows || []" :booking-total="state.bookings?.totalAmount" :booking-error="state.bookingError" :can-create-bookings="canCreateBookings" :can-edit-booking="canEditBooking" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :can-manage-id-docs="canManageIdDocs" :attachment-working="state.attachmentWorking" :attachment-error="state.attachmentError" @back="goBack" @edit="state.mode = 'edit'" @create-booking="state.mode = 'booking-create'" @edit-booking="beginBookingEdit" @delete-person="deletePerson" @upload="uploadAttachments" @set-primary="setPrimaryAttachment" @delete-attachment="deleteAttachment" />
 </template>

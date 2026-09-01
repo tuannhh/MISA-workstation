@@ -15,6 +15,8 @@ const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleDetai
 const mobileEditForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleEditFormMobile.vue'), 'utf8');
 const bookingDesktopForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'BookingCreateDesktop.vue'), 'utf8');
 const bookingMobileForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'BookingCreateMobile.vue'), 'utf8');
+const bookingEditDesktopForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'BookingEditDesktop.vue'), 'utf8');
+const bookingEditMobileForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'BookingEditMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
 const editForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleEditFormDesktop.vue'), 'utf8');
 const attachmentPanel = fs.readFileSync(path.join(featureRoot, 'PeopleAttachmentsPanel.vue'), 'utf8');
@@ -152,4 +154,16 @@ test('UI-PPL-011: tạo booking gắn person từ route, không gửi owner/org 
   for (const form of [bookingDesktopForm, bookingMobileForm]) { assert.match(form, /<MInput/); assert.match(form, /<MSelect/); assert.match(form, /<MTextarea/); assert.doesNotMatch(form, /owner_id|org_id|org_name|created_by|award_id/); }
   assert.match(bookingMobileForm, /<MDialog/); assert.match(bookingMobileForm, /--mds-mobile-safe-bottom/);
   assert.match(feature, /api\.createBooking\(payload\)/, 'tạo booking qua API server-enforced');
+});
+
+test('UI-PPL-012: sửa Booking chỉ hiện theo ownership, không thay owner/person/org và Native có xác nhận bỏ thay đổi', async () => {
+  const { toBookingEditDraft, toBookingUpdatePayload } = await import(pathToFileURL(path.join(featureRoot, 'domain', 'booking-write.mjs')).href);
+  const draft = toBookingEditDraft({ title: 'Booking cũ', contentTypeValue: 'Bài PR', hasAmount: true, amount: 250000, bookedDateValue: '2026-09-01', publishDateValue: '2026-09-02', status: 'Đã đặt', articleLink: 'https://example.test/a', note: 'Ghi chú' });
+  const payload = toBookingUpdatePayload({ ...draft, title: 'Booking mới' });
+  assert.equal(payload.title, 'Booking mới'); assert.equal(payload.amount, 250000);
+  for (const forbidden of ['owner_id', 'created_by', 'subject_type', 'subject_id', 'subject_name', 'org_id', 'org_name', 'award_id']) assert.equal(forbidden in payload, false, `${forbidden} không được thay qua form edit`);
+  for (const form of [bookingEditDesktopForm, bookingEditMobileForm]) { assert.match(form, /<MInput/); assert.match(form, /<MSelect/); assert.match(form, /<MTextarea/); assert.doesNotMatch(form, /owner_id|created_by|subject_type|subject_id|subject_name|org_id|org_name|award_id/); }
+  assert.match(bookingEditMobileForm, /<MDialog/); assert.match(bookingEditMobileForm, /--mds-mobile-safe-bottom/);
+  assert.match(feature, /Number\(booking\?\.ownerId\) === Number\(state\.currentUser\?\.id\)/, 'executor chỉ được thấy thao tác sửa booking chính mình');
+  assert.match(feature, /api\.updateBooking\(state\.editingBooking\.id, payload\)/, 'server vẫn re-check quyền khi PUT');
 });

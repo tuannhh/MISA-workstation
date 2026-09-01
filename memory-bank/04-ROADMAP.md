@@ -885,7 +885,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > Detail, Desktop MDS và Native form riêng. Form gắn cứng `subject_type='person'`/`subject_id`
 > từ route, không gửi owner, org, created_by hay award; backend vẫn tự resolve org và gán ownership.
 > Amount được nhập như dữ liệu Confidential có chủ đích nhưng read lại chỉ theo PolicyEngine.
-> Edit/delete Booking tiếp tục ở slice ownership kế tiếp.
+>
+> **Execution update — 2026-09-01 (W3.BOOKING.EDIT):** thêm form sửa Desktop MDS và Native
+> composition riêng. UX chỉ đưa thao tác sửa cho executor sở hữu booking hoặc Admin/Super Admin,
+> nhưng `PUT /bookings/:id` vẫn là nơi PolicyEngine re-check quyền. Payload edit chỉ gồm các field
+> booking cho phép, không đổi owner, nhân sự, cơ quan hay award. Delete và bề mặt booking trên
+> Partner Detail tiếp tục ở slice kế tiếp.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

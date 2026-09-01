@@ -9,8 +9,8 @@ import PeopleAttachmentsPanel from '../PeopleAttachmentsPanel.vue';
 import PeopleBookingsPanel from '../PeopleBookingsPanel.vue';
 import { fileUrl } from '../domain/people-detail.mjs';
 
-defineProps({ detail: { type: Object, required: true }, bookings: { type: Array, default: () => [] }, bookingTotal: { type: [String, Number], default: null }, bookingError: { type: String, default: '' }, canCreateBookings: { type: Boolean, default: false }, canEdit: { type: Boolean, default: false }, canDelete: { type: Boolean, default: false }, deleteWorking: { type: Boolean, default: false }, deleteError: { type: String, default: '' }, canManageIdDocs: { type: Boolean, default: false }, attachmentWorking: { type: Boolean, default: false }, attachmentError: { type: String, default: '' } });
-const emit = defineEmits(['back', 'edit', 'create-booking', 'delete-person', 'upload', 'set-primary', 'delete-attachment']);
+defineProps({ detail: { type: Object, required: true }, bookings: { type: Array, default: () => [] }, bookingTotal: { type: [String, Number], default: null }, bookingError: { type: String, default: '' }, canCreateBookings: { type: Boolean, default: false }, canEditBooking: { type: Function, default: () => false }, canEdit: { type: Boolean, default: false }, canDelete: { type: Boolean, default: false }, deleteWorking: { type: Boolean, default: false }, deleteError: { type: String, default: '' }, canManageIdDocs: { type: Boolean, default: false }, attachmentWorking: { type: Boolean, default: false }, attachmentError: { type: String, default: '' } });
+const emit = defineEmits(['back', 'edit', 'create-booking', 'edit-booking', 'delete-person', 'upload', 'set-primary', 'delete-attachment']);
 const activeTab = ref('overview');
 const deleteOpen = ref(false);
 const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachments', label: 'Tệp đính kèm' }, { key: 'bookings', label: 'Booking' }, { key: 'history', label: 'Tương tác' }];
@@ -36,7 +36,7 @@ const tabs = [{ key: 'overview', label: 'Thông tin chung' }, { key: 'attachment
           <aside class="rounded-lg bg-[var(--mds-bg-page)] p-4"><h2 class="text-[14px] font-semibold leading-5">Dữ liệu được phép xem</h2><p class="mt-2 text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">Thông tin nhạy cảm và giấy tờ chỉ hiển thị khi API đã chiếu dữ liệu theo PolicyEngine.</p><dl class="mt-4 space-y-3 text-[13px]"><div class="flex justify-between gap-3"><dt class="text-[var(--mds-text-secondary)]">Ảnh chân dung</dt><dd class="font-medium">{{ detail.portraitCount }}</dd></div><div class="flex justify-between gap-3"><dt class="text-[var(--mds-text-secondary)]">Giấy tờ đã ẩn/hiện</dt><dd class="font-medium">{{ detail.idDocCount }}</dd></div></dl></aside>
         </div>
         <PeopleAttachmentsPanel v-else-if="activeTab === 'attachments'" :portraits="detail.portraits" :id-docs="detail.idDocs" :id-doc-count="detail.idDocCount" :can-edit="canEdit" :can-manage-id-docs="canManageIdDocs" :working="attachmentWorking" :error="attachmentError" @upload="emit('upload', $event)" @set-primary="emit('set-primary', $event)" @delete="emit('delete-attachment', $event)" />
-        <PeopleBookingsPanel v-else-if="activeTab === 'bookings'" class="p-4" :bookings="bookings" :total-amount="bookingTotal" :error="bookingError" :can-create="canCreateBookings" @create="emit('create-booking')" />
+        <PeopleBookingsPanel v-else-if="activeTab === 'bookings'" class="p-4" :bookings="bookings" :total-amount="bookingTotal" :error="bookingError" :can-create="canCreateBookings" :can-edit="canEditBooking" @create="emit('create-booking')" @edit="emit('edit-booking', $event)" />
         <MEmptyState v-else title="Chưa có tương tác được hiển thị" description="Tương tác và biểu mẫu sẽ được chuyển trong slice People List/Forms/Interactions." />
       </MTabs>
     </div>
