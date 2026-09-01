@@ -51,3 +51,8 @@ test('UI-EVENT-002: Event List có hai composition MDS, Native không dùng desk
   for (const component of [desktopEvent, mobileEvent]) { assert.match(component, /<MInput/); assert.match(component, /<MButton/); assert.match(component, /<MEmptyState/); assert.doesNotMatch(component, /total_cost|owner_id|attachments/); }
   assert.match(mobileEvent, /<MMobileTopBar/); assert.match(mobileEvent, /--mds-mobile-safe-bottom/); assert.match(featureEvent, /Native host chưa sẵn sàng/); assert.match(appVue, /eventsListRead/); assert.match(appVue, /EventsListFeature/);
 });
+
+test('UI-EVENT-003: Event Create dùng MDS, có gate quyền và không đưa cost/file vào form', () => {
+  const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events'); const desktopCreate = fs.readFileSync(path.join(eventRoot, 'desktop', 'EventCreateDesktop.vue'), 'utf8'); const mobileCreate = fs.readFileSync(path.join(eventRoot, 'mobile', 'EventCreateMobile.vue'), 'utf8'); const featureEvent = fs.readFileSync(path.join(eventRoot, 'EventsListFeature.vue'), 'utf8');
+  for (const component of [desktopCreate, mobileCreate]) { assert.match(component, /toEventPayload/); assert.match(component, /<MInput/); assert.match(component, /<MSelect/); assert.match(component, /<MTextarea/); assert.doesNotMatch(component, /total_cost|owner_id|attachments/); } assert.match(featureEvent, /events.*includes\('create'\)/); assert.match(desktopCreate, /sticky bottom-0/); assert.match(mobileCreate, /<MMobileTopBar/); assert.match(mobileCreate, /<MDialog/);
+});
