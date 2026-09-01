@@ -3185,3 +3185,23 @@ owner và roster active.
 Các entity Direct chưa có rollout UI vẫn là Interaction, Award participation, Sponsorship, Gift,
 Association fee, Supplier quote/transaction/contact và Benefit usage; mỗi entity cần projection và
 detail context riêng trước khi mở transfer. Runtime Native AMIS vẫn **UNVERIFIED** tới O3/W4.
+
+## W3.SUPPLIER.READ + ADMIN.REASSIGN-OWNER — Supplier Detail sub-resources
+
+Mở tiếp Supplier Detail theo context thật thay vì tạo màn hình mutation chung: Báo giá, Giao dịch
+và Đầu mối có tab read-only Desktop MDS/Native riêng, rồi mới có affordance `Gán` tại chính dòng
+record cho người có `admin.edit`.
+
+- View model chỉ dùng `GET /suppliers/:id` projection. `unit_price` và `value` được hiển thị khi,
+  và chỉ khi, response đã có property đó; không có fallback hay tính toán client để suy ra số tiền.
+- `supplier-api.mjs` chỉ allowlist `supplier_quote`, `supplier_transaction` và
+  `supplier_contact`, tải roster protected và gửi duy nhất `{ owner_id }` tới
+  `PUT /admin/records/:entity/:id/owner`. Shared Desktop/Native owner flow chặn chọn lại chính
+  owner, buộc MDialog và reload dữ liệu khi server chấp nhận.
+- `UI-SUP-008` khóa projection, endpoint/payload allowlist, `admin.edit`, confirmation và Native
+  composition. UI characterization liên quan **69/69 pass**; build/host device evidence chưa thể
+  kết luận trước O3/W4.
+
+Rollout owner Direct còn lại là Interaction, Award participation, Sponsorship, Gift, Association
+fee và Benefit usage; từng slice phải có projection owner và context chi tiết đủ rõ trước khi mở
+mutation.

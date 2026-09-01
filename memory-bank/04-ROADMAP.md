@@ -1106,6 +1106,17 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > kiểm chứng roster, endpoint, payload, context, confirmation và Native composition. Các entity
 > Direct còn lại tiếp tục phải qua checklist projection/context riêng; native host/device vẫn
 > **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-02 (W3.SUPPLIER.READ + ADMIN.REASSIGN-OWNER):** Supplier Detail
+> nay có ba tab read-only cho `supplier_quote`, `supplier_transaction` và `supplier_contact`, với
+> Desktop MDS và Native composition riêng. Giá báo/giá trị giao dịch chỉ được render khi property
+> tương ứng thực sự nằm trong PolicyEngine projection; browser không suy đoán hoặc khôi phục trường
+> Confidential bị ẩn. Mỗi dòng có projection owner và action `Gán` chỉ khi principal có
+> `admin.edit`; shared flow giữ entity/id/nhãn trong context, lấy roster active từ endpoint
+> protected, chặn no-op, yêu cầu MDialog rồi mới gửi allowlist `{ owner_id }` tới đúng ba endpoint
+> supplier. `UI-SUP-008` kiểm chứng API allowlist, confirmation, projection và cả hai composition.
+> Rollout Direct còn lại: Interaction, Award participation, Sponsorship, Gift, Association fee và
+> Benefit usage. Native AMIS runtime/device vẫn **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
