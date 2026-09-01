@@ -1026,6 +1026,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > grounding, config hay mutation vào pilot. Feature được lazy-load cùng Award slice để giữ entry
 > bundle chính dưới ngưỡng 500 kB (sau build ~437 kB). Quét, Mentions CRUD, campaign/config và AI
 > là các slice quyền riêng tiếp theo; native AMIS bridge/device evidence vẫn **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-01 (W3.REPORTS.OVERVIEW.READ):** mở Reports Overview qua
+> `GET /reports`, feature-flagged `reportsOverviewRead` (local harness: `uiReportsPilot=1`). Desktop
+> MDS và Native composition riêng chỉ render projection tổng chi, ngân sách, booking/sự kiện/hội phí,
+> network và rủi ro chăm sóc; browser không cộng/tính lại tiền từ các dòng nguồn. Kỳ tháng/quý/năm
+> được tạo bởi hàm thuần có test ngày cuối tháng/quý (bao gồm tháng 2), tránh sai phạm vi tính tiền.
+> Slice lazy-load độc lập; report theo nhân sự/đơn vị/award/care-alert chi tiết là phần sau. Native
+> AMIS bridge/device evidence tiếp tục **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

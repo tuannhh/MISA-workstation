@@ -11,6 +11,7 @@ import InteractionsListFeature from './features/interactions/InteractionsListFea
 import EventsListFeature from './features/events/EventsListFeature.vue';
 const AwardsListFeature = defineAsyncComponent(() => import('./features/awards/AwardsListFeature.vue'));
 const MonitoringDashboardFeature = defineAsyncComponent(() => import('./features/monitoring/MonitoringDashboardFeature.vue'));
+const ReportsOverviewFeature = defineAsyncComponent(() => import('./features/reports/ReportsOverviewFeature.vue'));
 import {
   HostSurface,
   assertHostAdapter,
@@ -33,6 +34,7 @@ const interactionsFeatureRoute = ref(null);
 const eventsFeatureRoute = ref(null);
 const awardsFeatureRoute = ref(null);
 const monitoringFeatureRoute = ref(null);
+const reportsFeatureRoute = ref(null);
 const desktopAdapter = createFakeBrowserHostAdapter();
 const isLocalUiHarness = ['localhost', '127.0.0.1'].includes(location.hostname);
 const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : null;
@@ -55,6 +57,7 @@ function isInteractionsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?
 function isEventsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.eventsListRead === true || localUiParams?.get('uiEventsPilot') === '1'; }
 function isAwardsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.awardsListRead === true || localUiParams?.get('uiAwardsPilot') === '1'; }
 function isMonitoringPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.monitoringDashboardRead === true || localUiParams?.get('uiMonitoringPilot') === '1'; }
+function isReportsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.reportsOverviewRead === true || localUiParams?.get('uiReportsPilot') === '1'; }
 
 function requestedSurface(queryParam = 'uiPeopleSurface') {
   if (localUiParams?.get(queryParam) === HostSurface.NATIVE) return HostSurface.NATIVE;
@@ -145,6 +148,7 @@ function resolveInteractionsRoute(key) {
 function resolveEventsRoute(key) { const match = /^events(?:\/(\d+))?$/.exec(key); if (!isEventsPilotEnabled() || !match) { eventsFeatureRoute.value = null; return false; } const surface = requestedSurface('uiEventsSurface'); const eventId = match[1] ? Number(match[1]) : null; try { eventsFeatureRoute.value = { eventId, surface, adapter: selectHostAdapter(surface, 'uiEventsSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; eventsFeatureRoute.value = { eventId, surface, adapter: null, hostUnavailable: true }; } return true; }
 function resolveAwardsRoute(key) { const match = /^awards(?:\/(\d+))?$/.exec(key); if (!isAwardsPilotEnabled() || !match) { awardsFeatureRoute.value = null; return false; } const surface = requestedSurface('uiAwardsSurface'); const awardId = match[1] ? Number(match[1]) : null; try { awardsFeatureRoute.value = { awardId, surface, adapter: selectHostAdapter(surface, 'uiAwardsSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; awardsFeatureRoute.value = { awardId, surface, adapter: null, hostUnavailable: true }; } return true; }
 function resolveMonitoringRoute(key) { if (!isMonitoringPilotEnabled() || key !== 'monitor') { monitoringFeatureRoute.value = null; return false; } const surface = requestedSurface('uiMonitoringSurface'); try { monitoringFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiMonitoringSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; monitoringFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; } return true; }
+function resolveReportsRoute(key) { if (!isReportsPilotEnabled() || key !== 'reports') { reportsFeatureRoute.value = null; return false; } const surface = requestedSurface('uiReportsSurface'); try { reportsFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiReportsSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; reportsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; } return true; }
 
 function leavePeopleDetail() {
   peopleFeatureRoute.value = null;
@@ -163,6 +167,7 @@ function leaveInteractions() { interactionsFeatureRoute.value = null; location.h
 function leaveEvents() { eventsFeatureRoute.value = null; location.hash = 'dashboard'; }
 function leaveAwards() { awardsFeatureRoute.value = null; location.hash = 'dashboard'; }
 function leaveMonitoring() { monitoringFeatureRoute.value = null; location.hash = 'dashboard'; }
+function leaveReports() { reportsFeatureRoute.value = null; location.hash = 'dashboard'; }
 
 function navigatePeopleDetail(personId) {
   location.hash = `person/${personId}`;
@@ -183,7 +188,9 @@ const desktopAwardsFeature = computed(() => awardsFeatureRoute.value?.surface ==
 const nativeAwardsFeature = computed(() => awardsFeatureRoute.value?.surface === HostSurface.NATIVE ? awardsFeatureRoute.value : null);
 const desktopMonitoringFeature = computed(() => monitoringFeatureRoute.value?.surface === HostSurface.DESKTOP ? monitoringFeatureRoute.value : null);
 const nativeMonitoringFeature = computed(() => monitoringFeatureRoute.value?.surface === HostSurface.NATIVE ? monitoringFeatureRoute.value : null);
-const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key) || resolveAwardsRoute(key) || resolveMonitoringRoute(key);
+const desktopReportsFeature = computed(() => reportsFeatureRoute.value?.surface === HostSurface.DESKTOP ? reportsFeatureRoute.value : null);
+const nativeReportsFeature = computed(() => reportsFeatureRoute.value?.surface === HostSurface.NATIVE ? reportsFeatureRoute.value : null);
+const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key) || resolveAwardsRoute(key) || resolveMonitoringRoute(key) || resolveReportsRoute(key);
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [
@@ -296,8 +303,9 @@ onBeforeUnmount(() => {
   <EventsListFeature v-if="nativeEventsFeature" :event-id="nativeEventsFeature.eventId" :surface="nativeEventsFeature.surface" :adapter="nativeEventsFeature.adapter" :host-unavailable="nativeEventsFeature.hostUnavailable" @back="leaveEvents" />
   <AwardsListFeature v-if="nativeAwardsFeature" :award-id="nativeAwardsFeature.awardId" :surface="nativeAwardsFeature.surface" :adapter="nativeAwardsFeature.adapter" :host-unavailable="nativeAwardsFeature.hostUnavailable" @back="leaveAwards" />
   <MonitoringDashboardFeature v-if="nativeMonitoringFeature" :surface="nativeMonitoringFeature.surface" :adapter="nativeMonitoringFeature.adapter" :host-unavailable="nativeMonitoringFeature.hostUnavailable" @back="leaveMonitoring" />
+  <ReportsOverviewFeature v-if="nativeReportsFeature" :surface="nativeReportsFeature.surface" :adapter="nativeReportsFeature.adapter" :host-unavailable="nativeReportsFeature.hostUnavailable" @back="leaveReports" />
 
-  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature || nativeEventsFeature || nativeAwardsFeature || nativeMonitoringFeature }">
+  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature || nativeEventsFeature || nativeAwardsFeature || nativeMonitoringFeature || nativeReportsFeature }">
     <header class="platform-header">
       <button class="header-action" type="button" title="Mở điều hướng" aria-label="Mở điều hướng" @click="sideOpen = !sideOpen"><MIcon name="grid-dots" :size="20" /></button>
       <img class="app-logo-img" :src="headerMode === 'light' ? '/assets/misa-logo.png' : '/assets/misa-logo-white.png'" alt="MISA" />
@@ -323,7 +331,7 @@ onBeforeUnmount(() => {
         </button>
       </aside>
       <main class="main">
-        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature && !desktopInteractionsFeature && !desktopEventsFeature && !desktopAwardsFeature && !desktopMonitoringFeature" class="content" id="view"></div>
+        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature && !desktopInteractionsFeature && !desktopEventsFeature && !desktopAwardsFeature && !desktopMonitoringFeature && !desktopReportsFeature" class="content" id="view"></div>
         <PeopleListFeature
           v-if="desktopPeopleListFeature"
           :surface="desktopPeopleListFeature.surface"
@@ -358,6 +366,7 @@ onBeforeUnmount(() => {
         <EventsListFeature v-if="desktopEventsFeature" :event-id="desktopEventsFeature.eventId" :surface="desktopEventsFeature.surface" :adapter="desktopEventsFeature.adapter" @back="leaveEvents" />
         <AwardsListFeature v-if="desktopAwardsFeature" :award-id="desktopAwardsFeature.awardId" :surface="desktopAwardsFeature.surface" :adapter="desktopAwardsFeature.adapter" @back="leaveAwards" />
         <MonitoringDashboardFeature v-if="desktopMonitoringFeature" :surface="desktopMonitoringFeature.surface" :adapter="desktopMonitoringFeature.adapter" @back="leaveMonitoring" />
+        <ReportsOverviewFeature v-if="desktopReportsFeature" :surface="desktopReportsFeature.surface" :adapter="desktopReportsFeature.adapter" @back="leaveReports" />
       </main>
     </div>
   </div>

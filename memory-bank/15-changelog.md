@@ -3010,3 +3010,23 @@ Không có scan, mutation mentions, cấu hình nguồn/từ khóa/campaign ho�
 Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **22/22 pass**; `npm run
 build:ui` pass (entry 436.99 kB, không warning chunk size); `git diff --check` sạch. Các lane
 Monitoring write/AI và native device/bridge vẫn chưa được mở.
+
+## W3.REPORTS.OVERVIEW.READ — Reports Overview MDS (Desktop + Native)
+
+Thêm Reports Overview read-only, feature-flagged `reportsOverviewRead` (local harness:
+`uiReportsPilot=1`), dùng duy nhất projection `GET /api/reports`. UI hiển thị tổng chi, ngân sách,
+chi booking/sự kiện/hội phí, quy mô mạng lưới và đầu mối cần chăm sóc theo kỳ tháng/quý/năm; không
+tự tổng hợp tiền từ dữ liệu dòng ở client và không đưa action write/print/export vào pilot.
+
+- `dateRange()` tạo ngày đầu/cuối tháng, quý, năm. Test phát hiện và sửa lỗi cuối tháng từng ra
+  chuỗi không hợp lệ `2026-03-00`; giờ dùng ngày cuối thực của calendar, phủ cả tháng 2/quý.
+- `reports-view.mjs` chuyển numeric string từ MySQL về number ở view-model, trong khi tổng tiền vẫn
+  là giá trị server trả về — tránh tái diễn F14/F16.
+- Desktop/Native là hai composition MDS riêng, Native có topbar + safe area; feature lazy-load thành
+  `vue-ReportsOverviewFeature.js` 10.53 kB. Entry bundle giữ **437.98 kB**.
+- `UI-REPORT-001` khóa phạm vi ngày, endpoint, numeric projection, không tính lại tiền, MDS/native
+  split và flag/lazy-load.
+
+Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **23/23 pass**; `npm run
+build:ui` pass (không warning chunk size); `git diff --check` sạch. Báo cáo chi tiết và native
+runtime evidence vẫn là slice sau/O3-W4.
