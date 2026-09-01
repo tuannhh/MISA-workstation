@@ -1078,6 +1078,16 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > composition tách biệt. Các entity Direct còn lại chỉ được nhân rộng sau khi pilot được review;
 > native host/device tiếp tục **UNVERIFIED** tới O3/W4.
 
+> **Execution update — 2026-09-01 (W2.2 + W3.ADMIN.REASSIGN-OWNER Event):** sau pilot Award,
+> tách `owner-reassign` thành domain projection và hai composition Desktop/Native dùng chung ở
+> `features/ownership/`, rồi mở thêm Event Detail qua `PUT /admin/records/event/:id/owner`.
+> Component chung chỉ nhận context đã projection (`resourceLabel`, record title, owner hiện tại,
+> roster active); Event/Award giữ riêng permission gate, entity route và sau-write reload. Luồng vẫn
+> một chiều: chọn active owner khác người hiện tại → MDialog danger → allowlist `{ owner_id }` →
+> server/PolicyEngine re-check. Đây là phần thực thi W2.2 có test, không phải shared generic form
+> bỏ qua context. Các Direct entity khác tiếp tục theo cùng checklist context/projection trước khi
+> mở; native host/device vẫn **UNVERIFIED** tới O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

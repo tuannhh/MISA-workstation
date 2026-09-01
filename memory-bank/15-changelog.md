@@ -3122,3 +3122,22 @@ tạo form generic mù cho 14 loại record.
 Các entity Direct khác chưa được nhân rộng tự động: mỗi entity cần đưa action vào đúng detail context
 và re-check projection/owner column (đặc biệt `gift.responsible_user_id`). Native AMIS runtime/device
 evidence vẫn **UNVERIFIED** tới O3/W4.
+
+## W2.2 + W3.ADMIN.REASSIGN-OWNER — Shared ownership flow và Event Detail
+
+Sau khi Award pilot hoạt động, luồng gán owner được tách thành `features/ownership/` để tái sử dụng
+đúng ranh giới: domain chỉ project owner hiện tại + roster active; Desktop/Native có composition MDS
+riêng; từng feature giữ permission gate, context bản ghi và route mutation riêng.
+
+- Event Detail mở action khi `/api/me` có `admin.edit`, nạp roster protected và gọi đúng
+  `PUT /api/admin/records/event/:id/owner`. Payload chỉ `{ owner_id }`; UI chặn chọn chính owner
+  hiện tại và buộc MDialog danger trước write.
+- Award được chuyển sang shared flow không đổi contract; Event/Award đều reload record sau khi máy
+  chủ chấp nhận. Không có quyền hay policy nào được quyết ở client.
+- `UI-EVENT-010` kiểm chứng endpoint/payload, guard `admin.edit`, confirmation và Native MDS;
+  cùng `UI-AWARD-006` bảo vệ shared flow. UI characterization: **29/29 pass**. Production build
+  pass; entry `vue-app.js` 448.93 kB (gzip 107.45 kB), còn dưới ngưỡng 500 kB.
+
+Nhân rộng sang entity Direct khác vẫn cần audit context của từng feature, nhất là `gift` dùng
+`responsible_user_id` thay vì `owner_id`. Native AMIS runtime/device evidence vẫn **UNVERIFIED** tới
+O3/W4.
