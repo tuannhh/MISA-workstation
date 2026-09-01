@@ -22,3 +22,11 @@ test('UI-INT-003: Interaction Create có action theo quyền và hai composition
   for (const component of [desktopCreate, mobileCreate]) { assert.match(component, /<MInput/); assert.match(component, /<MSelect/); assert.match(component, /<MTextarea/); assert.match(component, /toInteractionCreatePayload/); assert.doesNotMatch(component, /owner_id|created_by|caretaker_ids/); }
   assert.match(desktopCreate, /sticky bottom-0/); assert.match(mobileCreate, /<MMobileTopBar/); assert.match(mobileCreate, /<MDialog/); assert.match(mobileCreate, /--mds-mobile-safe-bottom/);
 });
+
+test('UI-VOICE-001: Voice API chỉ gửi audio qua propose và buộc idempotency khi confirm', async () => {
+  const { createVoiceApi, createVoiceIdempotencyKey } = await import(pathToFileURL(path.join(root, 'frontend', 'src', 'features', 'voice', 'domain', 'voice-api.mjs')).href);
+  const calls = []; const api = createVoiceApi({ fetchFn: async (url, init) => { calls.push({ url, init }); return new Response(JSON.stringify(url.endsWith('propose') ? { proposalId: 'p-1', expiresAt: '2026-09-01 12:00:00', extracted: {}, personCandidates: [], orgCandidates: [], matchConfidence: {}, suggestedScoreDelta: 0 } : { interactionId: 9 }), { status: 200, headers: { 'content-type': 'application/json' } }); } });
+  const proposal = await api.propose(new Blob(['audio'], { type: 'audio/webm' })); assert.equal(proposal.proposalId, 'p-1'); assert.equal(calls[0].init.headers, undefined); assert.ok(calls[0].init.body instanceof FormData);
+  await api.confirm({ proposalId: 'p-1', idempotencyKey: 'key-1', edits: { summary: 'Đã sửa' } }); assert.match(calls[1].url, /interaction-voice-confirm$/); assert.match(calls[1].init.body, /key-1/); assert.equal(createVoiceIdempotencyKey(() => 'uuid-1'), 'uuid-1');
+  await assert.rejects(() => api.confirm({ proposalId: 'p-1' }), /mã xác nhận an toàn/);
+});
