@@ -907,6 +907,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > số cá nhân, ngân hàng, địa chỉ nhà, dữ liệu đời tư, caretaker, owner hay created_by; `POST
 > /people` vẫn kiểm tra `partners:create` ở server. Edit mở rộng và Interaction tiếp tục là batch
 > kế tiếp.
+>
+> **Execution update — 2026-09-01 (W3.INTERACTIONS.LIST.READ):** bắt đầu Interaction bằng danh
+> sách read-only Desktop MDS và Native mini-app riêng, feature-flagged `interactionsListRead`
+> (local harness: `uiInteractionsPilot=1`). List dùng R044, search/pagination, không render
+> `owner_id`/`created_by` hay suy diễn quyền ở client. Ghi tương tác, picker đối tác và Voice
+> trigger vẫn để batch create kế tiếp.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

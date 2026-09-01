@@ -7,6 +7,7 @@ import PeopleDetailFeature from './features/people/PeopleDetailFeature.vue';
 import PeopleListFeature from './features/people/PeopleListFeature.vue';
 import PartnerDetailFeature from './features/partners/PartnerDetailFeature.vue';
 import SupplierDetailFeature from './features/suppliers/SupplierDetailFeature.vue';
+import InteractionsListFeature from './features/interactions/InteractionsListFeature.vue';
 import {
   HostSurface,
   assertHostAdapter,
@@ -25,6 +26,7 @@ const peopleFeatureRoute = ref(null);
 const peopleListFeatureRoute = ref(null);
 const partnerFeatureRoute = ref(null);
 const supplierFeatureRoute = ref(null);
+const interactionsFeatureRoute = ref(null);
 const desktopAdapter = createFakeBrowserHostAdapter();
 const isLocalUiHarness = ['localhost', '127.0.0.1'].includes(location.hostname);
 const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : null;
@@ -43,6 +45,7 @@ function isPartnerPilotEnabled() {
 function isSupplierPilotEnabled() {
   return window.__MISA_UI_FEATURE_FLAGS__?.supplierDetailRead === true || localUiParams?.get('uiSupplierPilot') === '1';
 }
+function isInteractionsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.interactionsListRead === true || localUiParams?.get('uiInteractionsPilot') === '1'; }
 
 function requestedSurface(queryParam = 'uiPeopleSurface') {
   if (localUiParams?.get(queryParam) === HostSurface.NATIVE) return HostSurface.NATIVE;
@@ -123,6 +126,14 @@ function resolveSupplierDetailRoute(key) {
   return true;
 }
 
+function resolveInteractionsRoute(key) {
+  if (!isInteractionsPilotEnabled() || key !== 'interactions') { interactionsFeatureRoute.value = null; return false; }
+  const surface = requestedSurface('uiInteractionsSurface');
+  try { interactionsFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiInteractionsSurface'), hostUnavailable: false }; }
+  catch (error) { if (surface !== HostSurface.NATIVE) throw error; interactionsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; }
+  return true;
+}
+
 function leavePeopleDetail() {
   peopleFeatureRoute.value = null;
   location.hash = 'people';
@@ -136,6 +147,7 @@ function leaveSupplierDetail() {
   supplierFeatureRoute.value = null;
   location.hash = 'suppliers';
 }
+function leaveInteractions() { interactionsFeatureRoute.value = null; location.hash = 'dashboard'; }
 
 function navigatePeopleDetail(personId) {
   location.hash = `person/${personId}`;
@@ -148,7 +160,9 @@ const desktopPartnerFeature = computed(() => partnerFeatureRoute.value?.surface 
 const nativePartnerFeature = computed(() => partnerFeatureRoute.value?.surface === HostSurface.NATIVE ? partnerFeatureRoute.value : null);
 const desktopSupplierFeature = computed(() => supplierFeatureRoute.value?.surface === HostSurface.DESKTOP ? supplierFeatureRoute.value : null);
 const nativeSupplierFeature = computed(() => supplierFeatureRoute.value?.surface === HostSurface.NATIVE ? supplierFeatureRoute.value : null);
-const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key);
+const desktopInteractionsFeature = computed(() => interactionsFeatureRoute.value?.surface === HostSurface.DESKTOP ? interactionsFeatureRoute.value : null);
+const nativeInteractionsFeature = computed(() => interactionsFeatureRoute.value?.surface === HostSurface.NATIVE ? interactionsFeatureRoute.value : null);
+const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key);
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [
@@ -257,8 +271,9 @@ onBeforeUnmount(() => {
     :host-unavailable="nativeSupplierFeature.hostUnavailable"
     @back="leaveSupplierDetail"
   />
+  <InteractionsListFeature v-if="nativeInteractionsFeature" :surface="nativeInteractionsFeature.surface" :adapter="nativeInteractionsFeature.adapter" :host-unavailable="nativeInteractionsFeature.hostUnavailable" @back="leaveInteractions" />
 
-  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature }">
+  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature }">
     <header class="platform-header">
       <button class="header-action" type="button" title="Mở điều hướng" aria-label="Mở điều hướng" @click="sideOpen = !sideOpen"><MIcon name="grid-dots" :size="20" /></button>
       <img class="app-logo-img" :src="headerMode === 'light' ? '/assets/misa-logo.png' : '/assets/misa-logo-white.png'" alt="MISA" />
@@ -284,7 +299,7 @@ onBeforeUnmount(() => {
         </button>
       </aside>
       <main class="main">
-        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature" class="content" id="view"></div>
+        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature && !desktopInteractionsFeature" class="content" id="view"></div>
         <PeopleListFeature
           v-if="desktopPeopleListFeature"
           :surface="desktopPeopleListFeature.surface"
@@ -315,6 +330,7 @@ onBeforeUnmount(() => {
           :adapter="desktopSupplierFeature.adapter"
           @back="leaveSupplierDetail"
         />
+        <InteractionsListFeature v-if="desktopInteractionsFeature" :surface="desktopInteractionsFeature.surface" :adapter="desktopInteractionsFeature.adapter" @back="leaveInteractions" />
       </main>
     </div>
   </div>
