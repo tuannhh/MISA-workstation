@@ -2969,3 +2969,24 @@ lưu một cách chủ động. Không có request `POST /awards` nào từ màn
 Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **20/20 pass**; `npm run
 build:ui` pass; `git diff --check` sạch. Event Smart Intake, native AMIS host runtime, bridge và
 device accessibility chưa nằm trong slice này.
+
+## W3.SMART-INTAKE.EVENT — UI đề xuất AI cho sự kiện (Desktop MDS + Native composition)
+
+Thêm luồng draft-first cho `POST /api/ai/event-extract`, đúng hợp đồng backend: một văn bản **hoặc**
+một tệp Excel/CSV. Client không gửi URL, PDF hay ảnh cho endpoint Event và không tự ghi `POST /events`.
+Kết quả `extracted` chỉ mở Event create form để người dùng kiểm tra, sửa rồi chủ động lưu.
+
+- `events-api.mjs#extract()` tách JSON text / `FormData` file, từ chối thiếu hoặc nhiều nguồn và
+  giữ nguyên `missing`/`warnings` từ server.
+- `EventIntakeDesktop.vue`/`EventIntakeMobile.vue` là hai composition MDS riêng; Native có top bar,
+  discard dialog và safe-area action, không fallback desktop.
+- `EventCreateDesktop.vue`/`EventCreateMobile.vue` nhận và hiển thị cảnh báo đọc file/trường AI
+  chưa thấy ngay trong form review; tránh lỗi chuyển màn hình làm mất tín hiệu để người dùng đối
+  chiếu trước khi lưu. Chuỗi ngày `YYYY-MM-DD` được đổi thành `YYYY-MM-DDT00:00` cho control
+  `datetime-local`, không bịa giờ thực tế.
+- `UI-EVENT-009` khóa contract endpoint, input type, single-source, warning/missing retention,
+  draft-first, MDS Desktop/Native và normalized date.
+
+Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **21/21 pass**; `npm run
+build:ui` pass; `git diff --check` sạch. AI policy/validation/authorization vẫn ở server;
+native AMIS bridge, thiết bị và accessibility runtime tiếp tục **UNVERIFIED** tới O3/W4.

@@ -1009,6 +1009,15 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > phòng vệ UX/projection, không thay thế AI egress policy, validation hay PolicyEngine ở server;
 > native AMIS runtime, bridge và accessibility thiết bị vẫn **UNVERIFIED** tới O3/W4. Event Smart
 > Intake là slice riêng, chưa được mở trong batch Award này.
+>
+> **Execution update — 2026-09-01 (W3.SMART-INTAKE.EVENT):** bổ sung entry AI bóc tách Event
+> đúng contract R141: chỉ một nguồn văn bản **hoặc** file Excel/CSV, không nhận URL/ảnh/PDF như Award.
+> Response gồm `extracted`, `missing`, `warnings` được chuyển thành bản nháp Event rồi hiển thị ở
+> form review Desktop/Native; warning và field AI chưa thấy vẫn được giữ trong form trước khi người
+> dùng chủ động lưu. Ngày `YYYY-MM-DD` từ schema AI được chuẩn hóa thành `T00:00` để tương thích
+> control `datetime-local`, không tự suy diễn giờ. Client không tự ghi Event, server vẫn là authority
+> cho AI egress, validation và PolicyEngine; native AMIS runtime/device evidence vẫn **UNVERIFIED**
+> tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
