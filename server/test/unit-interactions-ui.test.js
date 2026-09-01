@@ -74,3 +74,11 @@ test('UI-EVENT-005: Event Edit chỉ là affordance theo quyền và vẫn gửi
   for (const component of [desktopForm, mobileForm]) { assert.match(component, /toEventDraft\(props\.record\)/); assert.match(component, /toEventPayload\(draft\)/); assert.doesNotMatch(component, /owner_id|caretaker_ids|total_cost|attachments/); }
   assert.match(mobileForm, /<MMobileTopBar/); assert.match(mobileForm, /<MDialog/); assert.match(desktopForm, /sticky bottom-0/);
 });
+
+test('UI-EVENT-006: Event Delete yêu cầu confirm ở cả hai surface và quay về API protected', async () => {
+  const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events'); const desktopDetail = fs.readFileSync(path.join(eventRoot, 'desktop', 'EventDetailDesktop.vue'), 'utf8'); const mobileDetail = fs.readFileSync(path.join(eventRoot, 'mobile', 'EventDetailMobile.vue'), 'utf8'); const featureEvent = fs.readFileSync(path.join(eventRoot, 'EventsListFeature.vue'), 'utf8'); const { createEventsApi } = await import(pathToFileURL(path.join(eventRoot, 'domain', 'events-api.mjs')).href);
+  let call; const api = createEventsApi({ fetchFn: async (url, init) => { call = { url, init }; return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } }); } }); await api.delete(12);
+  assert.equal(call.url, '/api/events/12'); assert.equal(call.init.method, 'DELETE'); await assert.rejects(() => api.delete(0), /Mã sự kiện/);
+  for (const component of [desktopDetail, mobileDetail]) { assert.match(component, /<MDialog/); assert.match(component, /Xóa sự kiện\?/); assert.match(component, /v-if="canDelete"/); }
+  assert.match(featureEvent, /events\?\.includes\('delete'\)/); assert.match(featureEvent, /api\.delete\(props\.eventId\)/); assert.match(featureEvent, /@delete="deleteEvent"/);
+});

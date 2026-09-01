@@ -11,6 +11,9 @@
 - Mở Event Edit cho người có `events:edit`: action chỉ là UX, request vẫn qua `PUT /events/:id`
   PolicyEngine; Desktop/Native form chỉ gửi public allowlist. `UI-EVENT-005` khóa route/permission/
   payload, còn cost/file/delete và Smart Intake không bị kéo vào patch này.
+- Mở Event Delete với dialog xác nhận MDS riêng ở Desktop/Native. Nút theo `events:delete` chỉ là
+  affordance; client gọi `DELETE /events/:id` và hiển thị lỗi từ server, không suy diễn ownership.
+  `UI-EVENT-006` khóa contract API và confirm trước thao tác phá hủy.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 

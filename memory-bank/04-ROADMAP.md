@@ -946,6 +946,11 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > caretaker, chi phí hay file. Xóa, cost/file flows và Smart Intake tiếp tục tách slice để không
 > trộn authorization/data classification vào core edit.
 
+> **Execution update — 2026-09-01 (W3.EVENTS.CORE.DELETE):** thao tác xóa chỉ hiện khi `/api/me`
+> có `events:delete`, luôn qua dialog xác nhận MDS ở Desktop và Native rồi mới gọi `DELETE
+> /events/:id`. Client không tự quyết ownership/role, nhận lỗi 403 từ server như state hiển thị;
+> cost/file và Smart Intake vẫn là slice độc lập.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
