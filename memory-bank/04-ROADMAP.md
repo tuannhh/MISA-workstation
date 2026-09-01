@@ -1138,6 +1138,16 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > `UI-AWARD-007` khóa endpoint, payload, permission/context, confirmation và Native composition.
 > Direct còn lại: Sponsorship, Gift, Association fee, Benefit usage. Native host/device vẫn
 > **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-02 (W3.ADMIN.REASSIGN-OWNER Partner Direct hoàn tất):** bốn entity
+> còn lại `sponsorship`, `gift`, `association_fee`, `benefit_usage` nay xuất hiện đúng trong tab Hợp
+> tác của Partner Detail với hai panel Desktop/Native tách biệt. View model chỉ lấy title/date/status
+> đã server-projection; không mang `amount`/`value` Confidential sang UI. Gift dùng đúng
+> `responsible_user_id` (không nhầm `owner_id` là cơ quan nhận quà). `Gán` chỉ hiện khi `admin.edit`,
+> giữ context record, active roster, no-op guard và MDialog trước R148. `D13-092` chứng minh executor
+> 403, Admin chuyển đủ bốn entity và GET Partner phản ánh owner server-derived, SQLite/MySQL 103/103;
+> `UI-PAR-014` khóa projection/API/permission/composition. **Reassign Owner UI đã phủ 14/14 entity
+> Direct.** Runtime AMIS/device vẫn **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

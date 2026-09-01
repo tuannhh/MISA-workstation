@@ -40,7 +40,7 @@ export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api'
       return payload;
     },
     async reassignOwner(entity, recordId, ownerId) {
-      if (!['agreement', 'work_log'].includes(entity)) throw new TypeError('Entity gán lại owner không hợp lệ.');
+      if (!['agreement', 'work_log', 'sponsorship', 'gift', 'association_fee', 'benefit_usage'].includes(entity)) throw new TypeError('Entity gán lại owner không hợp lệ.');
       const id = Number(recordId); const target = Number(ownerId);
       if (!Number.isInteger(id) || id < 1) throw new TypeError('Mã bản ghi không hợp lệ.');
       if (!Number.isInteger(target) || target < 1) throw new TypeError('Hãy chọn người phụ trách đang hoạt động.');

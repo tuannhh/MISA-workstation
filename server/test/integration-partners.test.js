@@ -449,6 +449,25 @@ test('D13-088: work_log — executor upload file vào work-log KHÔNG phải c�
   assert.equal((await uploadFiles(`/api/work-logs/${othersWl.id}/files`, [{ name: 'admin.pdf', content: 'x' }])).status, 200);
 });
 
+test('D13-092: Admin gán lại owner cho bốn Direct record trong Partner; executor bị chặn và detail phản ánh projection server', async () => {
+  const orgId = await createOrg({ org_type: 'association' });
+  const sponsorship = await (await call('POST', `/api/partners/${orgId}/sponsorships`, { body: { title: 'Tài trợ D13-092', type: 'Tài trợ' } })).json();
+  const gift = await (await call('POST', `/api/partners/${orgId}/gifts`, { body: { gift_type: 'Hoa', occasion: 'D13-092' } })).json();
+  const fee = await (await call('POST', `/api/partners/${orgId}/fees`, { body: { year: 2026, status: 'Chưa đóng' } })).json();
+  const benefit = await (await call('POST', `/api/partners/${orgId}/benefit-usages`, { body: { title: 'Quyền lợi D13-092' } })).json();
+  const { db } = require('../db');
+  const targetUserId = db.prepare("SELECT id FROM users WHERE role='admin' AND active=1 ORDER BY id LIMIT 1").get().id;
+  assert.equal((await call('PUT', `/api/admin/records/sponsorship/${sponsorship.id}/owner`, { body: { owner_id: targetUserId }, as: executorCookie })).status, 403);
+  for (const [entity, id] of [['sponsorship', sponsorship.id], ['gift', gift.id], ['association_fee', fee.id], ['benefit_usage', benefit.id]]) {
+    assert.equal((await call('PUT', `/api/admin/records/${entity}/${id}/owner`, { body: { owner_id: targetUserId }, as: targetAdminCookie })).status, 200);
+  }
+  const detail = await (await call('GET', `/api/partners/${orgId}`, { as: targetAdminCookie })).json();
+  assert.equal(detail.sponsorships.find((row) => row.id === sponsorship.id).owner_id, targetUserId);
+  assert.equal(detail.gifts.find((row) => row.id === gift.id).responsible_user_id, targetUserId);
+  assert.equal(detail.fees.find((row) => row.id === fee.id).owner_id, targetUserId);
+  assert.equal(detail.benefitUsages.find((row) => row.id === benefit.id).owner_id, targetUserId);
+});
+
 // ---------------------------------------------------------------------------
 // R018/R019/R020/R021 — gifts (owner=org qua R018, owner=person qua R019)
 // ---------------------------------------------------------------------------

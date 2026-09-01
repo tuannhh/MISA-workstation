@@ -3237,3 +3237,18 @@ context của chính kỳ tham gia thay vì một màn hình mutation chung.
   owner từ projection server; `UI-AWARD-007` kiểm chứng API, gate, confirmation và hai composition.
   `integration-awards` đạt **45/45** trên SQLite và MySQL; runtime AMIS/device vẫn **UNVERIFIED** tới
   O3/W4.
+
+## W3.ADMIN.REASSIGN-OWNER — Partner Direct records (14/14 hoàn tất)
+
+Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partner Detail: `sponsorship`, `gift`,
+`association_fee`, và `benefit_usage`.
+
+- Thêm panel Desktop và Native riêng. Chúng chỉ render title/ngày/trạng thái đã được server
+  projection; `amount`/`value` Confidential không đi qua view model hoặc UI.
+- Action `Gán` chỉ dành cho `admin.edit`, giữ context cụ thể của bản ghi, tải roster active, chặn
+  no-op và dùng shared MDS confirmation trước R148. `gift` chuyển đúng `responsible_user_id`, không
+  nhầm với `owner_id` là chủ thể nhận quà.
+- `D13-092` xác nhận executor bị 403, Admin chuyển được đủ bốn entity và response Partner phản ánh
+  owner từ server; Partner integration đạt **103/103** trên SQLite và MySQL. `UI-PAR-014` khóa API
+  allowlist, projection, permission và hai composition. Tổng reassignment UI: **14/14 Direct entity**;
+  Native AMIS runtime/device vẫn **UNVERIFIED** tới O3/W4.
