@@ -6,7 +6,7 @@ import MInput from '../../../components/mds/MInput.vue';
 import MTag from '../../../components/mds/MTag.vue';
 
 const props = defineProps({ rows: { type: Array, default: () => [] }, total: { type: Number, default: 0 }, page: { type: Number, default: 1 }, pageSize: { type: Number, default: 20 }, search: { type: String, default: '' }, loading: { type: Boolean, default: false }, canCreate: { type: Boolean, default: false } });
-const emit = defineEmits(['search', 'page', 'create']);
+const emit = defineEmits(['search', 'page', 'create', 'voice']);
 const query = ref(props.search);
 watch(() => props.search, (value) => { query.value = value; });
 function submit() { emit('search', query.value.trim()); }
@@ -21,7 +21,7 @@ function submit() { emit('search', query.value.trim()); }
             <h1 class="text-[20px] font-semibold leading-7">Lịch sử tương tác</h1>
             <p class="mt-1 text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">Nhật ký trao đổi với đối tác truyền thông, từ dữ liệu R044 đã được máy chủ trả về.</p>
           </div>
-          <MButton v-if="canCreate" variant="primary" :disabled="loading" @click="emit('create')">Thêm tương tác</MButton>
+          <div v-if="canCreate" class="flex gap-2"><MButton variant="neutral" :disabled="loading" @click="emit('voice')">Ghi bằng giọng nói</MButton><MButton variant="primary" :disabled="loading" @click="emit('create')">Thêm tương tác</MButton></div>
         </div>
         <form class="mt-4 flex max-w-[560px] gap-2" @submit.prevent="submit"><MInput v-model="query" placeholder="Tìm nội dung hoặc đối tác…" :disabled="loading" /><MButton variant="primary" :loading="loading" @click="submit">Tìm</MButton></form>
       </header>

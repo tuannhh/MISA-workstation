@@ -921,6 +921,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > khóa contract payload, quyền action và hai composition; kiểm chứng native AMIS runtime, accessibility
 > thiết bị/lifecycle/deep link vẫn **UNVERIFIED**, chờ O3 host contract.
 
+> **Execution update — 2026-09-01 (W3.VOICE.UI review):** thêm UI Desktop MDS và Native composition
+> riêng cho R149/R150: tệp audio → proposal → rà soát field/candidate → confirm bằng idempotency key.
+> Client không tự chọn candidate mơ hồ, không gửi owner/created_by và không tự ghi interaction. Thu âm
+> trực tiếp/mic runtime trong AMIS Mobile (W3.VOICE.2), accessibility thiết bị và deep-link host vẫn
+> **UNVERIFIED/BLOCKED bởi O3**; UI chỉ cho chọn tệp audio, không giả microphone production.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

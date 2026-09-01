@@ -30,3 +30,9 @@ test('UI-VOICE-001: Voice API chỉ gửi audio qua propose và buộc idempoten
   await api.confirm({ proposalId: 'p-1', idempotencyKey: 'key-1', edits: { summary: 'Đã sửa' } }); assert.match(calls[1].url, /interaction-voice-confirm$/); assert.match(calls[1].init.body, /key-1/); assert.equal(createVoiceIdempotencyKey(() => 'uuid-1'), 'uuid-1');
   await assert.rejects(() => api.confirm({ proposalId: 'p-1' }), /mã xác nhận an toàn/);
 });
+
+test('UI-VOICE-002: Voice review có hai composition MDS và luôn buộc user xác nhận', () => {
+  const voiceRoot = path.join(root, 'frontend', 'src', 'features', 'voice'); const voiceDesktop = fs.readFileSync(path.join(voiceRoot, 'desktop', 'VoiceProposalDesktop.vue'), 'utf8'); const voiceMobile = fs.readFileSync(path.join(voiceRoot, 'mobile', 'VoiceProposalMobile.vue'), 'utf8');
+  for (const component of [voiceDesktop, voiceMobile]) { assert.match(component, /<MUpload/); assert.match(component, /<MRadioGroup/); assert.match(component, /Xác nhận ghi tương tác/); assert.doesNotMatch(component, /owner_id|created_by/); }
+  assert.match(voiceMobile, /<MMobileTopBar/); assert.match(voiceMobile, /<MDialog/); assert.match(voiceMobile, /--mds-mobile-safe-bottom/); assert.match(feature, /VoiceProposalDesktop/); assert.match(feature, /VoiceProposalMobile/); assert.match(feature, /createVoiceIdempotencyKey/);
+});
