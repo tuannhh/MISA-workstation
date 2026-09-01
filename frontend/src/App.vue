@@ -8,6 +8,7 @@ import PeopleListFeature from './features/people/PeopleListFeature.vue';
 import PartnerDetailFeature from './features/partners/PartnerDetailFeature.vue';
 import SupplierDetailFeature from './features/suppliers/SupplierDetailFeature.vue';
 import InteractionsListFeature from './features/interactions/InteractionsListFeature.vue';
+import EventsListFeature from './features/events/EventsListFeature.vue';
 import {
   HostSurface,
   assertHostAdapter,
@@ -27,6 +28,7 @@ const peopleListFeatureRoute = ref(null);
 const partnerFeatureRoute = ref(null);
 const supplierFeatureRoute = ref(null);
 const interactionsFeatureRoute = ref(null);
+const eventsFeatureRoute = ref(null);
 const desktopAdapter = createFakeBrowserHostAdapter();
 const isLocalUiHarness = ['localhost', '127.0.0.1'].includes(location.hostname);
 const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : null;
@@ -46,6 +48,7 @@ function isSupplierPilotEnabled() {
   return window.__MISA_UI_FEATURE_FLAGS__?.supplierDetailRead === true || localUiParams?.get('uiSupplierPilot') === '1';
 }
 function isInteractionsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.interactionsListRead === true || localUiParams?.get('uiInteractionsPilot') === '1'; }
+function isEventsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.eventsListRead === true || localUiParams?.get('uiEventsPilot') === '1'; }
 
 function requestedSurface(queryParam = 'uiPeopleSurface') {
   if (localUiParams?.get(queryParam) === HostSurface.NATIVE) return HostSurface.NATIVE;
@@ -133,6 +136,7 @@ function resolveInteractionsRoute(key) {
   catch (error) { if (surface !== HostSurface.NATIVE) throw error; interactionsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; }
   return true;
 }
+function resolveEventsRoute(key) { if (!isEventsPilotEnabled() || key !== 'events') { eventsFeatureRoute.value = null; return false; } const surface = requestedSurface('uiEventsSurface'); try { eventsFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiEventsSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; eventsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; } return true; }
 
 function leavePeopleDetail() {
   peopleFeatureRoute.value = null;
@@ -148,6 +152,7 @@ function leaveSupplierDetail() {
   location.hash = 'suppliers';
 }
 function leaveInteractions() { interactionsFeatureRoute.value = null; location.hash = 'dashboard'; }
+function leaveEvents() { eventsFeatureRoute.value = null; location.hash = 'dashboard'; }
 
 function navigatePeopleDetail(personId) {
   location.hash = `person/${personId}`;
@@ -162,7 +167,9 @@ const desktopSupplierFeature = computed(() => supplierFeatureRoute.value?.surfac
 const nativeSupplierFeature = computed(() => supplierFeatureRoute.value?.surface === HostSurface.NATIVE ? supplierFeatureRoute.value : null);
 const desktopInteractionsFeature = computed(() => interactionsFeatureRoute.value?.surface === HostSurface.DESKTOP ? interactionsFeatureRoute.value : null);
 const nativeInteractionsFeature = computed(() => interactionsFeatureRoute.value?.surface === HostSurface.NATIVE ? interactionsFeatureRoute.value : null);
-const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key);
+const desktopEventsFeature = computed(() => eventsFeatureRoute.value?.surface === HostSurface.DESKTOP ? eventsFeatureRoute.value : null);
+const nativeEventsFeature = computed(() => eventsFeatureRoute.value?.surface === HostSurface.NATIVE ? eventsFeatureRoute.value : null);
+const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key);
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [
@@ -272,8 +279,9 @@ onBeforeUnmount(() => {
     @back="leaveSupplierDetail"
   />
   <InteractionsListFeature v-if="nativeInteractionsFeature" :surface="nativeInteractionsFeature.surface" :adapter="nativeInteractionsFeature.adapter" :host-unavailable="nativeInteractionsFeature.hostUnavailable" @back="leaveInteractions" />
+  <EventsListFeature v-if="nativeEventsFeature" :surface="nativeEventsFeature.surface" :adapter="nativeEventsFeature.adapter" :host-unavailable="nativeEventsFeature.hostUnavailable" @back="leaveEvents" />
 
-  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature }">
+  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature || nativeEventsFeature }">
     <header class="platform-header">
       <button class="header-action" type="button" title="Mở điều hướng" aria-label="Mở điều hướng" @click="sideOpen = !sideOpen"><MIcon name="grid-dots" :size="20" /></button>
       <img class="app-logo-img" :src="headerMode === 'light' ? '/assets/misa-logo.png' : '/assets/misa-logo-white.png'" alt="MISA" />
@@ -299,7 +307,7 @@ onBeforeUnmount(() => {
         </button>
       </aside>
       <main class="main">
-        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature && !desktopInteractionsFeature" class="content" id="view"></div>
+        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature && !desktopInteractionsFeature && !desktopEventsFeature" class="content" id="view"></div>
         <PeopleListFeature
           v-if="desktopPeopleListFeature"
           :surface="desktopPeopleListFeature.surface"
@@ -331,6 +339,7 @@ onBeforeUnmount(() => {
           @back="leaveSupplierDetail"
         />
         <InteractionsListFeature v-if="desktopInteractionsFeature" :surface="desktopInteractionsFeature.surface" :adapter="desktopInteractionsFeature.adapter" @back="leaveInteractions" />
+        <EventsListFeature v-if="desktopEventsFeature" :surface="desktopEventsFeature.surface" :adapter="desktopEventsFeature.adapter" @back="leaveEvents" />
       </main>
     </div>
   </div>

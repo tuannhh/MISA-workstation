@@ -927,6 +927,11 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > trực tiếp/mic runtime trong AMIS Mobile (W3.VOICE.2), accessibility thiết bị và deep-link host vẫn
 > **UNVERIFIED/BLOCKED bởi O3**; UI chỉ cho chọn tệp audio, không giả microphone production.
 
+> **Execution update — 2026-09-01 (W3.EVENTS.LIST.READ):** Event List read pilot dùng R087,
+> feature-flag `eventsListRead` (local harness: `uiEventsPilot=1`), có Desktop MDS và Native
+> composition riêng. Chỉ render projection sự kiện; không hiển thị `total_cost`, owner, file hoặc
+> cost breakdown. Event detail/create/edit, chi phí, file và Smart Intake vẫn là slice sau.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

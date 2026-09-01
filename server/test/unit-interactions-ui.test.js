@@ -41,3 +41,13 @@ test('UI-EVENT-001: Event core chỉ gửi Public allowlist, không nhận tiề
   const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events', 'domain'); const { EVENT_PUBLIC_FIELDS, toEventDraft, toEventPayload } = await import(pathToFileURL(path.join(eventRoot, 'event-write.mjs')).href); const payload = toEventPayload({ ...toEventDraft(), name: 'Hội nghị truyền thông', owner_id: 99, total_cost: 9000000, attachments: ['x'] });
   assert.equal(payload.name, 'Hội nghị truyền thông'); for (const forbidden of ['owner_id', 'total_cost', 'attachments', 'caretaker_ids']) assert.equal(forbidden in payload, false); assert.ok(EVENT_PUBLIC_FIELDS.includes('start_time')); assert.throws(() => toEventPayload({}), /Tên sự kiện/);
 });
+
+test('UI-EVENT-001B: Event API tạo query list hợp lệ và chỉ nhận projection rows', async () => {
+  const { createEventsApi } = await import(pathToFileURL(path.join(root, 'frontend', 'src', 'features', 'events', 'domain', 'events-api.mjs')).href); let url = ''; const api = createEventsApi({ fetchFn: async (value) => { url = value; return new Response(JSON.stringify({ rows: [], total: 0, page: 1, pageSize: 20 }), { status: 200, headers: { 'content-type': 'application/json' } }); } }); const payload = await api.getList({ page: 0, pageSize: 999, search: 'Hội nghị' }); assert.equal(payload.total, 0); assert.match(url, /page=1/); assert.match(url, /pageSize=100/); assert.match(url, /H%E1%BB%99i/);
+});
+
+test('UI-EVENT-002: Event List có hai composition MDS, Native không dùng desktop shell', () => {
+  const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events'); const desktopEvent = fs.readFileSync(path.join(eventRoot, 'desktop', 'EventsListDesktop.vue'), 'utf8'); const mobileEvent = fs.readFileSync(path.join(eventRoot, 'mobile', 'EventsListMobile.vue'), 'utf8'); const featureEvent = fs.readFileSync(path.join(eventRoot, 'EventsListFeature.vue'), 'utf8');
+  for (const component of [desktopEvent, mobileEvent]) { assert.match(component, /<MInput/); assert.match(component, /<MButton/); assert.match(component, /<MEmptyState/); assert.doesNotMatch(component, /total_cost|owner_id|attachments/); }
+  assert.match(mobileEvent, /<MMobileTopBar/); assert.match(mobileEvent, /--mds-mobile-safe-bottom/); assert.match(featureEvent, /Native host chưa sẵn sàng/); assert.match(appVue, /eventsListRead/); assert.match(appVue, /EventsListFeature/);
+});
