@@ -30,6 +30,9 @@ async function writeDomain() {
 async function cooperationDomain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'partner-cooperation.mjs')).href);
 }
+async function partnerApiDomain() {
+  return import(pathToFileURL(path.join(featureRoot, 'domain', 'partner-api.mjs')).href);
+}
 
 test('UI-PAR-001: Partner Detail chỉ claim route qua cờ host/local harness, trước legacy renderer', () => {
   assert.match(appVue, /partnerDetailRead === true/, 'partner pilot phải opt-in qua cờ host');
@@ -186,4 +189,15 @@ test('UI-PAR-012: tệp MOU/work log dùng MDS upload, chỉ mở API protected 
   assert.match(feature, /api\.uploadWorkLogFiles\(id, files\)/);
   assert.match(desktopPage, /<PartnerCooperationFilesPanel/);
   assert.match(mobilePage, /<PartnerCooperationFilesPanel/);
+});
+
+test('UI-PAR-013: Agreement/Work log chỉ Admin mới có gán owner theo context và luôn dùng shared MDS confirmation', async () => {
+  const { createPartnerApi } = await partnerApiDomain();
+  const ownershipRoot = path.join(root, 'frontend', 'src', 'features', 'ownership');
+  const calls = []; const api = createPartnerApi({ fetchFn: async (url, init = {}) => { calls.push({ url, init }); const payload = url.endsWith('/admin/users') ? { rows: [] } : { ok: true }; return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } }); } });
+  await api.getAdminUsers(); await api.reassignOwner('agreement', 12, 4); await api.reassignOwner('work_log', 15, 4);
+  assert.deepEqual(calls.map(({ url, init }) => [url, init.method || 'GET']), [['/api/admin/users', 'GET'], ['/api/admin/records/agreement/12/owner', 'PUT'], ['/api/admin/records/work_log/15/owner', 'PUT']]);
+  assert.deepEqual(JSON.parse(calls[1].init.body), { owner_id: 4 }); assert.deepEqual(JSON.parse(calls[2].init.body), { owner_id: 4 }); await assert.rejects(() => api.reassignOwner('supplier_quote', 1, 4), /Entity gán lại owner/);
+  for (const component of [desktopPage, mobilePage]) { assert.match(component, /canReassignCooperation/); assert.match(component, /reassign-agreement/); assert.match(component, /reassign-work-log/); assert.match(component, /Gán/); }
+  assert.match(feature, /\(item\) => Boolean\(item\?\.id\) && state\.permissions\?\.modules\?\.admin\?\.includes\('edit'\)/); assert.match(feature, /canReassignCooperation\.value\(record\)/); assert.match(feature, /api\.getAdminUsers/); assert.match(feature, /api\.reassignOwner/); assert.match(feature, /OwnerReassignDesktop/); assert.match(feature, /OwnerReassignMobile/); assert.match(feature, /Xác nhận gán lại người phụ trách/); assert.match(fs.readFileSync(path.join(ownershipRoot, 'desktop', 'OwnerReassignDesktop.vue'), 'utf8'), /<MSelect/); assert.match(fs.readFileSync(path.join(ownershipRoot, 'mobile', 'OwnerReassignMobile.vue'), 'utf8'), /class="mds-mobile-app/);
 });

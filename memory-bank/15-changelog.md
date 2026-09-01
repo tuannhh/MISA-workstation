@@ -3141,3 +3141,25 @@ riêng; từng feature giữ permission gate, context bản ghi và route mutati
 Nhân rộng sang entity Direct khác vẫn cần audit context của từng feature, nhất là `gift` dùng
 `responsible_user_id` thay vì `owner_id`. Native AMIS runtime/device evidence vẫn **UNVERIFIED** tới
 O3/W4.
+
+## W3.ADMIN.REASSIGN-OWNER — Partner Detail (Agreement + Work log)
+
+Mở gán lại người phụ trách trong đúng ngữ cảnh Partner Detail cho hai record Direct đã có
+projection `ownerId`: Thỏa thuận/MOU (`agreement`) và Lịch sử làm việc (`work_log`). Không có màn
+hình gán lại chung thiếu bối cảnh.
+
+- `partner-api.mjs` chỉ lấy roster protected từ `GET /api/admin/users`, và chỉ chấp nhận hai entity
+  allowlist rồi gọi `PUT /api/admin/records/:entity/:id/owner` với duy nhất `{ owner_id }`.
+- Desktop và Native thêm action `Gán` tại từng dòng khi principal có `admin.edit`; flow dùng shared
+  `features/ownership/`, hiển thị record/current owner/target active, chặn no-op và buộc MDialog
+  danger trước request. Sau success feature reload Partner Detail; 403/error từ server được hiển thị
+  thay vì suy diễn quyền tại browser.
+- `UI-PAR-013` kiểm chứng hai endpoint, payload, entity allowlist, permission gate, MDS confirmation
+  và hai composition riêng. `node --test server/test/unit-partner-detail-ui.test.js
+  server/test/unit-interactions-ui.test.js` **42/42 pass**; `npm run build:ui` pass (entry
+  `vue-app.js` 454,39 kB, gzip 109,33 kB); `git diff --check` sạch.
+
+Rollout reassign owner chưa coi là phủ hết 14 entity Direct: Booking, Interaction, Award
+participation, Sponsorship, Gift, Association fee, Supplier quote/transaction/contact và Benefit
+usage tiếp tục cần được mở theo detail/projection riêng. Runtime Native AMIS trên thiết bị thật vẫn
+**UNVERIFIED** tới O3/W4.

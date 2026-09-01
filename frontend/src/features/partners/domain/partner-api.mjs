@@ -32,6 +32,23 @@ export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api'
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async getAdminUsers() {
+      const response = await fetchFn(`${basePath}/admin/users`, { credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      if (!Array.isArray(payload?.rows)) throw new PartnerApiError({ status: 502, code: 'OWNER_USERS_INVALID_RESPONSE', message: 'Danh sách người phụ trách trả về không hợp lệ.' });
+      return payload;
+    },
+    async reassignOwner(entity, recordId, ownerId) {
+      if (!['agreement', 'work_log'].includes(entity)) throw new TypeError('Entity gán lại owner không hợp lệ.');
+      const id = Number(recordId); const target = Number(ownerId);
+      if (!Number.isInteger(id) || id < 1) throw new TypeError('Mã bản ghi không hợp lệ.');
+      if (!Number.isInteger(target) || target < 1) throw new TypeError('Hãy chọn người phụ trách đang hoạt động.');
+      const response = await fetchFn(`${basePath}/admin/records/${entity}/${id}/owner`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ owner_id: target }) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload || Object.freeze({ ok: true });
+    },
     async update(partnerId, input) {
       const id = Number(partnerId);
       const response = await fetchFn(`${basePath}/partners/${id}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });

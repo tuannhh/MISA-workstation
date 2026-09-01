@@ -1087,6 +1087,16 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > server/PolicyEngine re-check. Đây là phần thực thi W2.2 có test, không phải shared generic form
 > bỏ qua context. Các Direct entity khác tiếp tục theo cùng checklist context/projection trước khi
 > mở; native host/device vẫn **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-01 (W3.ADMIN.REASSIGN-OWNER Partner):** mở tiếp đúng ngữ cảnh
+> Partner Detail cho hai entity Direct có mặt trong projection: `agreement` và `work_log`. Action
+> chỉ hiện cho `admin.edit`; mỗi dòng giữ entity, tiêu đề và owner hiện tại của chính bản ghi, tải
+> roster active qua endpoint protected, dùng shared Desktop/Native owner flow và MDialog danger rồi
+> mới gửi allowlist `{ owner_id }` tới `PUT /admin/records/:entity/:id/owner`. Không tạo form gán
+> owner mù: endpoint, resource label, refresh sau ghi và lỗi 403 đều được giữ tại feature Partner.
+> `UI-PAR-013` khóa hai endpoint, payload, gate, confirmation và Native composition. Các Direct
+> entity còn lại chỉ được rollout khi feature của chúng có projection owner và context detail đủ
+> để người quản trị đánh giá việc chuyển giao; native host/device vẫn **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
