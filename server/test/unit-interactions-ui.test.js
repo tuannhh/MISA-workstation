@@ -36,3 +36,8 @@ test('UI-VOICE-002: Voice review có hai composition MDS và luôn buộc user x
   for (const component of [voiceDesktop, voiceMobile]) { assert.match(component, /<MUpload/); assert.match(component, /<MRadioGroup/); assert.match(component, /Xác nhận ghi tương tác/); assert.doesNotMatch(component, /owner_id|created_by/); }
   assert.match(voiceMobile, /<MMobileTopBar/); assert.match(voiceMobile, /<MDialog/); assert.match(voiceMobile, /--mds-mobile-safe-bottom/); assert.match(feature, /VoiceProposalDesktop/); assert.match(feature, /VoiceProposalMobile/); assert.match(feature, /createVoiceIdempotencyKey/);
 });
+
+test('UI-EVENT-001: Event core chỉ gửi Public allowlist, không nhận tiền/file/owner', async () => {
+  const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events', 'domain'); const { EVENT_PUBLIC_FIELDS, toEventDraft, toEventPayload } = await import(pathToFileURL(path.join(eventRoot, 'event-write.mjs')).href); const payload = toEventPayload({ ...toEventDraft(), name: 'Hội nghị truyền thông', owner_id: 99, total_cost: 9000000, attachments: ['x'] });
+  assert.equal(payload.name, 'Hội nghị truyền thông'); for (const forbidden of ['owner_id', 'total_cost', 'attachments', 'caretaker_ids']) assert.equal(forbidden in payload, false); assert.ok(EVENT_PUBLIC_FIELDS.includes('start_time')); assert.throws(() => toEventPayload({}), /Tên sự kiện/);
+});
