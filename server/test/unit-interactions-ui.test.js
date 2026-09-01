@@ -8,3 +8,11 @@ test('UI-INT-001: Interaction List chỉ render R044 projection và có hai comp
   for (const component of [desktop, mobile]) { assert.match(component, /<MInput/); assert.match(component, /<MButton/); assert.match(component, /<MEmptyState/); assert.doesNotMatch(component, /owner_id|created_by/); }
   assert.match(mobile, /<MMobileTopBar/); assert.match(mobile, /--mds-mobile-safe-bottom/); assert.match(appVue, /interactionsListRead/);
 });
+
+test('UI-INT-002: Interaction Create bind đối tác từ picker, không gửi owner/created_by', async () => {
+  const { toInteractionCreateDraft, toInteractionCreatePayload } = await import(pathToFileURL(path.join(featureRoot, 'domain', 'interaction-write.mjs')).href);
+  const payload = toInteractionCreatePayload({ ...toInteractionCreateDraft(), summary: 'Trao đổi kế hoạch' }, { type: 'org', id: 9, name: 'Báo Ví dụ' });
+  assert.equal(payload.partner_type, 'org'); assert.equal(payload.partner_id, 9); assert.equal(payload.partner_name, 'Báo Ví dụ');
+  for (const forbidden of ['owner_id', 'created_by', 'caretaker_ids']) assert.equal(forbidden in payload, false);
+  assert.throws(() => toInteractionCreatePayload(toInteractionCreateDraft(), null), /chọn một đối tác/);
+});
