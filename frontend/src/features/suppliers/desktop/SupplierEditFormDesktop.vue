@@ -1,0 +1,21 @@
+<script setup>
+import { nextTick, reactive, ref, watch } from 'vue';
+import MButton from '../../../components/mds/MButton.vue';
+import MInput from '../../../components/mds/MInput.vue';
+import MSelect from '../../../components/mds/MSelect.vue';
+import MTextarea from '../../../components/mds/MTextarea.vue';
+import { toSupplierEditDraft, toSupplierUpdatePayload, validateSupplierEditDraft } from '../domain/supplier-write.mjs';
+
+const props = defineProps({ record: { type: Object, required: true }, saving: { type: Boolean, default: false }, serverError: { type: String, default: '' } });
+const emit = defineEmits(['cancel', 'save']);
+const draft = reactive({}); const errors = reactive({}); const nameInput = ref(null);
+const industries = ['', 'Tổ chức sự kiện', 'In ấn', 'Quà tặng', 'Truyền thông', 'Thiết kế', 'Âm thanh ánh sáng', 'Nhân sự thời vụ', 'Khác'].map((value) => ({ value, label: value || 'Chọn lĩnh vực' }));
+const invoices = [{ value: '', label: 'Chọn loại hóa đơn' }, { value: 'VAT', label: 'VAT' }, { value: 'Trực tiếp 0%', label: 'Trực tiếp 0%' }];
+function resetDraft() { Object.assign(draft, toSupplierEditDraft(props.record)); Object.keys(errors).forEach((key) => delete errors[key]); }
+watch(() => props.record, resetDraft, { immediate: true });
+async function submit() { const nextErrors = validateSupplierEditDraft(draft); Object.keys(errors).forEach((key) => delete errors[key]); Object.assign(errors, nextErrors); if (Object.keys(nextErrors).length) { await nextTick(); nameInput.value?.focus(); return; } emit('save', toSupplierUpdatePayload(draft)); }
+</script>
+
+<template>
+  <section class="min-h-0 bg-[var(--mds-bg-page)] p-4"><form class="mx-auto max-w-[880px] rounded-lg bg-[var(--mds-bg)] shadow-[var(--mds-shadow-card)]" novalidate @submit.prevent="submit"><header class="flex items-start justify-between gap-4 border-b border-[var(--mds-border-light)] px-5 py-4"><div><h1 class="text-[20px] font-semibold leading-7 text-[var(--mds-text)]">Chỉnh sửa nhà cung cấp</h1><p class="mt-1 text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">Chỉ thông tin hồ sơ công khai được gửi ở bước này. Điều khoản thương mại và đầu mối giữ nguyên.</p></div><MButton variant="neutral" :disabled="saving" @click="emit('cancel')">Hủy</MButton></header><div class="grid gap-4 p-5 sm:grid-cols-2"><label class="block sm:col-span-2"><span class="mb-1.5 block text-[13px] font-medium leading-[18px]">Tên nhà cung cấp <span class="text-[var(--mds-danger)]">*</span></span><MInput ref="nameInput" v-model="draft.name" placeholder="Nhập tên nhà cung cấp" :error="errors.name" :disabled="saving" /></label><label class="block"><span class="mb-1.5 block text-[13px] font-medium leading-[18px]">Lĩnh vực</span><MSelect v-model="draft.industry" :options="industries" :disabled="saving" /></label><label class="block"><span class="mb-1.5 block text-[13px] font-medium leading-[18px]">Loại hóa đơn</span><MSelect v-model="draft.invoice_type" :options="invoices" :disabled="saving" /></label><label class="block sm:col-span-2"><span class="mb-1.5 block text-[13px] font-medium leading-[18px]">Địa chỉ</span><MInput v-model="draft.address" placeholder="Nhập địa chỉ" :disabled="saving" /></label><label class="block"><span class="mb-1.5 block text-[13px] font-medium leading-[18px]">Mã số thuế</span><MInput v-model="draft.tax_code" placeholder="Nhập mã số thuế" :disabled="saving" /></label><label class="block"><span class="mb-1.5 block text-[13px] font-medium leading-[18px]">Dịch vụ cung cấp</span><MInput v-model="draft.services" placeholder="Ví dụ: In ấn, tổ chức sự kiện" :disabled="saving" /></label><label class="block sm:col-span-2"><span class="mb-1.5 block text-[13px] font-medium leading-[18px]">Ghi chú</span><MTextarea v-model="draft.note" placeholder="Nhập ghi chú" :disabled="saving" /></label></div><p v-if="serverError" role="alert" class="mx-5 mb-4 rounded-lg bg-[var(--mds-danger-bg)] px-3 py-2 text-[13px] leading-[18px] text-[var(--mds-danger)]">{{ serverError }}</p><footer class="flex justify-end gap-2 border-t border-[var(--mds-border-light)] px-5 py-3"><MButton variant="neutral" :disabled="saving" @click="emit('cancel')">Hủy</MButton><MButton variant="primary" :loading="saving" :disabled="saving" @click="submit">Lưu thay đổi</MButton></footer></form></section>
+</template>

@@ -26,5 +26,19 @@ export function createSupplierApi({ fetchFn = globalThis.fetch, basePath = '/api
       }
       return payload;
     },
+    async getCurrentUser() {
+      const response = await fetchFn(`${basePath}/me`, { credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
+    async update(supplierId, input) {
+      const id = Number(supplierId);
+      if (!Number.isInteger(id) || id < 1) throw new TypeError('supplierId phải là số nguyên dương.');
+      const response = await fetchFn(`${basePath}/suppliers/${id}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
   });
 }

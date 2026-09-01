@@ -863,6 +863,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > là legacy cho tới contract policy riêng, để không lộ tiền hoặc bypass ownership. Contract:
 > `28-w3-supplier-detail-read-batch-contract.md`; Native AMIS production vẫn **UNVERIFIED** đến O3/W4.
 
+> **Execution update — 2026-09-01 (W3.SUPPLIER.WRITE-CORE):** thêm form MDS Desktop/Native
+> cho R082 với allowlist Public `name`, `industry`, `address`, `services`, `tax_code`,
+> `invoice_type`, `note`. Không gửi `service_fee_pct`, `deposit_pct`, contact hay link nhóm đặt
+> hàng; UI chỉ gợi ý quyền, PUT vẫn do PolicyEngine/server kiểm tra. Quote/transaction/file và
+> create/delete vẫn thuộc slice policy sau.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
