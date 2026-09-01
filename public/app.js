@@ -279,8 +279,9 @@ async function route() {
   // It must run before legacy DOM rendering; false means legacy behavior stays
   // exactly as it was (including all current write/file operations).
   if (window.__misaUiFeatureRouter?.resolve?.(key)) {
-    setActive('people');
-    $('#crumb').textContent = 'Nhân sự';
+    const featureType = key.split('/')[0];
+    setActive(featureType === 'person' ? 'people' : null);
+    $('#crumb').textContent = featureType === 'person' ? 'Nhân sự' : 'Đối tác';
     return;
   }
   const base = key.split('/')[0];

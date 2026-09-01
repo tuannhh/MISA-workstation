@@ -4,6 +4,7 @@ import MIcon from './components/MIcon.vue';
 import MHeaderIconAva from './components/MHeaderIconAva.vue';
 import MHeaderIconChat from './components/MHeaderIconChat.vue';
 import PeopleDetailFeature from './features/people/PeopleDetailFeature.vue';
+import PartnerDetailFeature from './features/partners/PartnerDetailFeature.vue';
 import {
   HostSurface,
   assertHostAdapter,
@@ -19,6 +20,7 @@ const theme = ref(localStorage.getItem('mds-theme') || 'blue');
 const density = ref(localStorage.getItem('mds-density') || 'medium');
 const headerMode = ref(localStorage.getItem('mds-header-mode') || 'brand');
 const peopleFeatureRoute = ref(null);
+const partnerFeatureRoute = ref(null);
 const desktopAdapter = createFakeBrowserHostAdapter();
 const isLocalUiHarness = ['localhost', '127.0.0.1'].includes(location.hostname);
 const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : null;
@@ -27,6 +29,9 @@ const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : 
 // kiểm chứng; mặc định false để không làm mất các thao tác write/file legacy.
 function isPeoplePilotEnabled() {
   return window.__MISA_UI_FEATURE_FLAGS__?.peopleDetailRead === true || localUiParams?.get('uiPeoplePilot') === '1';
+}
+function isPartnerPilotEnabled() {
+  return window.__MISA_UI_FEATURE_FLAGS__?.partnerDetailRead === true || localUiParams?.get('uiPartnerPilot') === '1';
 }
 
 function requestedSurface() {
@@ -64,17 +69,39 @@ function resolvePeopleDetailRoute(key) {
   return true;
 }
 
+function resolvePartnerDetailRoute(key) {
+  const match = /^partner\/(\d+)$/.exec(key);
+  if (!isPartnerPilotEnabled() || !match) {
+    partnerFeatureRoute.value = null;
+    return false;
+  }
+  const surface = requestedSurface();
+  try {
+    partnerFeatureRoute.value = { partnerId: Number(match[1]), surface, adapter: selectPeopleAdapter(surface), hostUnavailable: false };
+  } catch (error) {
+    if (surface !== HostSurface.NATIVE) throw error;
+    partnerFeatureRoute.value = { partnerId: Number(match[1]), surface, adapter: null, hostUnavailable: true };
+  }
+  return true;
+}
+
 function leavePeopleDetail() {
   peopleFeatureRoute.value = null;
   location.hash = 'people';
+}
+function leavePartnerDetail(listingHash = 'press') {
+  partnerFeatureRoute.value = null;
+  location.hash = ['press', 'association', 'gov', 'other'].includes(listingHash) ? listingHash : 'press';
 }
 
 function navigatePeopleDetail(personId) {
   location.hash = `person/${personId}`;
 }
-
 const desktopPeopleFeature = computed(() => peopleFeatureRoute.value?.surface === HostSurface.DESKTOP ? peopleFeatureRoute.value : null);
 const nativePeopleFeature = computed(() => peopleFeatureRoute.value?.surface === HostSurface.NATIVE ? peopleFeatureRoute.value : null);
+const desktopPartnerFeature = computed(() => partnerFeatureRoute.value?.surface === HostSurface.DESKTOP ? partnerFeatureRoute.value : null);
+const nativePartnerFeature = computed(() => partnerFeatureRoute.value?.surface === HostSurface.NATIVE ? partnerFeatureRoute.value : null);
+const resolveUiFeatureRoute = (key) => resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key);
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [
@@ -111,7 +138,7 @@ function savePreferences() {
 
 onMounted(async () => {
   applyPreferences();
-  window.__misaUiFeatureRouter = { resolve: resolvePeopleDetailRoute };
+  window.__misaUiFeatureRouter = { resolve: resolveUiFeatureRoute };
   await nextTick();
   const legacy = document.createElement('script');
   legacy.src = '/app.js';
@@ -120,7 +147,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  if (window.__misaUiFeatureRouter?.resolve === resolvePeopleDetailRoute) delete window.__misaUiFeatureRouter;
+  if (window.__misaUiFeatureRouter?.resolve === resolveUiFeatureRoute) delete window.__misaUiFeatureRouter;
 });
 </script>
 
@@ -158,8 +185,17 @@ onBeforeUnmount(() => {
     @back="leavePeopleDetail"
     @navigate="navigatePeopleDetail"
   />
+  <PartnerDetailFeature
+    v-if="nativePartnerFeature"
+    :partner-id="nativePartnerFeature.partnerId"
+    :surface="nativePartnerFeature.surface"
+    :adapter="nativePartnerFeature.adapter"
+    :host-unavailable="nativePartnerFeature.hostUnavailable"
+    @back="leavePartnerDetail"
+    @navigate="navigatePeopleDetail"
+  />
 
-  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature }">
+  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePartnerFeature }">
     <header class="platform-header">
       <button class="header-action" type="button" title="Mở điều hướng" aria-label="Mở điều hướng" @click="sideOpen = !sideOpen"><MIcon name="grid-dots" :size="20" /></button>
       <img class="app-logo-img" :src="headerMode === 'light' ? '/assets/misa-logo.png' : '/assets/misa-logo-white.png'" alt="MISA" />
@@ -185,13 +221,21 @@ onBeforeUnmount(() => {
         </button>
       </aside>
       <main class="main">
-        <div v-show="!desktopPeopleFeature" class="content" id="view"></div>
+        <div v-show="!desktopPeopleFeature && !desktopPartnerFeature" class="content" id="view"></div>
         <PeopleDetailFeature
           v-if="desktopPeopleFeature"
           :person-id="desktopPeopleFeature.personId"
           :surface="desktopPeopleFeature.surface"
           :adapter="desktopPeopleFeature.adapter"
           @back="leavePeopleDetail"
+          @navigate="navigatePeopleDetail"
+        />
+        <PartnerDetailFeature
+          v-if="desktopPartnerFeature"
+          :partner-id="desktopPartnerFeature.partnerId"
+          :surface="desktopPartnerFeature.surface"
+          :adapter="desktopPartnerFeature.adapter"
+          @back="leavePartnerDetail"
           @navigate="navigatePeopleDetail"
         />
       </main>

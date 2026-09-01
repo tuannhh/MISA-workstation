@@ -808,8 +808,19 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > đọc hẹp, feature-flagged, không cutover write/file legacy. Vue island chia domain/API, Desktop
 > MDS và Native composition độc lập; route `#person/:id` chỉ được claim khi host bật
 > `peopleDetailRead`. Native thiếu provider fail-closed trong native shell, không về desktop.
-> Contract/matrix/giới hạn runtime ở `26-w3-people-detail-read-batch-contract.md`. Exit còn chờ
-> visual review + build/regression; O3/W4 vẫn chặn mọi tuyên bố Native production pass.
+> Contract/matrix/giới hạn runtime ở `26-w3-people-detail-read-batch-contract.md`. Visual review,
+> build và regression cục bộ đã đạt; O3/W4 vẫn chặn mọi tuyên bố Native production pass.
+
+> **Execution update — 2026-09-01 (W3.PEOPLE pilot visual review):** visual review xác thực đã
+> chạy ở Desktop và Native fake provider; read/write/file/delete UI đều có build + regression
+> liên quan xanh. Bổ sung local-only harness để review không cần giả mạo production host và
+> regression `UI-PARTNER-ADD-001` cho toàn bộ bốn loại cơ quan. Đây **không** là device-pass:
+> O3/W4 vẫn chặn Native AMIS production, và header legacy ngoài island không thuộc scope cutover.
+
+> **Execution update — 2026-09-01 (W3.PARTNER.READ):** mở batch read hẹp tiếp theo theo đúng
+> thứ tự strangler. Contract `27-w3-partner-detail-read-batch-contract.md` giữ hội phí/tài trợ/
+> MOU/tệp/write ở legacy cho đến slice policy riêng, chỉ chuyển record đã projection + person rows
+> + ngày nhắc qua Desktop MDS và Native composition độc lập.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
