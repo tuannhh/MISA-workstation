@@ -17,6 +17,8 @@ const bookingDesktopForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'Bo
 const bookingMobileForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'BookingCreateMobile.vue'), 'utf8');
 const bookingEditDesktopForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'BookingEditDesktop.vue'), 'utf8');
 const bookingEditMobileForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'BookingEditMobile.vue'), 'utf8');
+const peopleListDesktop = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleListDesktop.vue'), 'utf8');
+const peopleListMobile = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleListMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
 const editForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleEditFormDesktop.vue'), 'utf8');
 const attachmentPanel = fs.readFileSync(path.join(featureRoot, 'PeopleAttachmentsPanel.vue'), 'utf8');
@@ -175,4 +177,14 @@ test('UI-PPL-013: xóa Booking chỉ là UX cho admin, luôn xác nhận và g�
   assert.match(bookingsPanel, /emit\('delete', pendingDelete\.id\)/);
   assert.match(feature, /api\.deleteBooking\(bookingId\)/, 'xóa luôn quay về API bảo vệ server');
   assert.match(feature, /:can-delete="canDelete"/, 'chỉ role có delete permission mới được nhận affordance');
+});
+
+test('UI-PPL-014: People List chỉ dùng R020 projection, không render số liên hệ cá nhân và có hai composition MDS', async () => {
+  const { peopleListViewModel } = await import(pathToFileURL(path.join(featureRoot, 'domain', 'people-detail.mjs')).href);
+  const model = peopleListViewModel({ rows: [{ id: 8, full_name: 'Nguyễn Thu Hà', org_name: 'Báo Ví dụ', position: 'Phóng viên', phone_personal: '0900-secret', relationship_score: 80 }], total: 1, page: 1, pageSize: 20 });
+  assert.equal(model.rows[0].name, 'Nguyễn Thu Hà'); assert.equal('phonePersonal' in model.rows[0], false);
+  assert.equal('phone_personal' in model.rows[0], false);
+  for (const component of [peopleListDesktop, peopleListMobile]) { assert.match(component, /<MInput/); assert.match(component, /<MButton/); assert.match(component, /<MEmptyState/); assert.doesNotMatch(component, /phone_personal|phonePersonal|phone_work/); }
+  assert.match(peopleListMobile, /<MMobileTopBar/); assert.match(peopleListMobile, /--mds-mobile-safe-bottom/);
+  assert.match(appVue, /peopleListRead/, 'route list chỉ được strangler claim qua feature flag');
 });

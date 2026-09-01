@@ -894,6 +894,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > re-check; executor không nhận affordance đó. Bề mặt booking trên Partner Detail tiếp tục ở slice
 > kế tiếp.
 
+> **Execution update — 2026-09-01 (W3.PEOPLE.LIST.READ):** bắt đầu People List/Forms/Interactions
+> bằng danh bạ đọc thuần, feature-flagged (`peopleListRead`; local harness dùng `uiPeoplePilot=1`).
+> Desktop MDS table và Native mini-app list là hai composition riêng, dùng R020 với tìm kiếm/phân
+> trang và chỉ render field có trong projection. Không hiển thị số liên hệ cá nhân hay dựng form
+> create ở batch này; mở hồ sơ chuyển sang People Detail đã có policy slice. Caretaker filter,
+> create form và interaction vẫn là batch sau để không trộn ownership/sensitive policy vào read.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

@@ -21,6 +21,12 @@ export function fileUrl(attachmentId) {
   return Number.isInteger(id) && id > 0 ? `/api/files/${id}` : null;
 }
 function bookingDate(value) { const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || '')); return match ? `${match[3]}/${match[2]}/${match[1]}` : '—'; }
+export function peopleListViewModel(payload) {
+  return Object.freeze({
+    rows: Object.freeze((payload?.rows || []).map((row) => Object.freeze({ id: Number(row.id), name: text(row.full_name), orgName: text(row.org_name), position: text(row.position), level: text(row.level), beat: text(row.beat), status: text(row.status), initials: initials(row.full_name), hasRelationshipScore: Object.prototype.hasOwnProperty.call(row, 'relationship_score'), relationshipScore: row.relationship_score })).filter((row) => Number.isInteger(row.id) && row.id > 0)),
+    total: Math.max(0, Number(payload?.total) || 0), page: Math.max(1, Number(payload?.page) || 1), pageSize: Math.max(1, Number(payload?.pageSize) || 20),
+  });
+}
 export function peopleBookingsViewModel(payload) {
   return Object.freeze({
     rows: Object.freeze((payload?.rows || []).map((row) => Object.freeze({ id: Number(row.id), ownerId: Number.isInteger(Number(row.owner_id)) ? Number(row.owner_id) : null, title: text(row.title), contentType: text(row.content_type), contentTypeValue: row.content_type || '', bookedDate: bookingDate(row.booked_date), bookedDateValue: row.booked_date || '', publishDate: bookingDate(row.publish_date), publishDateValue: row.publish_date || '', status: text(row.status), hasAmount: Object.prototype.hasOwnProperty.call(row, 'amount'), amount: row.amount, articleLink: row.article_link || '', note: row.note || '' })).filter((row) => Number.isInteger(row.id) && row.id > 0)),

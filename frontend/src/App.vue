@@ -4,6 +4,7 @@ import MIcon from './components/MIcon.vue';
 import MHeaderIconAva from './components/MHeaderIconAva.vue';
 import MHeaderIconChat from './components/MHeaderIconChat.vue';
 import PeopleDetailFeature from './features/people/PeopleDetailFeature.vue';
+import PeopleListFeature from './features/people/PeopleListFeature.vue';
 import PartnerDetailFeature from './features/partners/PartnerDetailFeature.vue';
 import SupplierDetailFeature from './features/suppliers/SupplierDetailFeature.vue';
 import {
@@ -21,6 +22,7 @@ const theme = ref(localStorage.getItem('mds-theme') || 'blue');
 const density = ref(localStorage.getItem('mds-density') || 'medium');
 const headerMode = ref(localStorage.getItem('mds-header-mode') || 'brand');
 const peopleFeatureRoute = ref(null);
+const peopleListFeatureRoute = ref(null);
 const partnerFeatureRoute = ref(null);
 const supplierFeatureRoute = ref(null);
 const desktopAdapter = createFakeBrowserHostAdapter();
@@ -30,7 +32,10 @@ const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : 
 // W3.PEOPLE.READ chỉ là strangler pilot. Host/staging bật cờ này sau khi
 // kiểm chứng; mặc định false để không làm mất các thao tác write/file legacy.
 function isPeoplePilotEnabled() {
-  return window.__MISA_UI_FEATURE_FLAGS__?.peopleDetailRead === true || localUiParams?.get('uiPeoplePilot') === '1';
+  return window.__MISA_UI_FEATURE_FLAGS__?.peopleDetailRead === true || window.__MISA_UI_FEATURE_FLAGS__?.peopleListRead === true || localUiParams?.get('uiPeoplePilot') === '1';
+}
+function isPeopleListPilotEnabled() {
+  return window.__MISA_UI_FEATURE_FLAGS__?.peopleListRead === true || localUiParams?.get('uiPeoplePilot') === '1';
 }
 function isPartnerPilotEnabled() {
   return window.__MISA_UI_FEATURE_FLAGS__?.partnerDetailRead === true || localUiParams?.get('uiPartnerPilot') === '1';
@@ -74,6 +79,18 @@ function resolvePeopleDetailRoute(key) {
   return true;
 }
 
+function resolvePeopleListRoute(key) {
+  if (!isPeopleListPilotEnabled() || key !== 'people') { peopleListFeatureRoute.value = null; return false; }
+  peopleFeatureRoute.value = null;
+  const surface = requestedSurface();
+  try { peopleListFeatureRoute.value = { surface, adapter: selectHostAdapter(surface), hostUnavailable: false }; }
+  catch (error) {
+    if (surface !== HostSurface.NATIVE) throw error;
+    peopleListFeatureRoute.value = { surface, adapter: null, hostUnavailable: true };
+  }
+  return true;
+}
+
 function resolvePartnerDetailRoute(key) {
   const match = /^partner\/(\d+)$/.exec(key);
   if (!isPartnerPilotEnabled() || !match) {
@@ -110,6 +127,7 @@ function leavePeopleDetail() {
   peopleFeatureRoute.value = null;
   location.hash = 'people';
 }
+function leavePeopleList() { peopleListFeatureRoute.value = null; location.hash = 'dashboard'; }
 function leavePartnerDetail(listingHash = 'press') {
   partnerFeatureRoute.value = null;
   location.hash = ['press', 'association', 'gov', 'other'].includes(listingHash) ? listingHash : 'press';
@@ -124,11 +142,13 @@ function navigatePeopleDetail(personId) {
 }
 const desktopPeopleFeature = computed(() => peopleFeatureRoute.value?.surface === HostSurface.DESKTOP ? peopleFeatureRoute.value : null);
 const nativePeopleFeature = computed(() => peopleFeatureRoute.value?.surface === HostSurface.NATIVE ? peopleFeatureRoute.value : null);
+const desktopPeopleListFeature = computed(() => peopleListFeatureRoute.value?.surface === HostSurface.DESKTOP ? peopleListFeatureRoute.value : null);
+const nativePeopleListFeature = computed(() => peopleListFeatureRoute.value?.surface === HostSurface.NATIVE ? peopleListFeatureRoute.value : null);
 const desktopPartnerFeature = computed(() => partnerFeatureRoute.value?.surface === HostSurface.DESKTOP ? partnerFeatureRoute.value : null);
 const nativePartnerFeature = computed(() => partnerFeatureRoute.value?.surface === HostSurface.NATIVE ? partnerFeatureRoute.value : null);
 const desktopSupplierFeature = computed(() => supplierFeatureRoute.value?.surface === HostSurface.DESKTOP ? supplierFeatureRoute.value : null);
 const nativeSupplierFeature = computed(() => supplierFeatureRoute.value?.surface === HostSurface.NATIVE ? supplierFeatureRoute.value : null);
-const resolveUiFeatureRoute = (key) => resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key);
+const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key);
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [
@@ -212,6 +232,14 @@ onBeforeUnmount(() => {
     @back="leavePeopleDetail"
     @navigate="navigatePeopleDetail"
   />
+  <PeopleListFeature
+    v-if="nativePeopleListFeature"
+    :surface="nativePeopleListFeature.surface"
+    :adapter="nativePeopleListFeature.adapter"
+    :host-unavailable="nativePeopleListFeature.hostUnavailable"
+    @back="leavePeopleList"
+    @open="navigatePeopleDetail"
+  />
   <PartnerDetailFeature
     v-if="nativePartnerFeature"
     :partner-id="nativePartnerFeature.partnerId"
@@ -230,7 +258,7 @@ onBeforeUnmount(() => {
     @back="leaveSupplierDetail"
   />
 
-  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePartnerFeature || nativeSupplierFeature }">
+  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature }">
     <header class="platform-header">
       <button class="header-action" type="button" title="Mở điều hướng" aria-label="Mở điều hướng" @click="sideOpen = !sideOpen"><MIcon name="grid-dots" :size="20" /></button>
       <img class="app-logo-img" :src="headerMode === 'light' ? '/assets/misa-logo.png' : '/assets/misa-logo-white.png'" alt="MISA" />
@@ -256,7 +284,14 @@ onBeforeUnmount(() => {
         </button>
       </aside>
       <main class="main">
-        <div v-show="!desktopPeopleFeature && !desktopPartnerFeature && !desktopSupplierFeature" class="content" id="view"></div>
+        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature" class="content" id="view"></div>
+        <PeopleListFeature
+          v-if="desktopPeopleListFeature"
+          :surface="desktopPeopleListFeature.surface"
+          :adapter="desktopPeopleListFeature.adapter"
+          @back="leavePeopleList"
+          @open="navigatePeopleDetail"
+        />
         <PeopleDetailFeature
           v-if="desktopPeopleFeature"
           :person-id="desktopPeopleFeature.personId"

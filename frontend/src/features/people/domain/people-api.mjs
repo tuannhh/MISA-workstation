@@ -46,6 +46,16 @@ export function createPeopleApi({ fetchFn = globalThis.fetch, basePath = '/api' 
       if (!Array.isArray(payload?.rows)) throw new PeopleApiError({ status: 502, code: 'BOOKING_LIST_INVALID_RESPONSE', message: 'Dữ liệu booking trả về không hợp lệ.' });
       return payload;
     },
+    async getList({ page = 1, pageSize = 20, search = '' } = {}) {
+      const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
+      const safePageSize = Math.min(100, Math.max(1, Number.parseInt(pageSize, 10) || 20));
+      const query = new URLSearchParams({ page: String(safePage), pageSize: String(safePageSize), search: String(search || '') });
+      const response = await fetchFn(`${basePath}/people?${query}`, { credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      if (!Array.isArray(payload?.rows)) throw new PeopleApiError({ status: 502, code: 'PEOPLE_LIST_INVALID_RESPONSE', message: 'Danh sách nhân sự trả về không hợp lệ.' });
+      return payload;
+    },
     async createBooking(input) {
       const response = await fetchFn(`${basePath}/bookings`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
       const payload = await response.json().catch(() => null);
