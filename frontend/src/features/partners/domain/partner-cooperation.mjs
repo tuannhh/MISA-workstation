@@ -19,6 +19,12 @@ export function validateAgreementDraft(draft) {
 export function toAgreementCreatePayload(draft) {
   return { title: trim(draft.title), signed_date: textOrNull(draft.signed_date), valid_until: textOrNull(draft.valid_until) };
 }
+export function toAgreementEditDraft(record) {
+  return { title: trim(record?.title), signed_date: textOrNull(record?.signedDateValue ?? record?.signed_date) || '', valid_until: textOrNull(record?.validUntilValue ?? record?.valid_until) || '', terms: textOrNull(record?.terms) || '', note: textOrNull(record?.note) || '' };
+}
+export function toAgreementUpdatePayload(draft) {
+  return { ...toAgreementCreatePayload(draft), terms: textOrNull(draft.terms), note: textOrNull(draft.note) };
+}
 
 export function toWorkLogDraft() { return { category: 'Làm việc tại cơ quan', work_date: today(), topic: '', status: 'Đang xử lý' }; }
 export function validateWorkLogDraft(draft) {

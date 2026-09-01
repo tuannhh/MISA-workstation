@@ -841,6 +841,11 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > thao tác nhầm, không thay PolicyEngine: request DELETE vẫn bị server xác minh action `delete`.
 > Sửa (R011/R014) và tệp (R016/R017) chưa được claim, vì ownership/file-policy là slice độc lập.
 
+> **Execution update — 2026-09-01 (W3.PARTNER.AGREEMENT-EDIT):** nối R011 bằng form MDS riêng
+> Desktop/Native. Để tránh client-side authorization, `owner_id` chỉ dùng gợi ý hiển thị cho executor;
+> PUT vẫn qua PolicyEngine của server và lỗi 403 hiển thị lại trong form. Payload không chứa owner,
+> created-by hay file. Work-log edit/tệp vẫn là scope kế tiếp.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

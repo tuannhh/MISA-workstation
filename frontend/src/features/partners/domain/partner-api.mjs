@@ -63,6 +63,12 @@ export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api'
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async updateAgreement(agreementId, input) {
+      const response = await fetchFn(`${basePath}/agreements/${Number(agreementId)}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
     async deleteWorkLog(workLogId) {
       const response = await fetchFn(`${basePath}/work-logs/${Number(workLogId)}`, { method: 'DELETE', credentials: 'same-origin' });
       const payload = await response.json().catch(() => null);

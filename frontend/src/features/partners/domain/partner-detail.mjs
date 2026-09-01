@@ -66,7 +66,7 @@ export function partnerDetailViewModel(payload) {
   // Không đưa file metadata/nội dung vào slice read này: GET /files/:id phải tiếp
   // tục đi qua policy file riêng ở slice W3.PARTNER.FILE.
   const agreements = Array.isArray(payload?.agreements) ? payload.agreements.map((agreement) => Object.freeze({
-    id: Number(agreement.id), title: text(agreement.title), signedDate: formatDate(agreement.signed_date), validUntil: formatDate(agreement.valid_until),
+    id: Number(agreement.id), ownerId: Number.isInteger(Number(agreement.owner_id)) ? Number(agreement.owner_id) : null, title: text(agreement.title), signedDate: formatDate(agreement.signed_date), signedDateValue: agreement.signed_date || '', validUntil: formatDate(agreement.valid_until), validUntilValue: agreement.valid_until || '', terms: agreement.terms || '', note: agreement.note || '',
   })) : [];
   const workLogs = Array.isArray(payload?.workLogs) ? payload.workLogs.map((workLog) => Object.freeze({
     id: Number(workLog.id), title: text(workLog.topic), category: text(workLog.category), date: formatDate(workLog.work_date), status: text(workLog.status),
