@@ -1,4 +1,4 @@
 import { InteractionsApiError } from '../../interactions/domain/interactions-api.mjs';
 export const EVENT_PUBLIC_FIELDS = Object.freeze(['name', 'source_url', 'mode', 'organizer', 'organizer_org_id', 'field', 'format', 'start_time', 'end_time', 'location', 'scale_attendees', 'scale_compare', 'guest_levels', 'evaluation', 'image_links', 'video_links', 'keyvisual_link', 'status', 'note', 'misa_keynotes']);
-export function toEventDraft(record = {}) { return Object.freeze(Object.fromEntries(EVENT_PUBLIC_FIELDS.map((key) => [key, record[key] ?? '']))); }
+export function toEventDraft(record = {}) { const source = record || {}; return Object.freeze(Object.fromEntries(EVENT_PUBLIC_FIELDS.map((key) => [key, source[key] ?? '']))); }
 export function toEventPayload(draft) { const name = String(draft?.name || '').trim(); if (!name) throw new InteractionsApiError({ status: 400, code: 'EVENT_NAME_REQUIRED', message: 'Tên sự kiện là bắt buộc.' }); return Object.freeze(Object.fromEntries(EVENT_PUBLIC_FIELDS.map((key) => [key, key === 'name' ? name : (draft[key] === '' ? null : draft[key])]))); }

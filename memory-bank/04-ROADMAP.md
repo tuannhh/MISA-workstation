@@ -987,6 +987,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > client không gửi key tương ứng trong `PUT`; tránh biến một thao tác sửa thông tin công khai thành
 > ghi đè `null` lên dữ liệu Confidential ở server.
 
+> **Execution update — 2026-09-01 (W3.AWARDS.PARTICIPATION):** thêm/sửa/xóa kỳ tham gia qua
+> R066/R067/R068. Desktop và Native dùng form/panel riêng; client chỉ gửi allowlist `PART_COLS`,
+> không nhận/gửi owner. Với executor, nút Sửa chỉ là affordance khi `owner_id` của raw projection
+> trùng principal hiện tại; xóa chỉ hiện cho Admin/Super Admin. Server vẫn `prepareCreate`/
+> `assertWritable` là authority cuối cùng. Budget Confidential bị omission khỏi projection sẽ không
+> được render/gửi lại trong update, tránh ghi đè dữ liệu ẩn. Upload/reminder/AI extract Award là
+> slice sau; host/device evidence còn **UNVERIFIED** tới O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

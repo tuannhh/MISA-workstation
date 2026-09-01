@@ -252,6 +252,16 @@ Phát hiện ngay trong chính vòng re-audit ACCEPTED F27: `fetchPersonSnapshot
   nhận copy là reactive/có thể gán và khóa source form vào pattern copy. Không làm client trở thành
   nơi phân quyền; payload vẫn qua allowlist và PolicyEngine server-side.
 
+### F30 — Form create truyền `record=null` vào draft đọc thuộc tính trực tiếp · **P1 High / browser-production — FIXED (2026-09-01)**
+
+- **Bằng chứng:** thí nghiệm thật `toEventDraft(null)` và `toAwardDraft(null)` đều ném
+  `Cannot read properties of null (reading 'name')`. Feature create truyền `state.record=null`, nên
+  màn hình có thể lỗi ngay khi bấm Thêm, độc lập với route hoặc quyền API.
+- **Resolution:** normalize `record || {}` ngay tại boundary draft Event/Award/Award participation;
+  mọi caller (Desktop/Native/create/edit) được an toàn mà không cần phân nhánh rải rác trong form.
+- **Regression evidence:** `UI-EVENT-001`, `UI-AWARD-002`, `UI-AWARD-003` gọi trực tiếp draft với
+  `null`; các UI contract tests và production build đều chạy sau bản vá.
+
 ## E. Điểm mạnh nên bảo toàn
 - Mô hình nghiệp vụ PR phong phú, liên hệ nhiều thực thể.
 - RBAC server-side + audit + per-user `sensitive_perms` (biểu cảm hơn role cứng).

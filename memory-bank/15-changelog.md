@@ -36,6 +36,13 @@
   Booking nay sao chép draft trước khi reactive; `UI-FORM-001` tái hiện lỗi bằng Vue thật và khóa 14
   composition Desktop/Native. Đây là nguyên nhân trực tiếp có thể làm người dùng tưởng chức năng
   "Thêm" bị thiếu dù route/API đã tồn tại.
+- Sửa F30: Award/Event create chuyển `record=null` vào draft đọc thuộc tính trực tiếp, nên form có
+  thể lỗi ngay lúc bấm Thêm. Chuẩn hóa `null` tại domain boundary và thêm regression test gọi đúng
+  nhánh này.
+- Mở Award Participation qua R066/R067/R068 với panel/form MDS Desktop và Native tách riêng. Payload
+  chỉ theo allowlist, UI không render owner; quyền owner/delete là affordance dựa trên projection,
+  còn server PolicyEngine kiểm tra lại. Budget không được API projection sẽ không bị gửi `null` khi
+  cập nhật.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 
