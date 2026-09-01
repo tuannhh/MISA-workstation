@@ -995,6 +995,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > được render/gửi lại trong update, tránh ghi đè dữ liệu ẩn. Upload/reminder/AI extract Award là
 > slice sau; host/device evidence còn **UNVERIFIED** tới O3/W4.
 
+> **Execution update — 2026-09-01 (W3.AWARDS.FILE):** Award detail Desktop/Native có composition
+> tệp riêng, gọi `POST /awards/:id/files` bằng `FormData` và chỉ hiện upload affordance theo
+> `awards:edit`; việc open tiếp tục qua `/files/:id`. Client chỉ giữ metadata projection và không
+> tự tính visibility/owner; route server `requireFileWrite` kiểm tra lại trước Multer. Chưa hiển thị
+> nút xóa vì API Award hiện không có contract delete file an toàn cho slice này.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

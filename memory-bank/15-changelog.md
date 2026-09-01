@@ -43,6 +43,9 @@
   chỉ theo allowlist, UI không render owner; quyền owner/delete là affordance dựa trên projection,
   còn server PolicyEngine kiểm tra lại. Budget không được API projection sẽ không bị gửi `null` khi
   cập nhật.
+- Mở Award file upload ở hai composition MDS riêng. UI gửi `FormData` đến route protected, không tự
+  quyết owner hoặc quyền xem; nội dung file luôn mở qua endpoint server kiểm quyền. Không thêm nút
+  xóa khi chưa có contract backend để tránh affordance không thực hiện được.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 
