@@ -60,6 +60,14 @@ export function createPeopleApi({ fetchFn = globalThis.fetch, basePath = '/api' 
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async deleteBooking(bookingId) {
+      const id = Number(bookingId);
+      if (!Number.isInteger(id) || id < 1) throw new TypeError('bookingId phải là số nguyên dương.');
+      const response = await fetchFn(`${basePath}/bookings/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
     async update(personId, input) {
       const id = Number(personId);
       const response = await fetchFn(`${basePath}/people/${id}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });

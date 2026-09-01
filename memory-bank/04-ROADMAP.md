@@ -889,8 +889,10 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > **Execution update — 2026-09-01 (W3.BOOKING.EDIT):** thêm form sửa Desktop MDS và Native
 > composition riêng. UX chỉ đưa thao tác sửa cho executor sở hữu booking hoặc Admin/Super Admin,
 > nhưng `PUT /bookings/:id` vẫn là nơi PolicyEngine re-check quyền. Payload edit chỉ gồm các field
-> booking cho phép, không đổi owner, nhân sự, cơ quan hay award. Delete và bề mặt booking trên
-> Partner Detail tiếp tục ở slice kế tiếp.
+> booking cho phép, không đổi owner, nhân sự, cơ quan hay award. Xóa là affordance riêng cho
+> Admin/Super Admin, có dialog xác nhận MDS và luôn gọi `DELETE /bookings/:id` để PolicyEngine
+> re-check; executor không nhận affordance đó. Bề mặt booking trên Partner Detail tiếp tục ở slice
+> kế tiếp.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

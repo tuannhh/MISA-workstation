@@ -167,3 +167,12 @@ test('UI-PPL-012: sửa Booking chỉ hiện theo ownership, không thay owner/p
   assert.match(feature, /Number\(booking\?\.ownerId\) === Number\(state\.currentUser\?\.id\)/, 'executor chỉ được thấy thao tác sửa booking chính mình');
   assert.match(feature, /api\.updateBooking\(state\.editingBooking\.id, payload\)/, 'server vẫn re-check quyền khi PUT');
 });
+
+test('UI-PPL-013: xóa Booking chỉ là UX cho admin, luôn xác nhận và gọi API PolicyEngine', () => {
+  const bookingsPanel = fs.readFileSync(path.join(featureRoot, 'PeopleBookingsPanel.vue'), 'utf8');
+  assert.match(bookingsPanel, /<MDialog/);
+  assert.match(bookingsPanel, /v-if="canDelete"/);
+  assert.match(bookingsPanel, /emit\('delete', pendingDelete\.id\)/);
+  assert.match(feature, /api\.deleteBooking\(bookingId\)/, 'xóa luôn quay về API bảo vệ server');
+  assert.match(feature, /:can-delete="canDelete"/, 'chỉ role có delete permission mới được nhận affordance');
+});
