@@ -56,6 +56,22 @@ export function createPeopleApi({ fetchFn = globalThis.fetch, basePath = '/api' 
       if (!Array.isArray(payload?.rows)) throw new PeopleApiError({ status: 502, code: 'PEOPLE_LIST_INVALID_RESPONSE', message: 'Danh sách nhân sự trả về không hợp lệ.' });
       return payload;
     },
+    async getOrganizations({ pageSize = 100 } = {}) {
+      const safePageSize = Math.min(100, Math.max(1, Number.parseInt(pageSize, 10) || 100));
+      const response = await fetchFn(`${basePath}/partners?pageSize=${safePageSize}`, { credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      if (!Array.isArray(payload?.rows)) throw new PeopleApiError({ status: 502, code: 'PEOPLE_ORGANIZATION_LIST_INVALID_RESPONSE', message: 'Danh sách cơ quan trả về không hợp lệ.' });
+      return payload.rows;
+    },
+    async createPerson(input) {
+      const response = await fetchFn(`${basePath}/people`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      const id = Number(payload?.id);
+      if (!Number.isInteger(id) || id < 1) throw new PeopleApiError({ status: 502, code: 'PEOPLE_CREATE_INVALID_RESPONSE', message: 'Máy chủ không trả về mã nhân sự hợp lệ.' });
+      return Object.freeze({ id });
+    },
     async createBooking(input) {
       const response = await fetchFn(`${basePath}/bookings`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
       const payload = await response.json().catch(() => null);

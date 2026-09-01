@@ -19,6 +19,8 @@ const bookingEditDesktopForm = fs.readFileSync(path.join(featureRoot, 'desktop',
 const bookingEditMobileForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'BookingEditMobile.vue'), 'utf8');
 const peopleListDesktop = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleListDesktop.vue'), 'utf8');
 const peopleListMobile = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleListMobile.vue'), 'utf8');
+const peopleCreateDesktop = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleCreateDesktop.vue'), 'utf8');
+const peopleCreateMobile = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleCreateMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
 const editForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleEditFormDesktop.vue'), 'utf8');
 const attachmentPanel = fs.readFileSync(path.join(featureRoot, 'PeopleAttachmentsPanel.vue'), 'utf8');
@@ -187,4 +189,20 @@ test('UI-PPL-014: People List chỉ dùng R020 projection, không render số li
   for (const component of [peopleListDesktop, peopleListMobile]) { assert.match(component, /<MInput/); assert.match(component, /<MButton/); assert.match(component, /<MEmptyState/); assert.doesNotMatch(component, /phone_personal|phonePersonal|phone_work/); }
   assert.match(peopleListMobile, /<MMobileTopBar/); assert.match(peopleListMobile, /--mds-mobile-safe-bottom/);
   assert.match(appVue, /peopleListRead/, 'route list chỉ được strangler claim qua feature flag');
+});
+
+test('UI-PPL-015: People Create foundation chỉ gửi Public allowlist và bắt buộc cơ quan', async () => {
+  const { PEOPLE_CREATE_FIELDS, toPeopleCreateDraft, toPeopleCreatePayload } = await import(pathToFileURL(path.join(featureRoot, 'domain', 'people-write.mjs')).href);
+  const payload = toPeopleCreatePayload({ ...toPeopleCreateDraft(), org_id: '7', full_name: 'Nguyễn Thu Hà', relationship_score: '80' });
+  assert.equal(payload.org_id, 7); assert.equal(payload.relationship_score, 80);
+  for (const forbidden of ['phone_personal', 'phone_other', 'phone_ott', 'dob', 'home_address', 'bank_account_number', 'caretaker_ids', 'owner_id', 'created_by']) assert.equal(forbidden in payload, false, `${forbidden} không thuộc create compact`);
+  assert.deepEqual(Object.keys(payload).sort(), [...PEOPLE_CREATE_FIELDS].sort());
+  assert.throws(() => toPeopleCreatePayload({ ...toPeopleCreateDraft(), full_name: 'Không có cơ quan' }), /Cơ quan là bắt buộc/);
+});
+
+test('UI-PPL-016: People Create Desktop/Native dùng MDS, không đưa dữ liệu mật hay caretaker vào form', () => {
+  for (const form of [peopleCreateDesktop, peopleCreateMobile]) { assert.match(form, /<MInput/); assert.match(form, /<MSelect/); assert.doesNotMatch(form, /phone_personal|phone_other|phone_ott|bank_account_number|home_address|caretaker_ids|owner_id|created_by/); }
+  assert.match(peopleCreateMobile, /<MMobileTopBar/); assert.match(peopleCreateMobile, /<MDialog/); assert.match(peopleCreateMobile, /--mds-mobile-safe-bottom/);
+  assert.match(peopleListDesktop, /emit\('create'\)/); assert.match(peopleListMobile, /emit\('create'\)/);
+  assert.match(fs.readFileSync(path.join(featureRoot, 'PeopleListFeature.vue'), 'utf8'), /api\.createPerson\(payload\)/);
 });

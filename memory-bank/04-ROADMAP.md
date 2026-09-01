@@ -900,6 +900,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > trang và chỉ render field có trong projection. Không hiển thị số liên hệ cá nhân hay dựng form
 > create ở batch này; mở hồ sơ chuyển sang People Detail đã có policy slice. Caretaker filter,
 > create form và interaction vẫn là batch sau để không trộn ownership/sensitive policy vào read.
+>
+> **Execution update — 2026-09-01 (W3.PEOPLE.CREATE):** thêm create compact Desktop MDS và
+> Native composition riêng từ danh bạ. Chỉ gửi allowlist Public: cơ quan bắt buộc, tên, cấp bậc,
+> chức vụ, mảng, nhóm, điểm quan hệ, trạng thái, email/điện thoại công việc. Không đưa vào form
+> số cá nhân, ngân hàng, địa chỉ nhà, dữ liệu đời tư, caretaker, owner hay created_by; `POST
+> /people` vẫn kiểm tra `partners:create` ở server. Edit mở rộng và Interaction tiếp tục là batch
+> kế tiếp.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
