@@ -3042,3 +3042,24 @@ chunk 5.95 kB, không nở entry bundle.
 `UI-ADMIN-001` khóa endpoint/projection omission, cấm mutation, MDS/native split và route flag.
 Create/edit/delete user, audit log, field visibility và reassign owner không bị giả lập ở UI read
 pilot — sẽ đi batch mutation có confirmation, server 403 và PolicyEngine evidence riêng.
+
+## W3.ADMIN.AUDIT.READ — Audit log MDS (Desktop + Native)
+
+Mở audit log read-only trong Admin feature qua `GET /api/admin/audit`. Client đọc `/api/me` chỉ để
+gợi affordance `Nhật ký audit` cho Super Admin; không coi role UI là authorization. Server tiếp tục
+trả 403 cho Admin thường hoặc principal bị thu hồi quyền sau khi màn hình đã render.
+
+- `admin-api.mjs` thêm `getCurrentUser()` và `getAudit()` với `credentials: 'same-origin'`; payload
+  audit không có `rows` bị coi là lỗi hợp đồng 502, không render state dở dang.
+- `adminAuditViewModel()` chỉ chuẩn hóa đúng các trường audit (`actor/action/entity/entityId/detail/
+  timestamp`), tách khỏi view model user để `sensitive_perms` không thể vô tình chảy qua màn Users.
+- `AdminAuditDesktop.vue` dùng table MDS trên nền trang xám, card shadow và action Quay lại;
+  `AdminAuditMobile.vue` là native mini-app list riêng với top bar/safe-area, không dùng desktop
+  header/sidebar. Users Desktop/Native chỉ hiện entry point khi principal là `super_admin`.
+- `UI-ADMIN-002` kiểm chứng endpoint protected, projection, affordance Super Admin, hai composition
+  MDS và recovery 403; không có mutation UI trong slice này.
+
+Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **25/25 pass**; `npm run
+build:ui` pass (Admin lazy chunk 11.45 kB, entry 438.97 kB); `git diff --check` sạch. User CRUD,
+field visibility và reassign owner vẫn là các mutation slice kế tiếp; native AMIS host/device test
+vẫn **UNVERIFIED** tới O3/W4.

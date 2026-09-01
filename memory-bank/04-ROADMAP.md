@@ -1041,6 +1041,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > không đi qua view-model hoặc UI. Create/edit/delete user, audit log, field visibility và reassign
 > owner tiếp tục là slice mutation riêng với confirmation/PolicyEngine test; Native host/device vẫn
 > **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-01 (W3.ADMIN.AUDIT.READ):** mở Audit log read-only ngay trong Admin
+> feature qua `GET /admin/audit`. UI chỉ gợi action cho Super Admin sau khi đọc `/api/me`; API vẫn là
+> authority và trả 403 cho role khác. Desktop table và Native mini-app list là hai composition riêng;
+> audit detail chỉ hiển thị cho dữ liệu server đã cho phép trả về, không lẫn `sensitive_perms` từ màn
+> Users. User CRUD, field visibility và reassign owner vẫn là các slice mutation riêng kế tiếp, đều
+> cần confirmation + kiểm tra PolicyEngine/server-error; Native host/device vẫn **UNVERIFIED** tới
+> O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
