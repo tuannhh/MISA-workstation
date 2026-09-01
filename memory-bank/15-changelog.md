@@ -20,6 +20,9 @@
   projection và action tải lên theo `events:edit`; request mở/tải tệp luôn qua endpoint server có
   PolicyEngine. Không hiện nút xóa vì route xoá hiện fail-closed với Event, tránh hành vi UI không
   thực hiện được.
+- Mở slice dòng chi phí Event: giữ nguyên projection/mask từ API, form create/edit Desktop và Native
+  tách composition, và yêu cầu xác nhận MDS trước xoá. Client chỉ gửi allowlist chi phí và không
+  suy diễn owner; server vẫn áp inherited ownership cho create/edit và Admin-only cho delete.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 

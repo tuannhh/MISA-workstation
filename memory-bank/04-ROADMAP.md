@@ -963,6 +963,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > fail-closed cho Event — tránh affordance hỏng. Desktop/Native vẫn là hai composition MDS; native
 > AMIS runtime, host bridge và accessibility thiết bị tiếp tục **UNVERIFIED** tới O3/W4.
 
+> **Execution update — 2026-09-01 (W3.EVENTS.COST.WRITE):** mỗi nhóm chi phí có view từ `costs`
+> projection của R088, giữ nguyên số tiền/tổng bị mask và tuyệt đối không tự cộng ở browser. Form
+> create/edit Desktop và Native là hai composition MDS riêng; payload chỉ có allowlist `EC_COLS` và
+> gọi `POST/PUT /events/:id/costs`. Xóa chỉ hiện theo `events:delete`, có confirm MDS rồi gọi
+> `DELETE /events/:id/costs/:cid`; backend vẫn là nơi chốt inherited owner và quyền write/delete.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

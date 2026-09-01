@@ -19,6 +19,29 @@ function files(value) {
   })).filter((file) => Number.isInteger(file.id) && file.id > 0)) : Object.freeze([]);
 }
 
+const COST_GROUPS = Object.freeze([
+  Object.freeze({ category: 'sponsor', label: 'Tài trợ', totalKey: 'sponsor' }),
+  Object.freeze({ category: 'organization', label: 'Tổ chức', totalKey: 'organization' }),
+  Object.freeze({ category: 'media', label: 'Truyền thông', totalKey: 'media' }),
+]);
+
+function costItem(value, category) {
+  return Object.freeze({
+    id: Number(value?.id), category, title: text(value?.title), amount: value?.amount ?? '—',
+    supplierId: Number(value?.supplier_id) || null, supplierName: text(value?.supplier_name),
+    sponsorTier: text(value?.sponsor_tier), sponsorBenefits: text(value?.sponsor_benefits),
+    pressOrg: text(value?.press_org), journalistName: text(value?.journalist_name), articleLink: text(value?.article_link, ''), note: text(value?.note),
+    amountMasked: typeof value?.amount !== 'number',
+  });
+}
+
+function costGroups(value, totals) {
+  return Object.freeze(COST_GROUPS.map(({ category, label, totalKey }) => Object.freeze({
+    category, label, total: totals?.[totalKey] ?? '—',
+    items: Object.freeze((Array.isArray(value?.[category]) ? value[category] : []).map((item) => costItem(item, category)).filter((item) => Number.isInteger(item.id) && item.id > 0)),
+  })));
+}
+
 // Chỉ render projection do server quyết định. owner_id, caretaker assignment và raw cost rows
 // không được suy ra ở client; file chỉ giữ metadata tồn tại đã projection, còn nội dung luôn
 // phải đi lại qua GET /files/:id để PolicyEngine kiểm tra quyền.
@@ -45,6 +68,7 @@ export function eventDetailViewModel(payload = {}) {
     // Có thể là số hoặc sentinel MASK do API quyết định. Không cộng/tính lại ở UI.
     totalCost: totals.grand ?? '—',
     costTotals,
+    costGroups: costGroups(payload?.costs, totals),
     files: files(payload?.attachments),
   });
 }
