@@ -856,6 +856,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > endpoint delete attachment cho agreement/work-log đang fail-closed đúng thiết kế. Native chỉ được
 > xác thực bằng fake host; chọn tệp thực trong AMIS WebView tiếp tục chờ O3/W4 bridge/device test.
 
+> **Execution update — 2026-09-01 (W3.SUPPLIER.READ):** bắt đầu slice Supplier/Booking/File bằng
+> Supplier Detail read tối thiểu, feature-flagged. Vue island Desktop MDS và Native composition
+> riêng chỉ tiêu thụ `record` từ R072 sau `PolicyEngine.projectRecord`; các tỷ lệ phí chỉ hiện khi
+> property đã được server projection. Báo giá, giao dịch, contact, ngày nhắc, tệp và mọi write vẫn
+> là legacy cho tới contract policy riêng, để không lộ tiền hoặc bypass ownership. Contract:
+> `28-w3-supplier-detail-read-batch-contract.md`; Native AMIS production vẫn **UNVERIFIED** đến O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

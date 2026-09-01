@@ -280,8 +280,8 @@ async function route() {
   // exactly as it was (including all current write/file operations).
   if (window.__misaUiFeatureRouter?.resolve?.(key)) {
     const featureType = key.split('/')[0];
-    setActive(featureType === 'person' ? 'people' : null);
-    $('#crumb').textContent = featureType === 'person' ? 'Nhân sự' : 'Đối tác';
+    setActive(featureType === 'person' ? 'people' : featureType === 'suppliers' ? 'suppliers' : null);
+    $('#crumb').textContent = featureType === 'person' ? 'Nhân sự' : featureType === 'suppliers' ? 'Nhà cung cấp' : 'Đối tác';
     return;
   }
   const base = key.split('/')[0];

@@ -5,6 +5,7 @@ import MHeaderIconAva from './components/MHeaderIconAva.vue';
 import MHeaderIconChat from './components/MHeaderIconChat.vue';
 import PeopleDetailFeature from './features/people/PeopleDetailFeature.vue';
 import PartnerDetailFeature from './features/partners/PartnerDetailFeature.vue';
+import SupplierDetailFeature from './features/suppliers/SupplierDetailFeature.vue';
 import {
   HostSurface,
   assertHostAdapter,
@@ -21,6 +22,7 @@ const density = ref(localStorage.getItem('mds-density') || 'medium');
 const headerMode = ref(localStorage.getItem('mds-header-mode') || 'brand');
 const peopleFeatureRoute = ref(null);
 const partnerFeatureRoute = ref(null);
+const supplierFeatureRoute = ref(null);
 const desktopAdapter = createFakeBrowserHostAdapter();
 const isLocalUiHarness = ['localhost', '127.0.0.1'].includes(location.hostname);
 const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : null;
@@ -33,20 +35,23 @@ function isPeoplePilotEnabled() {
 function isPartnerPilotEnabled() {
   return window.__MISA_UI_FEATURE_FLAGS__?.partnerDetailRead === true || localUiParams?.get('uiPartnerPilot') === '1';
 }
+function isSupplierPilotEnabled() {
+  return window.__MISA_UI_FEATURE_FLAGS__?.supplierDetailRead === true || localUiParams?.get('uiSupplierPilot') === '1';
+}
 
-function requestedSurface() {
-  if (localUiParams?.get('uiPeopleSurface') === HostSurface.NATIVE) return HostSurface.NATIVE;
+function requestedSurface(queryParam = 'uiPeopleSurface') {
+  if (localUiParams?.get(queryParam) === HostSurface.NATIVE) return HostSurface.NATIVE;
   return window.__MISA_UI_HOST_BOOTSTRAP__?.surface === HostSurface.NATIVE
     ? HostSurface.NATIVE
     : HostSurface.DESKTOP;
 }
 
-function selectPeopleAdapter(surface) {
+function selectHostAdapter(surface, nativeQueryParam = 'uiPeopleSurface') {
   const nativeCandidate = window.__MISA_UI_HOST_ADAPTER__;
   // Chỉ harness localhost mới có fake native. Deploy luôn đòi adapter host thật
   // và vẫn fail-closed nếu O3 chưa cấp bridge contract.
   const native = nativeCandidate ? assertHostAdapter(nativeCandidate)
-    : (isLocalUiHarness && localUiParams?.get('uiPeopleSurface') === HostSurface.NATIVE
+    : (isLocalUiHarness && localUiParams?.get(nativeQueryParam) === HostSurface.NATIVE
       ? createFakeNativeHostAdapter({ safeArea: { top: 24, bottom: 20 } }) : null);
   return createHostAdapterRegistry({ browser: desktopAdapter, native }).select(surface);
 }
@@ -59,7 +64,7 @@ function resolvePeopleDetailRoute(key) {
   }
   const surface = requestedSurface();
   try {
-    peopleFeatureRoute.value = { personId: Number(match[1]), surface, adapter: selectPeopleAdapter(surface), hostUnavailable: false };
+    peopleFeatureRoute.value = { personId: Number(match[1]), surface, adapter: selectHostAdapter(surface), hostUnavailable: false };
   } catch (error) {
     if (surface !== HostSurface.NATIVE) throw error;
     // Native never falls back to the desktop composition when its provider is
@@ -77,10 +82,26 @@ function resolvePartnerDetailRoute(key) {
   }
   const surface = requestedSurface();
   try {
-    partnerFeatureRoute.value = { partnerId: Number(match[1]), surface, adapter: selectPeopleAdapter(surface), hostUnavailable: false };
+    partnerFeatureRoute.value = { partnerId: Number(match[1]), surface, adapter: selectHostAdapter(surface), hostUnavailable: false };
   } catch (error) {
     if (surface !== HostSurface.NATIVE) throw error;
     partnerFeatureRoute.value = { partnerId: Number(match[1]), surface, adapter: null, hostUnavailable: true };
+  }
+  return true;
+}
+
+function resolveSupplierDetailRoute(key) {
+  const match = /^suppliers\/(\d+)$/.exec(key);
+  if (!isSupplierPilotEnabled() || !match) {
+    supplierFeatureRoute.value = null;
+    return false;
+  }
+  const surface = requestedSurface('uiSupplierSurface');
+  try {
+    supplierFeatureRoute.value = { supplierId: Number(match[1]), surface, adapter: selectHostAdapter(surface, 'uiSupplierSurface'), hostUnavailable: false };
+  } catch (error) {
+    if (surface !== HostSurface.NATIVE) throw error;
+    supplierFeatureRoute.value = { supplierId: Number(match[1]), surface, adapter: null, hostUnavailable: true };
   }
   return true;
 }
@@ -93,6 +114,10 @@ function leavePartnerDetail(listingHash = 'press') {
   partnerFeatureRoute.value = null;
   location.hash = ['press', 'association', 'gov', 'other'].includes(listingHash) ? listingHash : 'press';
 }
+function leaveSupplierDetail() {
+  supplierFeatureRoute.value = null;
+  location.hash = 'suppliers';
+}
 
 function navigatePeopleDetail(personId) {
   location.hash = `person/${personId}`;
@@ -101,7 +126,9 @@ const desktopPeopleFeature = computed(() => peopleFeatureRoute.value?.surface ==
 const nativePeopleFeature = computed(() => peopleFeatureRoute.value?.surface === HostSurface.NATIVE ? peopleFeatureRoute.value : null);
 const desktopPartnerFeature = computed(() => partnerFeatureRoute.value?.surface === HostSurface.DESKTOP ? partnerFeatureRoute.value : null);
 const nativePartnerFeature = computed(() => partnerFeatureRoute.value?.surface === HostSurface.NATIVE ? partnerFeatureRoute.value : null);
-const resolveUiFeatureRoute = (key) => resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key);
+const desktopSupplierFeature = computed(() => supplierFeatureRoute.value?.surface === HostSurface.DESKTOP ? supplierFeatureRoute.value : null);
+const nativeSupplierFeature = computed(() => supplierFeatureRoute.value?.surface === HostSurface.NATIVE ? supplierFeatureRoute.value : null);
+const resolveUiFeatureRoute = (key) => resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key);
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [
@@ -194,8 +221,16 @@ onBeforeUnmount(() => {
     @back="leavePartnerDetail"
     @navigate="navigatePeopleDetail"
   />
+  <SupplierDetailFeature
+    v-if="nativeSupplierFeature"
+    :supplier-id="nativeSupplierFeature.supplierId"
+    :surface="nativeSupplierFeature.surface"
+    :adapter="nativeSupplierFeature.adapter"
+    :host-unavailable="nativeSupplierFeature.hostUnavailable"
+    @back="leaveSupplierDetail"
+  />
 
-  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePartnerFeature }">
+  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePartnerFeature || nativeSupplierFeature }">
     <header class="platform-header">
       <button class="header-action" type="button" title="Mở điều hướng" aria-label="Mở điều hướng" @click="sideOpen = !sideOpen"><MIcon name="grid-dots" :size="20" /></button>
       <img class="app-logo-img" :src="headerMode === 'light' ? '/assets/misa-logo.png' : '/assets/misa-logo-white.png'" alt="MISA" />
@@ -221,7 +256,7 @@ onBeforeUnmount(() => {
         </button>
       </aside>
       <main class="main">
-        <div v-show="!desktopPeopleFeature && !desktopPartnerFeature" class="content" id="view"></div>
+        <div v-show="!desktopPeopleFeature && !desktopPartnerFeature && !desktopSupplierFeature" class="content" id="view"></div>
         <PeopleDetailFeature
           v-if="desktopPeopleFeature"
           :person-id="desktopPeopleFeature.personId"
@@ -237,6 +272,13 @@ onBeforeUnmount(() => {
           :adapter="desktopPartnerFeature.adapter"
           @back="leavePartnerDetail"
           @navigate="navigatePeopleDetail"
+        />
+        <SupplierDetailFeature
+          v-if="desktopSupplierFeature"
+          :supplier-id="desktopSupplierFeature.supplierId"
+          :surface="desktopSupplierFeature.surface"
+          :adapter="desktopSupplierFeature.adapter"
+          @back="leaveSupplierDetail"
         />
       </main>
     </div>
