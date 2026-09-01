@@ -267,20 +267,30 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
     const payload = JSON.parse(proposal.payload_json);
     const e = edits || {};
 
+    // D14.2/D14.4: khi AI trả về nhiều candidate, người dùng phải chọn duy nhất một bản ghi
+    // trước khi server tạo interaction. Không được rơi qua fallback partner_id=0 hoặc ngầm ưu tiên
+    // Person khi client gửi cả Person lẫn Organization.
+    const personCandidates = Array.isArray(payload.personCandidates) ? payload.personCandidates : [];
+    const orgCandidates = Array.isArray(payload.orgCandidates) ? payload.orgCandidates : [];
+    const selectedCandidateCount = Number(e.selected_person_id != null) + Number(e.selected_org_id != null);
+    if (personCandidates.length + orgCandidates.length > 1 && selectedCandidateCount !== 1) {
+      return sendError(req, res, 400, 'VALIDATION_FAILED', 'Có nhiều người liên hệ/cơ quan phù hợp; hãy chọn đúng một kết quả trước khi xác nhận.');
+    }
+
     // Tampering guard: chi duoc chon trong dung candidate da de xuat, khong nhan id tuy y tu client.
     let selectedPerson = null;
     if (e.selected_person_id != null) {
-      selectedPerson = (payload.personCandidates || []).find((c) => Number(c.id) === Number(e.selected_person_id)) || null;
+      selectedPerson = personCandidates.find((c) => Number(c.id) === Number(e.selected_person_id)) || null;
       if (!selectedPerson) return sendError(req, res, 400, 'VALIDATION_FAILED', 'selected_person_id không nằm trong danh sách đề xuất.');
-    } else if ((payload.personCandidates || []).length === 1) {
-      selectedPerson = payload.personCandidates[0];
+    } else if (personCandidates.length === 1 && orgCandidates.length === 0) {
+      selectedPerson = personCandidates[0];
     }
     let selectedOrg = null;
     if (e.selected_org_id != null) {
-      selectedOrg = (payload.orgCandidates || []).find((c) => Number(c.id) === Number(e.selected_org_id)) || null;
+      selectedOrg = orgCandidates.find((c) => Number(c.id) === Number(e.selected_org_id)) || null;
       if (!selectedOrg) return sendError(req, res, 400, 'VALIDATION_FAILED', 'selected_org_id không nằm trong danh sách đề xuất.');
-    } else if ((payload.orgCandidates || []).length === 1) {
-      selectedOrg = payload.orgCandidates[0];
+    } else if (orgCandidates.length === 1 && personCandidates.length === 0) {
+      selectedOrg = orgCandidates[0];
     }
 
     const partnerType = selectedPerson ? 'person' : (selectedOrg ? 'org' : 'person');

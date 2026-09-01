@@ -49,6 +49,23 @@ test('UI-VOICE-002: Voice review có hai composition MDS và luôn buộc user x
   assert.match(voiceMobile, /<MMobileTopBar/); assert.match(voiceMobile, /<MDialog/); assert.match(voiceMobile, /--mds-mobile-safe-bottom/); assert.match(feature, /VoiceProposalDesktop/); assert.match(feature, /VoiceProposalMobile/); assert.match(feature, /createVoiceIdempotencyKey/);
 });
 
+test('UI-VOICE-003: nhiều candidate phải chọn đúng một và Native dùng touch-token thật', () => {
+  const voiceRoot = path.join(root, 'frontend', 'src', 'features', 'voice');
+  const voiceDesktop = fs.readFileSync(path.join(voiceRoot, 'desktop', 'VoiceProposalDesktop.vue'), 'utf8');
+  const voiceMobile = fs.readFileSync(path.join(voiceRoot, 'mobile', 'VoiceProposalMobile.vue'), 'utf8');
+  const tokens = fs.readFileSync(path.join(root, 'frontend', 'src', 'assets', 'tokens', 'tokens.css'), 'utf8');
+  for (const component of [voiceDesktop, voiceMobile]) {
+    assert.match(component, /candidateCount/);
+    assert.match(component, /selected !== 1/);
+    assert.match(component, /selectPerson[\s\S]*selected_org_id = ''/);
+    assert.match(component, /selectOrg[\s\S]*selected_person_id = ''/);
+  }
+  assert.match(voiceMobile, /mds-mobile-touch-target/);
+  assert.match(tokens, /--mds-mobile-touch-target:\s*48px/);
+  assert.match(tokens, /--mds-mobile-topbar-height:\s*56px/);
+  assert.match(tokens, /\.mds-mobile-app\s*\{[\s\S]*--mds-btn-height:\s*var\(--mds-mobile-touch-target\)/);
+});
+
 test('UI-EVENT-001: Event core chỉ gửi Public allowlist, không nhận tiền/file/owner', async () => {
   const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events', 'domain'); const { EVENT_PUBLIC_FIELDS, toEventDraft, toEventPayload } = await import(pathToFileURL(path.join(eventRoot, 'event-write.mjs')).href); assert.equal(toEventDraft(null).name, ''); const payload = toEventPayload({ ...toEventDraft(), name: 'Hội nghị truyền thông', owner_id: 99, total_cost: 9000000, attachments: ['x'] });
   assert.equal(payload.name, 'Hội nghị truyền thông'); for (const forbidden of ['owner_id', 'total_cost', 'attachments', 'caretaker_ids']) assert.equal(forbidden in payload, false); assert.ok(EVENT_PUBLIC_FIELDS.includes('start_time')); assert.throws(() => toEventPayload({}), /Tên sự kiện/);

@@ -77,3 +77,13 @@ host của MDS.
 `frontend/src/features/people/mobile/`. Pilot chi tiết People dùng feature flag host và có test
 `UI-PPL-001..004`; evidence/giới hạn đầy đủ ở `26-w3-people-detail-read-batch-contract.md`.
 Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/W4; F5 không thay đổi.
+
+## 6. W3.VOICE — review native composition — 2026-09-02
+
+- Voice review không tự chọn đồng thời person và organization. Khi có hơn một candidate, người dùng
+  phải chọn **đúng một**; UI và R150 cùng từ chối selection thiếu hoặc mơ hồ trước khi tạo interaction.
+- Runtime fake-native tại 390×844 xác nhận Back/Hủy đều cao-rộng tối thiểu 48px. Tại 320×700,
+  `.mds-mobile-app` và document đều không có overflow ngang; input là 16px để tránh iOS auto-zoom.
+- Bằng chứng tự động: `UI-VOICE-003` và `integration-voice-secure-command` (SQLite 16/16).
+  Đây chỉ xác nhận browser fake provider. Permission mic, host Back/lifecycle, safe-area thực tế và
+  accessibility OS vẫn cần bridge contract O3 + thiết bị thật ở Wave 4.

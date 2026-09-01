@@ -1281,6 +1281,16 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > Không còn P1/MUST-FIX nào mở trên batch này. Chi tiết: `01-audit-findings.md` §F28,
 > `24-audit-bundle-w3voice-securecommand.md`.
 
+> **Execution update — 2026-09-02 (W3.VOICE UI review + Native MDS remediation):** Voice review
+> Desktop/Native nay chỉ auto-chọn khi tổng số candidate đúng bằng 1. Nếu AI trả nhiều candidate
+> (kể cả một person và một organization), client buộc chọn **đúng một** và hai picker loại trừ nhau;
+> R150 cũng fail-closed `400 VALIDATION_FAILED` trước transaction nếu selection mơ hồ. Native wrapper
+> khôi phục token MDS chuẩn 48px touch target/56px top bar, safe-area, 16px input và chống tràn ngang
+> cho toàn bộ composition `.mds-mobile-app`. Evidence fake-host: Voice Back/Hủy 48px ở 390px; 320px
+> không overflow; `UI-VOICE-003`, voice integration SQLite 16/16 và build production đều xanh.
+> Đây là contract-ready/fake-host evidence, **không** thay cho bridge AMIS hay device evidence: W3.VOICE.2
+> và W4 vẫn `UNVERIFIED` tới O3.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

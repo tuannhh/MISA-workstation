@@ -3252,3 +3252,16 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
   owner từ server; Partner integration đạt **103/103** trên SQLite và MySQL. `UI-PAR-014` khóa API
   allowlist, projection, permission và hai composition. Tổng reassignment UI: **14/14 Direct entity**;
   Native AMIS runtime/device vẫn **UNVERIFIED** tới O3/W4.
+
+## 2026-09-02 — W3.VOICE UI review: selection không mơ hồ + Native MDS baseline
+
+- Sửa luồng review Voice để chỉ auto-chọn candidate khi có đúng **một candidate tổng cộng**. Khi AI
+  trả nhiều candidate, hai picker person/organization loại trừ nhau và UI yêu cầu người dùng chọn đúng
+  một trước khi xác nhận. R150 xác nhận lại cùng invariant, trả `400 VALIDATION_FAILED` trước write
+  nếu thiếu selection hoặc gửi cả hai id.
+- Khôi phục token/guard `.mds-mobile-app` theo MDS: touch target 48px, top bar 56px, safe-area,
+  input 16px, gutter và chống overflow. Runtime fake-native: Back/Hủy đạt 48px ở 390×844;
+  320×700 không overflow ngang.
+- Verify: `UI-VOICE-003`, `integration-voice-secure-command` SQLite 16/16, security 6/6,
+  mapping 150/150, G0 verifier và Vite production build PASS. Đây không phải evidence AMIS host
+  thật; O3/W4 về bridge, thiết bị và OS accessibility vẫn `UNVERIFIED`.

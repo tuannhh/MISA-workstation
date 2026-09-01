@@ -126,6 +126,16 @@
   --mds-icon-lg: 24px;             /* kích thước mặc định */
   --mds-icon-xl: 32px;
   --mds-icon-touch-target: 40px;
+
+  /* ── Mobile mini-app trong native host MISA AMIS ──────────── */
+  --mds-mobile-touch-target: 48px;
+  --mds-mobile-topbar-height: 56px;
+  --mds-mobile-bottom-nav-height: 64px;
+  --mds-mobile-gutter: 16px;
+  --mds-mobile-safe-top: env(safe-area-inset-top, 0px);
+  --mds-mobile-safe-right: env(safe-area-inset-right, 0px);
+  --mds-mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mds-mobile-safe-left: env(safe-area-inset-left, 0px);
 }
 
 /* ── Density overrides ─────────────────────────────────────
@@ -140,6 +150,112 @@
   --mds-btn-height: 36px;
   --mds-input-height: 40px;
   --mds-dt-row-height: 40px;
+}
+
+/* Root bắt buộc của mini-app. Mobile ưu tiên khả năng chạm, không kế thừa
+   mật độ desktop hiện tại và không để iOS zoom khi focus input. */
+.mds-mobile-app {
+  --mds-btn-height: var(--mds-mobile-touch-target);
+  --mds-input-height: var(--mds-mobile-touch-target);
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+  padding-right: var(--mds-mobile-safe-right);
+  padding-left: var(--mds-mobile-safe-left);
+  font-family: var(--mds-font-family);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@supports (container-type: inline-size) {
+  .mds-mobile-app { container-type: inline-size; }
+}
+
+.mds-mobile-app *,
+.mds-mobile-app *::before,
+.mds-mobile-app *::after { box-sizing: border-box; }
+
+.mds-mobile-app img,
+.mds-mobile-app video,
+.mds-mobile-app canvas,
+.mds-mobile-app svg { max-width: 100%; }
+
+.mds-mobile-app input,
+.mds-mobile-app textarea { font-size: 16px; }
+
+.mds-mobile-app button,
+.mds-mobile-app [role="tab"] { white-space: nowrap; }
+
+.mds-mobile-app [role="tab"],
+.mds-mobile-app [role="radiogroup"] label { min-height: var(--mds-mobile-touch-target); }
+
+.mds-mobile-app .mds-mobile-clip-region {
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.mds-mobile-app .mds-mobile-gutter-x {
+  padding-right: var(--mds-mobile-gutter);
+  padding-left: var(--mds-mobile-gutter);
+}
+
+.mds-mobile-app .mds-mobile-single-line {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mds-mobile-app .mds-mobile-readable {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Fallback cho WebView iOS cũ chưa hỗ trợ flex-gap đầy đủ. */
+.mds-mobile-app .mds-button,
+.mds-mobile-app .mds-tag,
+.mds-mobile-app .mds-mobile-row-gap-1,
+.mds-mobile-app .mds-mobile-row-gap-2,
+.mds-mobile-app .mds-mobile-row-gap-3,
+.mds-mobile-app .mds-mobile-row-gap-4,
+.mds-mobile-app .mds-mobile-column-gap-1,
+.mds-mobile-app .mds-mobile-column-gap-2,
+.mds-mobile-app .mds-mobile-column-gap-4 { gap: 0; }
+
+.mds-mobile-app .mds-button > * + * { margin-left: 6px; }
+.mds-mobile-app .mds-tag > * + *,
+.mds-mobile-app .mds-mobile-row-gap-1 > * + * { margin-left: 4px; }
+.mds-mobile-app .mds-mobile-row-gap-2 > * + * { margin-left: 8px; }
+.mds-mobile-app .mds-mobile-row-gap-3 > * + * { margin-left: 12px; }
+.mds-mobile-app .mds-mobile-row-gap-4 > * + * { margin-left: 16px; }
+.mds-mobile-app .mds-mobile-column-gap-1 > * + * { margin-top: 4px; }
+.mds-mobile-app .mds-mobile-column-gap-2 > * + * { margin-top: 8px; }
+.mds-mobile-app .mds-mobile-column-gap-4 > * + * { margin-top: 16px; }
+
+@media (max-width: 359px) {
+  .mds-mobile-app { --mds-mobile-gutter: 12px; }
+}
+
+@container (max-width: 359px) {
+  .mds-mobile-app .mds-mobile-gutter-x {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mds-mobile-app *,
+  .mds-mobile-app *::before,
+  .mds-mobile-app *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 /* ── Hình nền + hiệu ứng kính ────────────────────────────────

@@ -154,6 +154,41 @@ test('propose: 2 nguoi cung khop ten -> confidence ambiguous, tra ve ca 2 (khong
   assert.deepEqual(ids, [p1, p2].sort());
 });
 
+test('confirm: proposal nhieu candidate bat buoc chon dung mot; thieu hoac chon ca hai khong duoc ghi', async () => {
+  const suffix = Date.now();
+  const p1 = insertPerson(`Confirm Ambig ${suffix} A`, 40);
+  insertPerson(`Confirm Ambig ${suffix} B`, 60);
+  const oid = insertOrg(`Confirm Ambig Org ${suffix}`, 'press');
+  const before_ = countInteractions();
+  const { body: proposal } = await propose(execACookie, {
+    transcript: 't', summary: 's', person_name: `Confirm Ambig ${suffix}`, org_name: getOrg(oid).name,
+  });
+  assert.equal(proposal.personCandidates.length, 2);
+  assert.equal(proposal.orgCandidates.length, 1);
+
+  const missing = await confirm(execACookie, { proposalId: proposal.proposalId, idempotencyKey: `ambig-missing-${suffix}` });
+  assert.equal(missing.res.status, 400);
+  assert.equal(missing.body.code, 'VALIDATION_FAILED');
+  assert.equal(countInteractions(), before_);
+  assert.equal(getProposal(proposal.proposalId).status, 'pending');
+
+  const both = await confirm(execACookie, {
+    proposalId: proposal.proposalId, idempotencyKey: `ambig-both-${suffix}`,
+    edits: { selected_person_id: p1, selected_org_id: oid },
+  });
+  assert.equal(both.res.status, 400);
+  assert.equal(both.body.code, 'VALIDATION_FAILED');
+  assert.equal(countInteractions(), before_);
+  assert.equal(getProposal(proposal.proposalId).status, 'pending');
+
+  const selected = await confirm(execACookie, {
+    proposalId: proposal.proposalId, idempotencyKey: `ambig-selected-${suffix}`,
+    edits: { selected_person_id: p1 },
+  });
+  assert.equal(selected.res.status, 200);
+  assert.equal(countInteractions(), before_ + 1);
+});
+
 test('propose->confirm happy path: tao interaction + doi relationship_score dung mot lan', async () => {
   const pid = insertPerson(`Happy Path ${Date.now()}`, 50);
   const before_ = countInteractions();
