@@ -57,5 +57,17 @@ export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api'
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async deleteAgreement(agreementId) {
+      const response = await fetchFn(`${basePath}/agreements/${Number(agreementId)}`, { method: 'DELETE', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
+    async deleteWorkLog(workLogId) {
+      const response = await fetchFn(`${basePath}/work-logs/${Number(workLogId)}`, { method: 'DELETE', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      return payload;
+    },
   });
 }

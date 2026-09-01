@@ -836,6 +836,11 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > ownership/file-policy tiếp theo. Evidence/matrix ở `27-w3-partner-detail-read-batch-contract.md`;
 > Native AMIS production vẫn **UNVERIFIED** cho tới O3/W4 device evidence.
 
+> **Execution update — 2026-09-01 (W3.PARTNER.COOPERATION-DELETE):** nối R012/R015 cho
+> Admin/Super Admin bằng xác nhận `MDialog` danger ở cả Desktop và Native. Đây là UI-gate để giảm
+> thao tác nhầm, không thay PolicyEngine: request DELETE vẫn bị server xác minh action `delete`.
+> Sửa (R011/R014) và tệp (R016/R017) chưa được claim, vì ownership/file-policy là slice độc lập.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

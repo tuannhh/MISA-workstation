@@ -124,3 +124,16 @@ test('UI-PAR-008: tạo MOU/lịch sử là slice create hẹp, dùng MDS deskto
   assert.match(feature, /api\.createWorkLog\(props\.partnerId, payload\)/);
   assert.match(feature, /state\.detail\?\.type === 'gov'/, 'create chỉ hiện cho loại đối tác bộ ngành như legacy');
 });
+
+test('UI-PAR-009: chỉ quản trị viên mới thấy xoá MOU/lịch sử và thao tác luôn có confirm MDS', () => {
+  for (const component of [desktopPage, mobilePage]) {
+    assert.match(component, /canDeleteCooperation/, 'nút xoá phải được tách khỏi quyền create');
+    assert.match(component, /requestCooperationDelete\('agreement'/, 'MOU phải qua confirm trước khi emit xoá');
+    assert.match(component, /requestCooperationDelete\('work-log'/, 'lịch sử phải qua confirm trước khi emit xoá');
+    assert.match(component, /<MDialog v-model="cooperationDeleteOpen"/, 'xoá phải dùng dialog MDS');
+    assert.doesNotMatch(component, /<button\b/, 'không tự chế control xoá');
+  }
+  assert.match(feature, /can-delete-cooperation="canDelete"/, 'UI chỉ gợi ý xoá cùng chính sách Admin/Super Admin của partner');
+  assert.match(feature, /api\.deleteAgreement\(agreementId\)/, 'server phải nhận DELETE agreement');
+  assert.match(feature, /api\.deleteWorkLog\(workLogId\)/, 'server phải nhận DELETE work log');
+});
