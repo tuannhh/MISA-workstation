@@ -846,6 +846,11 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > PUT vẫn qua PolicyEngine của server và lỗi 403 hiển thị lại trong form. Payload không chứa owner,
 > created-by hay file. Work-log edit/tệp vẫn là scope kế tiếp.
 
+> **Execution update — 2026-09-01 (W3.PARTNER.WORK-LOG-EDIT):** nối R014 cùng quy tắc ownership
+> UI-gợi ý/PolicyEngine-server của R011. Bốn loại làm việc dùng `MSelect`; ba trạng thái dùng
+> `MRadioGroup` MDS. Native là form riêng có safe-area và confirm bỏ draft. Tệp R016/R017 là slice
+> cuối của Partner sub-resource và chưa được claim.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

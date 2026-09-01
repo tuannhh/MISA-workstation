@@ -1,6 +1,6 @@
 # 27 — Batch Contract: W3.PARTNER.READ + WRITE-CORE (Partner Detail strangler)
 
-> **Status:** READ + WRITE-CORE + COOPERATION-CREATE/DELETE + AGREEMENT-EDIT IMPLEMENTED / local visual review PASS; chưa cutover sửa work-log/tệp hay Native production.
+> **Status:** READ + WRITE-CORE + COOPERATION-CREATE/DELETE + COOPERATION-EDIT IMPLEMENTED / local visual review PASS; chưa cutover tệp hay Native production.
 
 ## 1. Mục tiêu và phạm vi
 
@@ -23,7 +23,7 @@ Các phần sau **giữ nguyên legacy** khi cờ `partnerDetailRead` tắt và 
 
 **Cooperation delete (R012/R015):** nút xoá chỉ gợi ý cho Admin/Super Admin có `partners.delete`, luôn qua `MDialog` danger và server `policyService.assertWritable(..., action:'delete')` quyết định lại. UI không diễn giải ownership Direct ở client. Sửa và tệp vẫn chưa thuộc batch này vì cần contract ownership/file-policy riêng.
 
-**Agreement edit (R011):** model giữ `owner_id` chỉ để gợi ý UX: executor thấy Sửa khi owner trùng principal hiện tại, Admin/Super Admin thấy Sửa theo module permission. MOU form gửi đúng allowlist `title`, `signed_date`, `valid_until`, `terms`, `note`; không gửi owner/created-by/tệp. Máy chủ vẫn gọi `assertWritable()` và trả 403 nếu quyền bị thay đổi sau khi UI đã render. Work-log edit và mọi tệp chưa được claim.
+**Cooperation edit (R011/R014):** model giữ `owner_id` chỉ để gợi ý UX: executor thấy Sửa khi owner trùng principal hiện tại, Admin/Super Admin thấy Sửa theo module permission. MOU form gửi đúng allowlist `title`, `signed_date`, `valid_until`, `terms`, `note`; Work Log form gửi `category`, `work_date`, `topic`, `result`, `status`, `staff`, `note`. Ba trạng thái dùng `MRadioGroup`, bốn loại làm việc dùng `MSelect`; không gửi owner/created-by/tệp. Máy chủ vẫn gọi `assertWritable()` và trả 403 nếu quyền bị thay đổi sau khi UI đã render. Mọi tệp chưa được claim.
 
 ## 3. Route × surface × role
 
@@ -33,8 +33,8 @@ Các phần sau **giữ nguyên legacy** khi cờ `partnerDetailRead` tắt và 
 | R004–R006 core partner write/delete | Vue MDS pilot | Vue native composition | **UNVERIFIED — O3/W4.1** | server PolicyEngine | server PolicyEngine | server PolicyEngine |
 | R010 create agreement / R013 create work log (`gov`) | Vue MDS form | Vue native composition | **UNVERIFIED — O3/W4.1** | server PolicyEngine/403 | server PolicyEngine/allow khi có `partners.create` | server PolicyEngine |
 | R012/R015 delete MOU/work log (`gov`) | Vue MDS confirm | Vue native confirm | **UNVERIFIED — O3/W4.1** | server PolicyEngine/403 | server PolicyEngine/403 | server PolicyEngine + confirm |
-| R011 edit agreement (`gov`) | Vue MDS form | Vue native form | **UNVERIFIED — O3/W4.1** | server PolicyEngine/403 | owner-only UX + server PolicyEngine | server PolicyEngine |
-| R014 edit work-log, R016/R017 file sub-resources | Legacy, không claim | Legacy, không claim | N/A batch này | server PolicyEngine | server PolicyEngine | server PolicyEngine |
+| R011 edit agreement / R014 edit work-log (`gov`) | Vue MDS form | Vue native form | **UNVERIFIED — O3/W4.1** | server PolicyEngine/403 | owner-only UX + server PolicyEngine | server PolicyEngine |
+| R016/R017 file sub-resources | Legacy, không claim | Legacy, không claim | N/A batch này | server PolicyEngine | server PolicyEngine | server PolicyEngine |
 
 Native 403/404/lỗi mạng vẫn là native shell, không fallback Desktop. Cờ có default `false`; local harness `?uiPartnerPilot=1&uiPeopleSurface=native` chỉ hoạt động trên localhost/127.0.0.1, không thay thế AMIS bridge O3.
 
@@ -43,5 +43,5 @@ Native 403/404/lỗi mạng vẫn là native shell, không fallback Desktop. C�
 1. Hai cây page Desktop/Native độc lập, không chọn shell theo UA/viewport/role.
 2. View model không hiển thị trường nhạy cảm không có trong projection; person rows không đưa contact cá nhân.
 3. Loading/403/404/network ở đúng shell; Back/deep link/lifecycle qua W2.5 adapter.
-4. `UI-PAR-001..010`, build và regression xanh; rollback = tắt `partnerDetailRead`.
+4. `UI-PAR-001..011`, build và regression xanh; rollback = tắt `partnerDetailRead`.
 5. Không tuyên bố Native production pass trước O3/W4 device evidence.

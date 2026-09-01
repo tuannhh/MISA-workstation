@@ -69,7 +69,7 @@ export function partnerDetailViewModel(payload) {
     id: Number(agreement.id), ownerId: Number.isInteger(Number(agreement.owner_id)) ? Number(agreement.owner_id) : null, title: text(agreement.title), signedDate: formatDate(agreement.signed_date), signedDateValue: agreement.signed_date || '', validUntil: formatDate(agreement.valid_until), validUntilValue: agreement.valid_until || '', terms: agreement.terms || '', note: agreement.note || '',
   })) : [];
   const workLogs = Array.isArray(payload?.workLogs) ? payload.workLogs.map((workLog) => Object.freeze({
-    id: Number(workLog.id), title: text(workLog.topic), category: text(workLog.category), date: formatDate(workLog.work_date), status: text(workLog.status),
+    id: Number(workLog.id), ownerId: Number.isInteger(Number(workLog.owner_id)) ? Number(workLog.owner_id) : null, title: text(workLog.topic), category: text(workLog.category), date: formatDate(workLog.work_date), workDateValue: workLog.work_date || '', status: text(workLog.status), result: workLog.result || '', staff: workLog.staff || '', note: workLog.note || '',
   })) : [];
   return Object.freeze({
     id: Number(record.id), name: text(record.name), type, typeLabel: PARTNER_TYPE_META[type].label,

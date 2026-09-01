@@ -94,7 +94,7 @@ test('UI-PAR-007: MOU/work log chỉ hiển thị metadata đã có trong API, k
   const { partnerDetailViewModel } = await domain();
   const model = partnerDetailViewModel({ record: { id: 4, name: 'Bộ MISA', org_type: 'gov' }, agreements: [{ id: 2, title: 'MOU 2026', signed_date: '2026-01-02', valid_until: '2027-01-02', files: [{ id: 99 }] }], workLogs: [{ id: 3, topic: 'Làm việc định kỳ', category: 'Làm việc', work_date: '2026-02-03', status: 'Hoàn thành', files: [{ id: 100 }] }] });
   assert.deepEqual(model.agreements[0], { id: 2, ownerId: null, title: 'MOU 2026', signedDate: '02/01/2026', signedDateValue: '2026-01-02', validUntil: '02/01/2027', validUntilValue: '2027-01-02', terms: '', note: '' });
-  assert.deepEqual(model.workLogs[0], { id: 3, title: 'Làm việc định kỳ', category: 'Làm việc', date: '03/02/2026', status: 'Hoàn thành' });
+  assert.deepEqual(model.workLogs[0], { id: 3, ownerId: null, title: 'Làm việc định kỳ', category: 'Làm việc', date: '03/02/2026', workDateValue: '2026-02-03', status: 'Hoàn thành', result: '', staff: '', note: '' });
   assert.doesNotMatch(desktopPage, /\/api\/files\//, 'file phải đợi slice Policy/File riêng');
   assert.doesNotMatch(mobilePage, /\/api\/files\//, 'native cũng không được bypass policy file');
 });
@@ -151,4 +151,21 @@ test('UI-PAR-010: chỉnh sửa MOU chỉ là gợi ý ownership UX, dùng MDS f
   assert.match(feature, /api\.updateAgreement\(state\.editingAgreement\.id, payload\)/, 'máy chủ là nơi quyết định PUT');
   assert.match(desktopPage, /canEditCooperation\(agreement\)/);
   assert.match(mobilePage, /canEditCooperation\(agreement\)/);
+});
+
+test('UI-PAR-011: chỉnh sửa work log dùng đúng MDS dropdown/radio và PUT do PolicyEngine quyết định', async () => {
+  const { WORK_LOG_STATUS_OPTIONS, toWorkLogEditDraft, toWorkLogUpdatePayload } = await cooperationDomain();
+  const draft = toWorkLogEditDraft({ category: 'Đối ngoại', workDateValue: '2026-03-01', title: 'Họp báo', status: 'Hoàn thành', result: 'Đã thống nhất', staff: 'Mai An', note: '' });
+  assert.equal(WORK_LOG_STATUS_OPTIONS.length, 3, 'ba trạng thái phải dùng radio, không dùng select');
+  assert.deepEqual(toWorkLogUpdatePayload(draft), { category: 'Đối ngoại', work_date: '2026-03-01', topic: 'Họp báo', result: 'Đã thống nhất', status: 'Hoàn thành', staff: 'Mai An', note: null });
+  for (const file of ['desktop/PartnerWorkLogEditDesktop.vue', 'mobile/PartnerWorkLogEditMobile.vue']) {
+    const component = fs.readFileSync(path.join(featureRoot, file), 'utf8');
+    assert.match(component, /<MSelect/, 'bốn loại làm việc phải dùng Dropdown MDS');
+    assert.match(component, /<MRadioGroup/, 'ba trạng thái phải dùng Radio MDS');
+    assert.match(component, /<MTextarea/, 'trường nội dung dài phải dùng MDS Textarea');
+    assert.doesNotMatch(component, /<button\b/, 'không tự chế button');
+  }
+  assert.match(feature, /api\.updateWorkLog\(state\.editingWorkLog\.id, payload\)/);
+  assert.match(desktopPage, /canEditCooperation\(work\)/);
+  assert.match(mobilePage, /canEditCooperation\(work\)/);
 });

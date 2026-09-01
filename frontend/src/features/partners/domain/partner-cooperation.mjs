@@ -8,6 +8,11 @@ export const WORK_LOG_CATEGORY_OPTIONS = Object.freeze([
   Object.freeze({ value: 'Công văn phối hợp', label: 'Công văn phối hợp' }),
   Object.freeze({ value: 'Đối ngoại', label: 'Đối ngoại' }),
 ]);
+export const WORK_LOG_STATUS_OPTIONS = Object.freeze([
+  Object.freeze({ value: 'Đang xử lý', label: 'Đang xử lý' }),
+  Object.freeze({ value: 'Hoàn thành', label: 'Hoàn thành' }),
+  Object.freeze({ value: 'Theo dõi', label: 'Theo dõi' }),
+]);
 
 export function toAgreementDraft() { return { title: '', signed_date: today(), valid_until: '' }; }
 export function validateAgreementDraft(draft) {
@@ -36,4 +41,10 @@ export function validateWorkLogDraft(draft) {
 }
 export function toWorkLogCreatePayload(draft) {
   return { category: draft.category, work_date: draft.work_date, topic: trim(draft.topic), status: 'Đang xử lý' };
+}
+export function toWorkLogEditDraft(record) {
+  return { category: WORK_LOG_CATEGORY_OPTIONS.some((option) => option.value === record?.category) ? record.category : 'Làm việc tại cơ quan', work_date: record?.workDateValue || '', topic: trim(record?.title), result: textOrNull(record?.result) || '', status: WORK_LOG_STATUS_OPTIONS.some((option) => option.value === record?.status) ? record.status : 'Đang xử lý', staff: textOrNull(record?.staff) || '', note: textOrNull(record?.note) || '' };
+}
+export function toWorkLogUpdatePayload(draft) {
+  return { category: draft.category, work_date: textOrNull(draft.work_date), topic: trim(draft.topic), result: textOrNull(draft.result), status: draft.status, staff: textOrNull(draft.staff), note: textOrNull(draft.note) };
 }
