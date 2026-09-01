@@ -81,3 +81,12 @@ test('UI-PAR-006: write Desktop/Native dùng MDS form, confirm destructive và s
   assert.match(feature, /api\.deletePartner\(props\.partnerId\)/);
   assert.match(feature, /permissions\?\.modules\?\.partners\?\.includes\('edit'\)/);
 });
+
+test('UI-PAR-007: MOU/work log chỉ hiển thị metadata đã có trong API, không đưa file vào slice read', async () => {
+  const { partnerDetailViewModel } = await domain();
+  const model = partnerDetailViewModel({ record: { id: 4, name: 'Bộ MISA', org_type: 'gov' }, agreements: [{ id: 2, title: 'MOU 2026', signed_date: '2026-01-02', valid_until: '2027-01-02', files: [{ id: 99 }] }], workLogs: [{ id: 3, topic: 'Làm việc định kỳ', category: 'Làm việc', work_date: '2026-02-03', status: 'Hoàn thành', files: [{ id: 100 }] }] });
+  assert.deepEqual(model.agreements[0], { id: 2, title: 'MOU 2026', signedDate: '02/01/2026', validUntil: '02/01/2027' });
+  assert.deepEqual(model.workLogs[0], { id: 3, title: 'Làm việc định kỳ', category: 'Làm việc', date: '03/02/2026', status: 'Hoàn thành' });
+  assert.doesNotMatch(desktopPage, /\/api\/files\//, 'file phải đợi slice Policy/File riêng');
+  assert.doesNotMatch(mobilePage, /\/api\/files\//, 'native cũng không được bypass policy file');
+});

@@ -62,11 +62,20 @@ export function partnerDetailViewModel(payload) {
   const dates = Array.isArray(payload?.dates) ? payload.dates.map((date) => Object.freeze({
     id: Number(date.id), title: text(date.title), date: formatDate(date.event_date), recurring: Boolean(date.recurring),
   })) : [];
+  // Agreements/work logs là dữ liệu không có field Confidential trong registry.
+  // Không đưa file metadata/nội dung vào slice read này: GET /files/:id phải tiếp
+  // tục đi qua policy file riêng ở slice W3.PARTNER.FILE.
+  const agreements = Array.isArray(payload?.agreements) ? payload.agreements.map((agreement) => Object.freeze({
+    id: Number(agreement.id), title: text(agreement.title), signedDate: formatDate(agreement.signed_date), validUntil: formatDate(agreement.valid_until),
+  })) : [];
+  const workLogs = Array.isArray(payload?.workLogs) ? payload.workLogs.map((workLog) => Object.freeze({
+    id: Number(workLog.id), title: text(workLog.topic), category: text(workLog.category), date: formatDate(workLog.work_date), status: text(workLog.status),
+  })) : [];
   return Object.freeze({
     id: Number(record.id), name: text(record.name), type, typeLabel: PARTNER_TYPE_META[type].label,
     listingHash: PARTNER_TYPE_META[type].listingHash,
     subtitle: [PARTNER_TYPE_META[type].label, record.tier].filter(Boolean).join(' · '),
     fields: present([...commonFields, ...(fieldsByType[type] || [])]),
-    people: Object.freeze(people), dates: Object.freeze(dates),
+    people: Object.freeze(people), dates: Object.freeze(dates), agreements: Object.freeze(agreements), workLogs: Object.freeze(workLogs),
   });
 }

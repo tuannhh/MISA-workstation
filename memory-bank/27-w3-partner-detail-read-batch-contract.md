@@ -9,11 +9,11 @@ Chuyển phần **đọc an toàn** của hash `#partner/:id` sang Vue island MD
 - Desktop: trang Detail trong shell hiện hữu.
 - Native-Mobile: mini-app `.mds-mobile-app`, `MMobileTopBar`, tab cuộn ngang, safe-area qua W2.5 host adapter.
 
-Nguồn dữ liệu chỉ là `GET /api/partners/:id` (R003). Slice hiển thị record đã PolicyEngine projection, danh sách nhân sự đã projection và ngày nhắc liên quan. Không có quyền/RBAC tự tính ở client.
+Nguồn dữ liệu chỉ là `GET /api/partners/:id` (R003). Slice hiển thị record đã PolicyEngine projection, danh sách nhân sự đã projection, ngày nhắc, metadata MOU/lịch sử làm việc. Không có quyền/RBAC tự tính ở client.
 
 ## 2. Chủ ý không đưa vào batch read/write lõi
 
-Các phần sau **giữ nguyên legacy** khi cờ `partnerDetailRead` tắt và chưa được coi là chuyển đổi khi cờ bật: nhân sự, hội phí, tài trợ, quà tặng, booking, MOU/work log, tệp, tương tác. Chúng có route/field ownership khác nhau; gom vào read slice sẽ phá ranh giới PolicyEngine và làm rollback không còn hẹp.
+Các phần sau **giữ nguyên legacy** khi cờ `partnerDetailRead` tắt và chưa được coi là chuyển đổi khi cờ bật: nhân sự, hội phí, tài trợ, quà tặng, booking, write MOU/work log, tệp, tương tác. Chúng có route/field ownership khác nhau; gom vào read slice sẽ phá ranh giới PolicyEngine và làm rollback không còn hẹp.
 
 `membership_fee` chỉ hiển thị nếu property đã xuất hiện trong `record` từ API. Client không có fallback mask/unmask hoặc request riêng để suy đoán dữ liệu Confidential.
 
