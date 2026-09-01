@@ -881,6 +881,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > viewer/executor không lộ tổng tiền của bản ghi người khác. Create/edit/delete Booking và org
 > detail booking tiếp tục là slice ownership/form kế tiếp.
 
+> **Execution update — 2026-09-01 (W3.BOOKING.CREATE):** thêm form tạo Booking trong People
+> Detail, Desktop MDS và Native form riêng. Form gắn cứng `subject_type='person'`/`subject_id`
+> từ route, không gửi owner, org, created_by hay award; backend vẫn tự resolve org và gán ownership.
+> Amount được nhập như dữ liệu Confidential có chủ đích nhưng read lại chỉ theo PolicyEngine.
+> Edit/delete Booking tiếp tục ở slice ownership kế tiếp.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

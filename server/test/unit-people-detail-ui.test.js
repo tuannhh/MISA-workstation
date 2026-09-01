@@ -13,6 +13,8 @@ const appJs = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const desktopPage = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleDetailPage.vue'), 'utf8');
 const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleDetailPageMobile.vue'), 'utf8');
 const mobileEditForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'PeopleEditFormMobile.vue'), 'utf8');
+const bookingDesktopForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'BookingCreateDesktop.vue'), 'utf8');
+const bookingMobileForm = fs.readFileSync(path.join(featureRoot, 'mobile', 'BookingCreateMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PeopleDetailFeature.vue'), 'utf8');
 const editForm = fs.readFileSync(path.join(featureRoot, 'desktop', 'PeopleEditFormDesktop.vue'), 'utf8');
 const attachmentPanel = fs.readFileSync(path.join(featureRoot, 'PeopleAttachmentsPanel.vue'), 'utf8');
@@ -138,4 +140,16 @@ test('UI-PPL-010: Booking trong People Detail chỉ nhận projection, không t�
   assert.match(bookingsPanel, /Tổng tiền không được tự tính/);
   assert.doesNotMatch(bookingsPanel, /reduce\(|\.sum\(/, 'component không được tự tính tổng tiền');
   assert.match(feature, /api\.getBookings\(props\.personId\)/, 'booking luôn tải qua API có PolicyEngine');
+});
+
+test('UI-PPL-011: tạo booking gắn person từ route, không gửi owner/org và form Native giữ safe-area/draft', async () => {
+  const { BOOKING_CREATE_FIELDS, toBookingCreateDraft, toBookingCreatePayload, validateBookingCreateDraft } = await import(pathToFileURL(path.join(featureRoot, 'domain', 'booking-write.mjs')).href);
+  const payload = toBookingCreatePayload({ ...toBookingCreateDraft(), title: 'Bài PR', booked_date: '2026-09-01', amount: '1200000' }, { personId: 8, personName: 'Nguyễn Thu Hà' });
+  assert.equal(payload.subject_type, 'person'); assert.equal(payload.subject_id, 8); assert.equal(payload.amount, 1200000);
+  for (const forbidden of ['owner_id', 'org_id', 'org_name', 'created_by', 'award_id']) assert.equal(forbidden in payload, false, `${forbidden} không được gửi từ form`);
+  assert.ok(BOOKING_CREATE_FIELDS.includes('amount'));
+  assert.equal(validateBookingCreateDraft({ title: '', booked_date: '' }).title, 'Tên booking không được để trống.');
+  for (const form of [bookingDesktopForm, bookingMobileForm]) { assert.match(form, /<MInput/); assert.match(form, /<MSelect/); assert.match(form, /<MTextarea/); assert.doesNotMatch(form, /owner_id|org_id|org_name|created_by|award_id/); }
+  assert.match(bookingMobileForm, /<MDialog/); assert.match(bookingMobileForm, /--mds-mobile-safe-bottom/);
+  assert.match(feature, /api\.createBooking\(payload\)/, 'tạo booking qua API server-enforced');
 });
