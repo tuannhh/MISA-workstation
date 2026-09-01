@@ -914,6 +914,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > `owner_id`/`created_by` hay suy diễn quyền ở client. Ghi tương tác, picker đối tác và Voice
 > trigger vẫn để batch create kế tiếp.
 
+> **Execution update — 2026-09-01 (W3.INTERACTIONS.CREATE):** hoàn thiện form ghi tương tác
+> Desktop MDS và Native mini-app riêng. Action chỉ là affordance theo `interactions:create` từ
+> `/api/me`; R043 bắt buộc chọn đối tác và payload không chấp nhận `owner_id`, `created_by` hay
+> caretaker từ client. Native có Back/discard confirmation và safe-area sticky action. `UI-INT-002/003`
+> khóa contract payload, quyền action và hai composition; kiểm chứng native AMIS runtime, accessibility
+> thiết bị/lifecycle/deep link vẫn **UNVERIFIED**, chờ O3 host contract.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

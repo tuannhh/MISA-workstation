@@ -1,5 +1,37 @@
 <script setup>
-import { ref, watch } from 'vue'; import MButton from '../../../components/mds/MButton.vue'; import MEmptyState from '../../../components/mds/MEmptyState.vue'; import MInput from '../../../components/mds/MInput.vue'; import MTag from '../../../components/mds/MTag.vue';
-const props = defineProps({ rows: { type: Array, default: () => [] }, total: { type: Number, default: 0 }, page: { type: Number, default: 1 }, pageSize: { type: Number, default: 20 }, search: { type: String, default: '' }, loading: { type: Boolean, default: false } }); const emit = defineEmits(['search', 'page']); const query = ref(props.search); watch(() => props.search, (value) => { query.value = value; }); function submit() { emit('search', query.value.trim()); }
+import { ref, watch } from 'vue';
+import MButton from '../../../components/mds/MButton.vue';
+import MEmptyState from '../../../components/mds/MEmptyState.vue';
+import MInput from '../../../components/mds/MInput.vue';
+import MTag from '../../../components/mds/MTag.vue';
+
+const props = defineProps({ rows: { type: Array, default: () => [] }, total: { type: Number, default: 0 }, page: { type: Number, default: 1 }, pageSize: { type: Number, default: 20 }, search: { type: String, default: '' }, loading: { type: Boolean, default: false }, canCreate: { type: Boolean, default: false } });
+const emit = defineEmits(['search', 'page', 'create']);
+const query = ref(props.search);
+watch(() => props.search, (value) => { query.value = value; });
+function submit() { emit('search', query.value.trim()); }
 </script>
-<template><section class="min-h-0 bg-[var(--mds-bg-page)] p-4"><div class="mx-auto max-w-[1200px] space-y-4"><header class="rounded-lg bg-[var(--mds-bg)] px-5 py-4 shadow-[var(--mds-shadow-card)]"><h1 class="text-[20px] font-semibold leading-7">Lịch sử tương tác</h1><p class="mt-1 text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">Nhật ký trao đổi với đối tác truyền thông, từ dữ liệu R044 đã được máy chủ trả về.</p><form class="mt-4 flex max-w-[560px] gap-2" @submit.prevent="submit"><MInput v-model="query" placeholder="Tìm nội dung hoặc đối tác…" :disabled="loading" /><MButton variant="primary" :loading="loading" @click="submit">Tìm</MButton></form></header><section class="overflow-hidden rounded-lg bg-[var(--mds-bg)] shadow-[var(--mds-shadow-card)]"><div class="flex items-center justify-between border-b border-[var(--mds-border-light)] px-5 py-3"><p class="text-[13px] text-[var(--mds-text-secondary)]">{{ total.toLocaleString('vi-VN') }} tương tác</p><p class="text-[12px] text-[var(--mds-text-secondary)]">Trang {{ page }}</p></div><div v-if="rows.length" class="overflow-x-auto"><table class="w-full min-w-[760px] text-left"><thead class="bg-[var(--mds-bg-page)] text-[12px] font-medium text-[var(--mds-text-secondary)]"><tr><th class="px-5 py-3">Ngày</th><th class="px-3 py-3">Đối tác</th><th class="px-3 py-3">Kênh</th><th class="px-3 py-3">Kết quả</th><th class="px-3 py-3">Người thực hiện</th><th class="px-5 py-3">Nội dung</th></tr></thead><tbody class="divide-y divide-[var(--mds-border-light)]"><tr v-for="row in rows" :key="row.id"><td class="px-5 py-3 text-[13px]">{{ row.date }}</td><td class="px-3 py-3"><strong class="block text-[13px]">{{ row.partnerName }}</strong><MTag color="neutral" class="mt-1">{{ row.partnerType }}</MTag></td><td class="px-3 py-3 text-[13px]">{{ row.channel }}</td><td class="px-3 py-3 text-[13px]">{{ row.result }}</td><td class="px-3 py-3 text-[13px]">{{ row.staff }}</td><td class="max-w-[320px] px-5 py-3 text-[13px] leading-[18px]">{{ row.summary }}</td></tr></tbody></table></div><MEmptyState v-else-if="!loading" title="Chưa có tương tác" description="Khi có ghi nhận trao đổi, chúng sẽ xuất hiện ở đây." /><div v-else class="p-8 text-center text-[13px] text-[var(--mds-text-secondary)]">Đang tải tương tác…</div></section><footer class="flex justify-end gap-2"><MButton variant="neutral" :disabled="loading || page <= 1" @click="emit('page', page - 1)">Trang trước</MButton><MButton variant="neutral" :disabled="loading || page * pageSize >= total" @click="emit('page', page + 1)">Trang sau</MButton></footer></div></section></template>
+
+<template>
+  <section class="min-h-0 bg-[var(--mds-bg-page)] p-4">
+    <div class="mx-auto max-w-[1200px] space-y-4">
+      <header class="rounded-lg bg-[var(--mds-bg)] px-5 py-4 shadow-[var(--mds-shadow-card)]">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 class="text-[20px] font-semibold leading-7">Lịch sử tương tác</h1>
+            <p class="mt-1 text-[13px] leading-[18px] text-[var(--mds-text-secondary)]">Nhật ký trao đổi với đối tác truyền thông, từ dữ liệu R044 đã được máy chủ trả về.</p>
+          </div>
+          <MButton v-if="canCreate" variant="primary" :disabled="loading" @click="emit('create')">Thêm tương tác</MButton>
+        </div>
+        <form class="mt-4 flex max-w-[560px] gap-2" @submit.prevent="submit"><MInput v-model="query" placeholder="Tìm nội dung hoặc đối tác…" :disabled="loading" /><MButton variant="primary" :loading="loading" @click="submit">Tìm</MButton></form>
+      </header>
+      <section class="overflow-hidden rounded-lg bg-[var(--mds-bg)] shadow-[var(--mds-shadow-card)]">
+        <div class="flex items-center justify-between border-b border-[var(--mds-border-light)] px-5 py-3"><p class="text-[13px] text-[var(--mds-text-secondary)]">{{ total.toLocaleString('vi-VN') }} tương tác</p><p class="text-[12px] text-[var(--mds-text-secondary)]">Trang {{ page }}</p></div>
+        <div v-if="rows.length" class="overflow-x-auto"><table class="w-full min-w-[760px] text-left"><thead class="bg-[var(--mds-bg-page)] text-[12px] font-medium text-[var(--mds-text-secondary)]"><tr><th class="px-5 py-3">Ngày</th><th class="px-3 py-3">Đối tác</th><th class="px-3 py-3">Kênh</th><th class="px-3 py-3">Kết quả</th><th class="px-3 py-3">Người thực hiện</th><th class="px-5 py-3">Nội dung</th></tr></thead><tbody class="divide-y divide-[var(--mds-border-light)]"><tr v-for="row in rows" :key="row.id"><td class="px-5 py-3 text-[13px]">{{ row.date }}</td><td class="px-3 py-3"><strong class="block text-[13px]">{{ row.partnerName }}</strong><MTag color="neutral" class="mt-1">{{ row.partnerType }}</MTag></td><td class="px-3 py-3 text-[13px]">{{ row.channel }}</td><td class="px-3 py-3 text-[13px]">{{ row.result }}</td><td class="px-3 py-3 text-[13px]">{{ row.staff }}</td><td class="max-w-[320px] px-5 py-3 text-[13px] leading-[18px]">{{ row.summary }}</td></tr></tbody></table></div>
+        <MEmptyState v-else-if="!loading" title="Chưa có tương tác" description="Khi có ghi nhận trao đổi, chúng sẽ xuất hiện ở đây." />
+        <div v-else class="p-8 text-center text-[13px] text-[var(--mds-text-secondary)]">Đang tải tương tác…</div>
+      </section>
+      <footer class="flex justify-end gap-2"><MButton variant="neutral" :disabled="loading || page <= 1" @click="emit('page', page - 1)">Trang trước</MButton><MButton variant="neutral" :disabled="loading || page * pageSize >= total" @click="emit('page', page + 1)">Trang sau</MButton></footer>
+    </div>
+  </section>
+</template>
