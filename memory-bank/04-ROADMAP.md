@@ -983,6 +983,9 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > cao (liên kết tổ chức, AI/review, cơ cấu giải và cách đánh giá) được giữ nguyên khi sửa và sẽ mở
 > trong slice form mở rộng, cùng participation/file/reminder/AI extract. Native host bridge,
 > accessibility thiết bị và production AMIS runtime vẫn **UNVERIFIED** tới O3/W4.
+> Nếu R063 không projection một field (ví dụ `cost` bị policy ẩn), form edit không render field đó và
+> client không gửi key tương ứng trong `PUT`; tránh biến một thao tác sửa thông tin công khai thành
+> ghi đè `null` lên dữ liệu Confidential ở server.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
