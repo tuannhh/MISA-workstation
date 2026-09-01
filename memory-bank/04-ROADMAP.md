@@ -1000,6 +1000,15 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > `awards:edit`; việc open tiếp tục qua `/files/:id`. Client chỉ giữ metadata projection và không
 > tự tính visibility/owner; route server `requireFileWrite` kiểm tra lại trước Multer. Chưa hiển thị
 > nút xóa vì API Award hiện không có contract delete file an toàn cho slice này.
+>
+> **Execution update — 2026-09-01 (W3.SMART-INTAKE.AWARD):** bổ sung entry AI bóc tách giải
+> thưởng cho Desktop MDS và Native composition riêng. Người dùng chỉ được chọn **một** nguồn
+> (nội dung, URL HTTPS hoặc ảnh/PDF); client gọi `POST /ai/award-extract`, nhận kết quả rồi chuyển
+> sang form tạo Award để người dùng rà soát/chủ động lưu — không có ghi tự động. Nếu `/api/me`
+> không cấp nhóm nhạy cảm `org_fee`, client bỏ `cost` khỏi bản nháp AI trước khi render. Đây là
+> phòng vệ UX/projection, không thay thế AI egress policy, validation hay PolicyEngine ở server;
+> native AMIS runtime, bridge và accessibility thiết bị vẫn **UNVERIFIED** tới O3/W4. Event Smart
+> Intake là slice riêng, chưa được mở trong batch Award này.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

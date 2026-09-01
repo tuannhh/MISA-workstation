@@ -2947,3 +2947,25 @@ atomic + CAS điểm đúng D14.4 (F26), `idempotencyKey` bắt buộc (P2), par
 re-check trước khi ghi + trạng thái terminal `stale` (F27), row lock MySQL nhiều instance (F28).
 Không còn P1/MUST-FIX nào mở trên batch W3.VOICE.SECURE-COMMAND + W3.VOICE.1. Chi tiết:
 `01-audit-findings.md` §F28, `24-audit-bundle-w3voice-securecommand.md`.
+
+## W3.SMART-INTAKE.AWARD — UI đề xuất AI cho giải thưởng (Desktop MDS + Native composition)
+
+Thêm luồng `Bóc tách AI` từ Award List, dùng endpoint hiện hữu `POST /api/ai/award-extract`. Đây
+là luồng **draft-first**: người dùng chọn đúng một nguồn (dán nội dung, URL HTTPS hoặc tệp
+ảnh/PDF), nhận object `extracted`, sau đó được chuyển sang Award create form để xem, sửa và bấm
+lưu một cách chủ động. Không có request `POST /awards` nào từ màn Intake.
+
+- `frontend/src/features/awards/domain/awards-api.mjs`: thêm `extract()` với credential
+  same-origin, JSON cho text/URL và `FormData` cho file; từ chối thiếu hoặc nhiều nguồn để không có
+  thứ tự ưu tiên ngầm ở client.
+- `AwardIntakeDesktop.vue` và `AwardIntakeMobile.vue`: hai composition MDS riêng; Native có
+  `MMobileTopBar`, discard dialog và safe-area sticky action, không fallback sang desktop shell.
+- `AwardsListFeature.vue`: kết quả AI chỉ tạo `state.record` rồi chuyển `state.mode='create'`.
+  Khi principal không có `sensitiveGroups.org_fee`, `cost` bị bỏ khỏi bản nháp trước khi render,
+  tránh mở rộng bề mặt tiết lộ dữ liệu nhạy cảm qua UI. Quyền API/AI policy vẫn do server quyết định.
+- `UI-AWARD-005`: khóa endpoint/payload, FormData, single-source validation, draft-first,
+  redaction UI affordance và hai composition MDS.
+
+Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **20/20 pass**; `npm run
+build:ui` pass; `git diff --check` sạch. Event Smart Intake, native AMIS host runtime, bridge và
+device accessibility chưa nằm trong slice này.

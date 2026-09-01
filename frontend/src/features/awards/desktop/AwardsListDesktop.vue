@@ -5,8 +5,8 @@ import MEmptyState from '../../../components/mds/MEmptyState.vue';
 import MInput from '../../../components/mds/MInput.vue';
 import MTag from '../../../components/mds/MTag.vue';
 
-const props = defineProps({ rows: { type: Array, default: () => [] }, total: Number, page: Number, pageSize: Number, search: String, loading: Boolean, canCreate: Boolean });
-const emit = defineEmits(['search', 'page', 'open', 'create']);
+const props = defineProps({ rows: { type: Array, default: () => [] }, total: Number, page: Number, pageSize: Number, search: String, loading: Boolean, canCreate: Boolean, canIntake: Boolean });
+const emit = defineEmits(['search', 'page', 'open', 'create', 'intake']);
 const query = ref(props.search || '');
 watch(() => props.search, (value) => { query.value = value || ''; });
 </script>
@@ -17,7 +17,10 @@ watch(() => props.search, (value) => { query.value = value || ''; });
       <header class="rounded-lg bg-[var(--mds-bg)] px-5 py-4 shadow-[var(--mds-shadow-card)]">
         <div class="flex items-start justify-between gap-3">
           <div><h1 class="text-[20px] font-semibold">Giải thưởng</h1><p class="mt-1 text-[13px] text-[var(--mds-text-secondary)]">Danh sách giải thưởng từ projection R062.</p></div>
-          <MButton v-if="canCreate" variant="primary" @click="emit('create')">Thêm giải thưởng</MButton>
+          <div class="flex shrink-0 items-center gap-2">
+            <MButton v-if="canIntake" variant="neutral" @click="emit('intake')">Bóc tách AI</MButton>
+            <MButton v-if="canCreate" variant="primary" @click="emit('create')">Thêm giải thưởng</MButton>
+          </div>
         </div>
         <form class="mt-4 flex max-w-[560px] gap-2" @submit.prevent="emit('search', query.trim())">
           <MInput v-model="query" placeholder="Tìm giải thưởng hoặc đơn vị tổ chức…" />
