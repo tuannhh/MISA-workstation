@@ -969,6 +969,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > gọi `POST/PUT /events/:id/costs`. Xóa chỉ hiện theo `events:delete`, có confirm MDS rồi gọi
 > `DELETE /events/:id/costs/:cid`; backend vẫn là nơi chốt inherited owner và quyền write/delete.
 
+> **Execution update — 2026-09-01 (W3.AWARDS.LIST/DETAIL.READ):** bổ sung Award List và Detail
+> read-only, feature-flagged `awardsListRead` (local harness: `uiAwardsPilot=1`) qua R062/R063.
+> Desktop MDS và Native mini-app là hai composition riêng; projection giữ nguyên giá trị mask chi phí,
+> không render owner/caretaker/budget participation, metadata tệp mở lại qua `/files/:id` để server
+> kiểm tra quyền. CRUD Award/participation, upload, reminder và AI extract là slice sau; native host,
+> accessibility thiết bị và bridge vẫn **UNVERIFIED** tới O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

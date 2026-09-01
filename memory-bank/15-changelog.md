@@ -23,6 +23,9 @@
 - Mở slice dòng chi phí Event: giữ nguyên projection/mask từ API, form create/edit Desktop và Native
   tách composition, và yêu cầu xác nhận MDS trước xoá. Client chỉ gửi allowlist chi phí và không
   suy diễn owner; server vẫn áp inherited ownership cho create/edit và Admin-only cho delete.
+- Mở pilot read-only cho Award List/Detail qua R062/R063. UI giữ nguyên mask do PolicyEngine trả về,
+  không render owner/caretaker/budget participation; dữ liệu file chỉ là metadata tồn tại và nội dung
+  vẫn phải đi qua endpoint được server kiểm quyền. CRUD/AI/reminder Award chưa bị kéo vào pilot này.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 
