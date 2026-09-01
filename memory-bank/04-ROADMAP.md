@@ -956,6 +956,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > dòng chi phí tại browser; giá trị mask được giữ nguyên. Tạo/sửa/xóa từng cost line và file metadata
 > vẫn tách slice vì route/file policy còn cần contract riêng.
 
+> **Execution update — 2026-09-01 (W3.EVENTS.FILE):** Event Detail hiển thị metadata tệp được R088
+> projection (tên/loại/MIME) và chỉ đưa action tải lên khi `/api/me` có `events:edit`. Mở/tải luôn qua
+> endpoint server đã có PolicyEngine (`GET /files/:id`, `POST /events/:id/files`); client không tự
+> quyết visibility hay truy xuất file. Không đưa nút xóa vì `DELETE /attachments/:aid` hiện cố ý
+> fail-closed cho Event — tránh affordance hỏng. Desktop/Native vẫn là hai composition MDS; native
+> AMIS runtime, host bridge và accessibility thiết bị tiếp tục **UNVERIFIED** tới O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

@@ -9,9 +9,19 @@ function text(value, fallback = '—') {
   return result || fallback;
 }
 
-// Chỉ render public projection. owner_id, caretaker assignment, raw cost rows
-// và metadata tệp vẫn thuộc các slice PolicyEngine/file sau, không được suy ra
-// ở client từ payload chi tiết.
+export function eventFileUrl(id) {
+  return Number.isInteger(Number(id)) && Number(id) > 0 ? `/api/files/${Number(id)}` : null;
+}
+
+function files(value) {
+  return Array.isArray(value) ? Object.freeze(value.map((file) => Object.freeze({
+    id: Number(file.id), kind: text(file.kind, 'Tài liệu'), originalName: text(file.original_name), mime: text(file.mime),
+  })).filter((file) => Number.isInteger(file.id) && file.id > 0)) : Object.freeze([]);
+}
+
+// Chỉ render projection do server quyết định. owner_id, caretaker assignment và raw cost rows
+// không được suy ra ở client; file chỉ giữ metadata tồn tại đã projection, còn nội dung luôn
+// phải đi lại qua GET /files/:id để PolicyEngine kiểm tra quyền.
 export function eventDetailViewModel(payload = {}) {
   const record = payload?.record || {};
   const fields = Object.fromEntries(DETAIL_FIELDS.map((key) => [key, text(record[key]) ]));
@@ -35,5 +45,6 @@ export function eventDetailViewModel(payload = {}) {
     // Có thể là số hoặc sentinel MASK do API quyết định. Không cộng/tính lại ở UI.
     totalCost: totals.grand ?? '—',
     costTotals,
+    files: files(payload?.attachments),
   });
 }

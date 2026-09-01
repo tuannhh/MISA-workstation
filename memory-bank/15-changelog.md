@@ -16,6 +16,10 @@
   `UI-EVENT-006` khóa contract API và confirm trước thao tác phá hủy.
 - Detail hiển thị tổng chi phí theo projection `R088` (bao gồm giá trị MASK) mà không tự cộng row
   ở client. Đây chỉ là cost-read; cost line/file metadata và mọi thao tác ghi giữ ở slice policy riêng.
+- Mở slice Event file: cả Desktop và Native composition chỉ hiển thị metadata tệp đã được server
+  projection và action tải lên theo `events:edit`; request mở/tải tệp luôn qua endpoint server có
+  PolicyEngine. Không hiện nút xóa vì route xoá hiện fail-closed với Event, tránh hành vi UI không
+  thực hiện được.
 
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 
