@@ -1,12 +1,24 @@
 'use strict';
 const test = require('node:test'); const assert = require('node:assert/strict'); const fs = require('node:fs'); const path = require('node:path'); const { pathToFileURL } = require('node:url');
 const root = path.resolve(__dirname, '..', '..'); const featureRoot = path.join(root, 'frontend', 'src', 'features', 'interactions'); const appVue = fs.readFileSync(path.join(root, 'frontend', 'src', 'App.vue'), 'utf8'); const feature = fs.readFileSync(path.join(featureRoot, 'InteractionsListFeature.vue'), 'utf8'); const desktop = fs.readFileSync(path.join(featureRoot, 'desktop', 'InteractionsListDesktop.vue'), 'utf8'); const mobile = fs.readFileSync(path.join(featureRoot, 'mobile', 'InteractionsListMobile.vue'), 'utf8'); const desktopCreate = fs.readFileSync(path.join(featureRoot, 'desktop', 'InteractionCreateDesktop.vue'), 'utf8'); const mobileCreate = fs.readFileSync(path.join(featureRoot, 'mobile', 'InteractionCreateMobile.vue'), 'utf8');
+async function apiDomain() { return import(pathToFileURL(path.join(featureRoot, 'domain', 'interactions-api.mjs')).href); }
 test('UI-INT-001: Interaction List chỉ render R044 projection và có hai composition MDS', async () => {
   const { interactionsListViewModel } = await import(pathToFileURL(path.join(featureRoot, 'domain', 'interactions-view.mjs')).href);
   const model = interactionsListViewModel({ rows: [{ id: 4, date: '2026-09-01', partner_name: 'Báo Ví dụ', partner_type: 'org', channel: 'Gặp trực tiếp', result: 'Tốt', staff: 'PR', summary: 'Trao đổi kế hoạch', owner_id: 2 }], total: 1, page: 1, pageSize: 20 });
-  assert.equal(model.rows[0].partnerType, 'Cơ quan'); assert.equal('ownerId' in model.rows[0], false);
+  assert.equal(model.rows[0].partnerType, 'Cơ quan'); assert.equal(model.rows[0].ownerId, 2, 'owner được giữ làm context mutation, không render mặc định');
   for (const component of [desktop, mobile]) { assert.match(component, /<MInput/); assert.match(component, /<MButton/); assert.match(component, /<MEmptyState/); assert.doesNotMatch(component, /owner_id|created_by/); }
   assert.match(mobile, /<MMobileTopBar/); assert.match(mobile, /--mds-mobile-safe-bottom/); assert.match(appVue, /interactionsListRead/);
+});
+
+test('UI-INT-004: gán owner Interaction chỉ dành cho Admin, dùng shared confirmation và endpoint entity allowlist', async () => {
+  assert.match(feature, /OwnerReassignDesktop/); assert.match(feature, /OwnerReassignMobile/); assert.match(feature, /modules\?\.admin\?\.includes\('edit'\)/); assert.match(feature, /api\.getAdminUsers/); assert.match(feature, /api\.reassignOwner/); assert.match(feature, /<MDialog/);
+  for (const component of [desktop, mobile]) { assert.match(component, /canReassign/); assert.match(component, /emit\('reassign', row\)/); assert.match(component, /Gán/); }
+  assert.match(mobile, /mds-mobile-touch-target/); assert.doesNotMatch(mobile, /MHeaderBar|MSidebar|<button\b/);
+  const { createInteractionsApi } = await apiDomain(); const calls = [];
+  const api = createInteractionsApi({ fetchFn: async (url, init = {}) => { calls.push({ url, init }); const payload = url.endsWith('/admin/users') ? { rows: [{ id: 3, username: 'owner', active: 1 }] } : { ok: true }; return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } }); } });
+  await api.getAdminUsers(); await api.reassignOwner(12, 3);
+  assert.deepEqual(calls.map(({ url, init }) => [url, init.method || 'GET', init.body || null]), [['/api/admin/users', 'GET', null], ['/api/admin/records/interaction/12/owner', 'PUT', '{"owner_id":3}']]);
+  await assert.rejects(() => api.reassignOwner(0, 3), /Mã tương tác/); await assert.rejects(() => api.reassignOwner(12, 0), /Hãy chọn người phụ trách/);
 });
 
 test('UI-INT-002: Interaction Create bind đối tác từ picker, không gửi owner/created_by', async () => {

@@ -89,6 +89,15 @@ test('R044 happy: trả danh sách phân trang + total, filter partner_type/sear
   assert.equal(typeof body.page, 'number');
   assert.equal(typeof body.pageSize, 'number');
 });
+test('D13-081: R044 trả record Interaction qua PolicyEngine projection, giữ owner server-derived cho context Admin', async () => {
+  const created = await (await call('POST', '/api/interactions', { body: { partner_type: 'org', partner_id: 1, date: '2026-08-01', summary: `Projection owner ${Date.now()}` }, as: executorCookie })).json();
+  const { db } = require('../db');
+  const expectedOwnerId = db.prepare("SELECT id FROM users WHERE username LIKE 'interactions_executor_%' ORDER BY id DESC LIMIT 1").get().id;
+  const res = await call('GET', '/api/interactions', { as: executorCookie });
+  assert.equal(res.status, 200);
+  const row = (await res.json()).rows.find((item) => item.id === created.id);
+  assert.equal(row.owner_id, expectedOwnerId, 'owner có nguồn server-derived và được projection cho Direct context');
+});
 test('R044 invalid CHARACTERIZATION: page/pageSize sai định dạng không lỗi, tự clamp về mặc định', async () => {
   const res = await call('GET', '/api/interactions?page=-5&pageSize=99999');
   assert.equal(res.status, 200);

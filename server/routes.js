@@ -836,7 +836,10 @@ router.get('/interactions', requirePerm('interactions', 'view'), (req, res) => {
   if (req.query.search) { filters.push('(summary LIKE ? OR partner_name LIKE ?)'); args.push(`%${req.query.search}%`, `%${req.query.search}%`); }
   const where = filters.length ? 'WHERE ' + filters.join(' AND ') : '';
   const total = db.prepare(`SELECT COUNT(*) c FROM interactions ${where}`).get(...args).c;
-  const rows = db.prepare(`SELECT * FROM interactions ${where} ORDER BY date DESC LIMIT ? OFFSET ?`).all(...args, pageSize, offset);
+  // Interaction là entity Direct: trả projection qua PolicyEngine thay vì raw row. Điều này giữ
+  // cùng boundary với các Direct slice khác trước khi UI Admin mở action gán owner theo record.
+  const rows = db.prepare(`SELECT * FROM interactions ${where} ORDER BY date DESC LIMIT ? OFFSET ?`).all(...args, pageSize, offset)
+    .map((row) => policyService.projectRecord({ principal: req.principal, entity: 'interaction', module: 'interactions', record: row }));
   res.json({ rows, total, page, pageSize });
 });
 // D13 (RBAC v2, batch RBAC-EXP-B3 3/6 — entity Direct dau tien): interaction khong co PUT/DELETE

@@ -1117,6 +1117,16 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > supplier. `UI-SUP-008` kiểm chứng API allowlist, confirmation, projection và cả hai composition.
 > Rollout Direct còn lại: Interaction, Award participation, Sponsorship, Gift, Association fee và
 > Benefit usage. Native AMIS runtime/device vẫn **UNVERIFIED** tới O3/W4.
+>
+> **Execution update — 2026-09-02 (W3.INTERACTION.READ + ADMIN.REASSIGN-OWNER):** trước khi mở
+> mutation, R044 được đưa qua `PolicyEngine.projectRecord()` thay vì trả raw SQL row. UI chỉ giữ
+> `ownerId` đã projection làm context kỹ thuật (không render mặc định), còn Admin có đủ thông tin
+> đối tác/ngày/nội dung tại đúng dòng Interaction để đánh giá chuyển giao. Action `Gán` dùng shared
+> Desktop/Native owner flow, roster protected, chặn no-op và MDialog confirmation, rồi gọi duy nhất
+> `PUT /admin/records/interaction/:id/owner` với `{ owner_id }`. `D13-081` khóa HTTP projection
+> trên SQLite/MySQL; `UI-INT-004` khóa endpoint/payload/gate/composition. Direct còn lại: Award
+> participation, Sponsorship, Gift, Association fee và Benefit usage; Native device vẫn
+> **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |

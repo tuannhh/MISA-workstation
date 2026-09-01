@@ -3205,3 +3205,20 @@ record cho người có `admin.edit`.
 Rollout owner Direct còn lại là Interaction, Award participation, Sponsorship, Gift, Association
 fee và Benefit usage; từng slice phải có projection owner và context chi tiết đủ rõ trước khi mở
 mutation.
+
+## W3.INTERACTION.READ + ADMIN.REASSIGN-OWNER — Interaction list
+
+Hoàn thành Interaction như một slice an toàn trước khi thêm mutation: R044 không còn trả raw
+database row mà chạy mọi record qua `PolicyEngine.projectRecord()` với entity/module Interaction.
+
+- View model giữ `ownerId` chỉ làm context cho Admin transfer; UI không render định danh owner mặc
+  định. Desktop row và Native card đều có đủ đối tác, ngày và nội dung để tránh thao tác gán lại
+  không có ngữ cảnh.
+- Chỉ principal có `admin.edit` mới thấy `Gán`. Flow tái dùng hai composition owner Desktop/Native,
+  tải roster từ endpoint protected, chặn no-op, yêu cầu MDialog rồi gọi duy nhất
+  `PUT /api/admin/records/interaction/:id/owner` bằng payload allowlist `{ owner_id }`.
+- `D13-081` xác nhận R044 projection vẫn giữ owner server-derived cho context Direct: SQLite
+  **13/13 pass**, MySQL **13/13 pass**. `UI-INT-004` khóa affordance, confirmation và contract API.
+
+Direct UI chưa rollout: Award participation, Sponsorship, Gift, Association fee và Benefit usage.
+Native AMIS runtime/device evidence vẫn **UNVERIFIED** tới O3/W4.
