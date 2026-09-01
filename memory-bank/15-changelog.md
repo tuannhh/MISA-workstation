@@ -1,5 +1,14 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-01 — W3 Event Detail read pilot (Codex)
+
+- Mở rộng strangler Event List từ `#events` sang `#events/:id`, giữ feature flag `eventsListRead`.
+- Thêm `event-detail.mjs` cùng hai composition `EventDetailDesktop`/`EventDetailMobile`; chỉ hiển thị
+  projection public đã chọn, không suy diễn owner, assignment, raw cost hay attachment ở client.
+- List/Desktop và Native list mở route detail bằng thao tác có bàn phím/touch; build UI và test
+  `UI-EVENT-004` đã chạy xanh. Runtime trong native AMIS, deep link host và accessibility OS còn
+  **UNVERIFIED** cho tới O3/W4, nên không ghi là hoàn thành release mobile.
+
 ## 2026-09-01 — W2.5 host-adapter contract-ready (Codex)
 
 - Thêm `frontend/src/platform/host-adapter.mjs`: contract không mang `principal`/token, chọn Desktop/Native bằng `surface` tường minh, capability state có recovery rõ, lifecycle/safe-area/deep-link/Back/gesture quy về một adapter.

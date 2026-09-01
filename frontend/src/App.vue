@@ -136,7 +136,7 @@ function resolveInteractionsRoute(key) {
   catch (error) { if (surface !== HostSurface.NATIVE) throw error; interactionsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; }
   return true;
 }
-function resolveEventsRoute(key) { if (!isEventsPilotEnabled() || key !== 'events') { eventsFeatureRoute.value = null; return false; } const surface = requestedSurface('uiEventsSurface'); try { eventsFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiEventsSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; eventsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; } return true; }
+function resolveEventsRoute(key) { const match = /^events(?:\/(\d+))?$/.exec(key); if (!isEventsPilotEnabled() || !match) { eventsFeatureRoute.value = null; return false; } const surface = requestedSurface('uiEventsSurface'); const eventId = match[1] ? Number(match[1]) : null; try { eventsFeatureRoute.value = { eventId, surface, adapter: selectHostAdapter(surface, 'uiEventsSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; eventsFeatureRoute.value = { eventId, surface, adapter: null, hostUnavailable: true }; } return true; }
 
 function leavePeopleDetail() {
   peopleFeatureRoute.value = null;
@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
     @back="leaveSupplierDetail"
   />
   <InteractionsListFeature v-if="nativeInteractionsFeature" :surface="nativeInteractionsFeature.surface" :adapter="nativeInteractionsFeature.adapter" :host-unavailable="nativeInteractionsFeature.hostUnavailable" @back="leaveInteractions" />
-  <EventsListFeature v-if="nativeEventsFeature" :surface="nativeEventsFeature.surface" :adapter="nativeEventsFeature.adapter" :host-unavailable="nativeEventsFeature.hostUnavailable" @back="leaveEvents" />
+  <EventsListFeature v-if="nativeEventsFeature" :event-id="nativeEventsFeature.eventId" :surface="nativeEventsFeature.surface" :adapter="nativeEventsFeature.adapter" :host-unavailable="nativeEventsFeature.hostUnavailable" @back="leaveEvents" />
 
   <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature || nativeEventsFeature }">
     <header class="platform-header">
@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
           @back="leaveSupplierDetail"
         />
         <InteractionsListFeature v-if="desktopInteractionsFeature" :surface="desktopInteractionsFeature.surface" :adapter="desktopInteractionsFeature.adapter" @back="leaveInteractions" />
-        <EventsListFeature v-if="desktopEventsFeature" :surface="desktopEventsFeature.surface" :adapter="desktopEventsFeature.adapter" @back="leaveEvents" />
+        <EventsListFeature v-if="desktopEventsFeature" :event-id="desktopEventsFeature.eventId" :surface="desktopEventsFeature.surface" :adapter="desktopEventsFeature.adapter" @back="leaveEvents" />
       </main>
     </div>
   </div>

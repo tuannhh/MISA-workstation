@@ -56,3 +56,13 @@ test('UI-EVENT-003: Event Create dùng MDS, có gate quyền và không đưa co
   const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events'); const desktopCreate = fs.readFileSync(path.join(eventRoot, 'desktop', 'EventCreateDesktop.vue'), 'utf8'); const mobileCreate = fs.readFileSync(path.join(eventRoot, 'mobile', 'EventCreateMobile.vue'), 'utf8'); const featureEvent = fs.readFileSync(path.join(eventRoot, 'EventsListFeature.vue'), 'utf8');
   for (const component of [desktopCreate, mobileCreate]) { assert.match(component, /toEventPayload/); assert.match(component, /<MInput/); assert.match(component, /<MSelect/); assert.match(component, /<MTextarea/); assert.doesNotMatch(component, /total_cost|owner_id|attachments/); } assert.match(featureEvent, /events.*includes\('create'\)/); assert.match(desktopCreate, /sticky bottom-0/); assert.match(mobileCreate, /<MMobileTopBar/); assert.match(mobileCreate, /<MDialog/);
 });
+
+test('UI-EVENT-004: Event Detail dùng projection public, có route Desktop/Native riêng và không suy ra chi phí/tệp', async () => {
+  const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events'); const domainRoot = path.join(eventRoot, 'domain'); const desktopDetail = fs.readFileSync(path.join(eventRoot, 'desktop', 'EventDetailDesktop.vue'), 'utf8'); const mobileDetail = fs.readFileSync(path.join(eventRoot, 'mobile', 'EventDetailMobile.vue'), 'utf8'); const featureEvent = fs.readFileSync(path.join(eventRoot, 'EventsListFeature.vue'), 'utf8');
+  const { eventDetailViewModel } = await import(pathToFileURL(path.join(domainRoot, 'event-detail.mjs')).href);
+  const model = eventDetailViewModel({ record: { id: 4, name: 'Hội nghị PR', organizer: 'MISA', location: 'Hà Nội', owner_id: 99, status: 'Đang chuẩn bị' }, totals: { grand: '●●● (đã ẩn)' }, attachments: [{ id: 2 }] });
+  assert.equal(model.title, 'Hội nghị PR'); assert.equal(model.totalCost, '●●● (đã ẩn)'); assert.equal('ownerId' in model, false); assert.equal('attachments' in model, false);
+  for (const component of [desktopDetail, mobileDetail]) { assert.doesNotMatch(component, /owner_id|attachments|totalCost|event_cost/); }
+  assert.match(desktopDetail, /shadow-\[var\(--mds-shadow-card\)\]/); assert.match(mobileDetail, /class="mds-mobile-app/); assert.match(mobileDetail, /<MMobileTopBar/); assert.doesNotMatch(mobileDetail, /MHeaderBar|MSidebar/);
+  assert.match(featureEvent, /eventDetailViewModel/); assert.match(featureEvent, /location\.hash=`events\/\$\{Number\(id\)\}`/); assert.match(appVue, /\^events\(\?:\\\/\(\\d\+\)\)\?\$/);
+});

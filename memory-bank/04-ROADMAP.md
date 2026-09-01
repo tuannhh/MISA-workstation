@@ -932,6 +932,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > composition riêng. Chỉ render projection sự kiện; không hiển thị `total_cost`, owner, file hoặc
 > cost breakdown. Event detail/create/edit, chi phí, file và Smart Intake vẫn là slice sau.
 
+> **Execution update — 2026-09-01 (W3.EVENTS.DETAIL.READ):** mở rộng pilot sang R088 qua hash
+> `events/:id`, vẫn dùng cùng feature flag. Desktop Detail và Native mini-app là hai composition
+> riêng; client chỉ tạo view-model từ allowlist thông tin công khai, không render `owner_id`,
+> assignment, raw cost rows hay attachments, và không tự tính tổng chi phí. List row và Native
+> list item mở detail theo route; tạo/sửa/xóa, chi phí, file và Smart Intake vẫn là slice sau.
+> Browser/local đã kiểm tra Event List; native AMIS runtime, accessibility thiết bị và host bridge
+> cho Detail vẫn **UNVERIFIED**, chờ O3/W4.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|
