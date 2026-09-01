@@ -134,6 +134,15 @@ test('UI-PARTNER-ADD-001: bốn loại cơ quan đều mở đúng form và gử
     'form tạo mới phải gắn loại cơ quan ở client và gọi đúng API tạo');
 });
 
+test('UI-PARTNER-ADD-002: đổi route phải dọn modal cũ nhưng giữ cơ chế nháp của biểu mẫu', () => {
+  assert.match(appJs, /function closeRouteModal\(\) \{[\s\S]*?root\.replaceChildren\(\);[\s\S]*?\}/,
+    'router cần bỏ lớp modal của route cũ thay vì để form trước che màn danh sách mới');
+  assert.match(appJs, /async function route\(\) \{\s*closeRouteModal\(\);/,
+    'dọn modal phải xảy ra trước khi router render route mới');
+  assert.match(appJs, /sessionStorage\.setItem\(storageKey, JSON\.stringify\(/,
+    'đóng modal khi đổi route không được xóa cơ chế tự lưu nháp');
+});
+
 test('UI-PPL-010: Booking trong People Detail chỉ nhận projection, không tự tổng hợp tiền ở client', async () => {
   const { peopleBookingsViewModel } = await domain();
   const viewer = peopleBookingsViewModel({ rows: [{ id: 7, title: 'Bài viết', status: 'Đã đặt' }], total_amount: '••••' });

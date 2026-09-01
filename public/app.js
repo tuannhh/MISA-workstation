@@ -273,7 +273,17 @@ function setActive(key) {
 
 // ---------------- ROUTER ----------------
 const VIEWS = {};
+// Một modal thuộc về route đang hiển thị. Nếu người dùng đổi menu/deep link
+// trong lúc biểu mẫu còn mở, không để form cũ che route mới rồi tạo cảm giác
+// nút "Thêm" ở màn sau không phản hồi. Bản nháp vẫn đã được openForm lưu vào
+// sessionStorage khi người dùng nhập, nên đóng lớp trình bày này không làm mất
+// dữ liệu nhập dở.
+function closeRouteModal() {
+  const root = $('#modalRoot');
+  if (root?.childElementCount) root.replaceChildren();
+}
 async function route() {
+  closeRouteModal();
   const key = (location.hash.replace('#', '') || 'dashboard');
   // W3 strangler seam: a Vue island may claim a narrow, feature-flagged route.
   // It must run before legacy DOM rendering; false means legacy behavior stays
