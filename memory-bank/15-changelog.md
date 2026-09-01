@@ -2990,3 +2990,23 @@ Kết quả `extracted` chỉ mở Event create form để người dùng kiểm
 Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **21/21 pass**; `npm run
 build:ui` pass; `git diff --check` sạch. AI policy/validation/authorization vẫn ở server;
 native AMIS bridge, thiết bị và accessibility runtime tiếp tục **UNVERIFIED** tới O3/W4.
+
+## W3.MONITOR.DASHBOARD.READ — Monitoring Dashboard MDS (Desktop + Native)
+
+Thêm dashboard giám sát read-only, feature-flagged `monitoringDashboardRead` (local harness:
+`uiMonitoringPilot=1`), qua `GET /api/monitor/dashboard`. Người dùng có thể đổi khoảng 7/30/90 ngày;
+dashboard chỉ hiển thị KPI tổng quan, crisis state, sentiment/NSR, lần quét và cảnh báo projection.
+Không có scan, mutation mentions, cấu hình nguồn/từ khóa/campaign hoặc action AI grounding trong slice này.
+
+- `monitoring-api.mjs` chỉ gọi `/api/me` và `/monitor/dashboard`; `monitoring-view.mjs` chuẩn hóa
+  số để không lặp lỗi MySQL trả numeric string.
+- Có hai composition Desktop/Native riêng với `MMobileTopBar`, safe area và fail-closed khi không có
+  Native host; không render desktop shell trên mobile.
+- Award và Monitoring được `defineAsyncComponent()` lazy-load. Build giảm entry `vue-app.js` từ
+  khoảng 500 kB xuống **436.99 kB** và tạo chunk độc lập cho từng feature — không tăng ngưỡng để che
+  warning performance.
+- `UI-MONITOR-001` khóa API/projection, MDS/native split, feature flag và lazy-load.
+
+Kiểm chứng: `node --test server/test/unit-interactions-ui.test.js` **22/22 pass**; `npm run
+build:ui` pass (entry 436.99 kB, không warning chunk size); `git diff --check` sạch. Các lane
+Monitoring write/AI và native device/bridge vẫn chưa được mở.

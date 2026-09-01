@@ -1018,6 +1018,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > control `datetime-local`, không tự suy diễn giờ. Client không tự ghi Event, server vẫn là authority
 > cho AI egress, validation và PolicyEngine; native AMIS runtime/device evidence vẫn **UNVERIFIED**
 > tới O3/W4.
+>
+> **Execution update — 2026-09-01 (W3.MONITOR.DASHBOARD.READ):** mở Monitoring Dashboard
+> read-only qua `GET /monitor/dashboard`, feature-flagged `monitoringDashboardRead` (local harness:
+> `uiMonitoringPilot=1`). Desktop MDS và Native mini-app là hai composition riêng, chỉ render
+> projection KPI/sentiment/NSR/alert/last-run; không đưa owner, nội dung nguồn thô, scan, AI
+> grounding, config hay mutation vào pilot. Feature được lazy-load cùng Award slice để giữ entry
+> bundle chính dưới ngưỡng 500 kB (sau build ~437 kB). Quét, Mentions CRUD, campaign/config và AI
+> là các slice quyền riêng tiếp theo; native AMIS bridge/device evidence vẫn **UNVERIFIED** tới O3/W4.
 
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
