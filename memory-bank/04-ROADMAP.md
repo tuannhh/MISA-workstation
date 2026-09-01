@@ -828,6 +828,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > vẫn là nguồn quyền cuối cùng khi PUT/DELETE. Desktop/Native form đều đã visual review local;
 > phần hội phí/MOU/tệp/tài trợ/booking/tương tác vẫn là slice riêng.
 
+> **Execution update — 2026-09-01 (W3.PARTNER.COOPERATION-CREATE):** mở lát cắt kế tiếp theo thứ
+> tự Partner Detail: tạo MOU (R010) và ghi nhận làm việc (R013) cho đối tác bộ ngành. Hai form
+> Desktop MDS/Native mini-app là composition độc lập, footer Lưu/Hủy có safe-area/draft confirm,
+> và chỉ gửi tập field create tối thiểu. Loại làm việc dùng `MSelect` MDS cho đúng 4 lựa chọn;
+> client không gửi owner/file hay tự quyết quyền. Sửa/xóa/tệp MOU/work-log vẫn để legacy tới slice
+> ownership/file-policy tiếp theo. Evidence/matrix ở `27-w3-partner-detail-read-batch-contract.md`;
+> Native AMIS production vẫn **UNVERIFIED** cho tới O3/W4 device evidence.
+
 ### W3.VOICE — Voice Assistant (D14), track riêng trong Wave 3
 | # | Task | Phụ thuộc | Evidence Contract |
 |---|---|---|---|

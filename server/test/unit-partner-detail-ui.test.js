@@ -14,12 +14,20 @@ const mobilePage = fs.readFileSync(path.join(featureRoot, 'mobile', 'PartnerDeta
 const desktopEdit = fs.readFileSync(path.join(featureRoot, 'desktop', 'PartnerEditFormDesktop.vue'), 'utf8');
 const mobileEdit = fs.readFileSync(path.join(featureRoot, 'mobile', 'PartnerEditFormMobile.vue'), 'utf8');
 const feature = fs.readFileSync(path.join(featureRoot, 'PartnerDetailFeature.vue'), 'utf8');
+const desktopAgreementCreate = fs.readFileSync(path.join(featureRoot, 'desktop', 'PartnerAgreementCreateDesktop.vue'), 'utf8');
+const desktopWorkLogCreate = fs.readFileSync(path.join(featureRoot, 'desktop', 'PartnerWorkLogCreateDesktop.vue'), 'utf8');
+const mobileAgreementCreate = fs.readFileSync(path.join(featureRoot, 'mobile', 'PartnerAgreementCreateMobile.vue'), 'utf8');
+const mobileWorkLogCreate = fs.readFileSync(path.join(featureRoot, 'mobile', 'PartnerWorkLogCreateMobile.vue'), 'utf8');
+const mSelect = fs.readFileSync(path.join(root, 'frontend', 'src', 'components', 'mds', 'MSelect.vue'), 'utf8');
 
 async function domain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'partner-detail.mjs')).href);
 }
 async function writeDomain() {
   return import(pathToFileURL(path.join(featureRoot, 'domain', 'partner-write.mjs')).href);
+}
+async function cooperationDomain() {
+  return import(pathToFileURL(path.join(featureRoot, 'domain', 'partner-cooperation.mjs')).href);
 }
 
 test('UI-PAR-001: Partner Detail chỉ claim route qua cờ host/local harness, trước legacy renderer', () => {
@@ -89,4 +97,30 @@ test('UI-PAR-007: MOU/work log chỉ hiển thị metadata đã có trong API, k
   assert.deepEqual(model.workLogs[0], { id: 3, title: 'Làm việc định kỳ', category: 'Làm việc', date: '03/02/2026', status: 'Hoàn thành' });
   assert.doesNotMatch(desktopPage, /\/api\/files\//, 'file phải đợi slice Policy/File riêng');
   assert.doesNotMatch(mobilePage, /\/api\/files\//, 'native cũng không được bypass policy file');
+});
+
+test('UI-PAR-008: tạo MOU/lịch sử là slice create hẹp, dùng MDS desktop/native và không gửi owner hay tệp', async () => {
+  const { WORK_LOG_CATEGORY_OPTIONS, toAgreementCreatePayload, toAgreementDraft, toWorkLogCreatePayload, toWorkLogDraft, validateAgreementDraft, validateWorkLogDraft } = await cooperationDomain();
+  assert.equal(WORK_LOG_CATEGORY_OPTIONS.length, 4, 'bốn lựa chọn phải dùng Dropdown MDS');
+  assert.equal(validateAgreementDraft({ title: '', signed_date: '2026-02-01', valid_until: '2026-01-01' }).title, 'Tên thỏa thuận không được để trống.');
+  assert.equal(validateAgreementDraft({ title: 'MOU', signed_date: '2026-02-01', valid_until: '2026-01-01' }).valid_until, 'Ngày hết hiệu lực phải sau hoặc bằng ngày ký.');
+  assert.equal(validateWorkLogDraft({ category: 'Khác', work_date: '', topic: '' }).category, 'Vui lòng chọn loại làm việc.');
+  assert.deepEqual(toAgreementCreatePayload({ ...toAgreementDraft(), title: '  MOU 2026  ', owner_id: 9, files: ['x'] }), { title: 'MOU 2026', signed_date: toAgreementDraft().signed_date, valid_until: null });
+  assert.deepEqual(toWorkLogCreatePayload({ ...toWorkLogDraft(), topic: '  Làm việc định kỳ ', owner_id: 9, result: 'không gửi' }), { category: 'Làm việc tại cơ quan', work_date: toWorkLogDraft().work_date, topic: 'Làm việc định kỳ', status: 'Đang xử lý' });
+  for (const component of [desktopAgreementCreate, desktopWorkLogCreate]) {
+    assert.match(component, /sticky bottom-0/, 'Desktop form phải ghim footer Lưu/Hủy');
+    assert.match(component, /<MButton variant="primary"/, 'Desktop có một hành động Lưu primary');
+    assert.doesNotMatch(component, /<button\b/, 'Desktop không tự chế button');
+  }
+  for (const component of [mobileAgreementCreate, mobileWorkLogCreate]) {
+    assert.match(component, /class="mds-mobile-app/, 'Native phải có composition mini-app riêng');
+    assert.match(component, /<MMobileTopBar/, 'Native dùng top bar host-safe');
+    assert.match(component, /pb-\[calc\(12px\+var\(--mds-mobile-safe-bottom\)\)\]/, 'Native footer phải chừa safe-area');
+    assert.doesNotMatch(component, /<button\b/, 'Native không tự chế button');
+  }
+  assert.match(desktopWorkLogCreate, /<MSelect/, 'loại làm việc phải dùng Dropdown MDS thay select gốc');
+  assert.match(mSelect, /role="combobox"/, 'MSelect có semantics keyboard/accessibility');
+  assert.match(feature, /api\.createAgreement\(props\.partnerId, payload\)/);
+  assert.match(feature, /api\.createWorkLog\(props\.partnerId, payload\)/);
+  assert.match(feature, /state\.detail\?\.type === 'gov'/, 'create chỉ hiện cho loại đối tác bộ ngành như legacy');
 });

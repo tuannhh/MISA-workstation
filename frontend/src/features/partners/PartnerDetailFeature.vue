@@ -8,8 +8,12 @@ import { createPartnerApi, PartnerApiError } from './domain/partner-api.mjs';
 import { partnerDetailViewModel } from './domain/partner-detail.mjs';
 import PartnerDetailPage from './desktop/PartnerDetailPage.vue';
 import PartnerEditFormDesktop from './desktop/PartnerEditFormDesktop.vue';
+import PartnerAgreementCreateDesktop from './desktop/PartnerAgreementCreateDesktop.vue';
+import PartnerWorkLogCreateDesktop from './desktop/PartnerWorkLogCreateDesktop.vue';
+import PartnerAgreementCreateMobile from './mobile/PartnerAgreementCreateMobile.vue';
 import PartnerEditFormMobile from './mobile/PartnerEditFormMobile.vue';
 import PartnerDetailPageMobile from './mobile/PartnerDetailPageMobile.vue';
+import PartnerWorkLogCreateMobile from './mobile/PartnerWorkLogCreateMobile.vue';
 
 const props = defineProps({ partnerId: { type: Number, required: true }, surface: { type: String, required: true }, adapter: { type: Object, default: null }, hostUnavailable: { type: Boolean, default: false } });
 const emit = defineEmits(['back', 'navigate']);
@@ -35,7 +39,10 @@ async function load() {
 }
 const canEdit = computed(() => state.permissions?.modules?.partners?.includes('edit') === true);
 const canDelete = computed(() => state.permissions?.modules?.partners?.includes('delete') === true && ['admin', 'super_admin'].includes(state.permissions?.role));
+const canCreateCooperation = computed(() => state.detail?.type === 'gov' && state.permissions?.modules?.partners?.includes('create') === true);
 async function saveEdit(payload) { state.saving = true; state.saveError = null; try { await api.update(props.partnerId, payload); await load(); } catch (error) { state.saveError = error instanceof PartnerApiError ? error.message : 'Không thể lưu cơ quan. Vui lòng thử lại.'; } finally { state.saving = false; } }
+async function saveAgreement(payload) { state.saving = true; state.saveError = null; try { await api.createAgreement(props.partnerId, payload); await load(); } catch (error) { state.saveError = error instanceof PartnerApiError ? error.message : 'Không thể lưu thỏa thuận. Vui lòng thử lại.'; } finally { state.saving = false; } }
+async function saveWorkLog(payload) { state.saving = true; state.saveError = null; try { await api.createWorkLog(props.partnerId, payload); await load(); } catch (error) { state.saveError = error instanceof PartnerApiError ? error.message : 'Không thể lưu lịch sử làm việc. Vui lòng thử lại.'; } finally { state.saving = false; } }
 async function deletePartner() { state.deleting = true; state.deleteError = null; try { await api.deletePartner(props.partnerId); await goBack(); } catch (error) { state.deleteError = error instanceof PartnerApiError ? error.message : 'Không thể xóa cơ quan. Vui lòng thử lại.'; } finally { state.deleting = false; } }
 async function goBack() {
   if (isNative.value) { if (props.adapter) await props.adapter.goBack({ reason: 'partner-detail' }); return; }
@@ -56,7 +63,11 @@ onBeforeUnmount(() => { while (unsubscribers.length) unsubscribers.pop()(); });
   <div v-if="state.phase === 'loading'" :class="isNative ? 'mds-mobile-app grid h-[100dvh] place-items-center bg-[var(--mds-bg)]' : 'grid min-h-[360px] place-items-center bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MSpinner :size="28" class="text-[var(--mds-brand-600)]" /></div>
   <section v-else-if="state.phase === 'error'" :class="isNative ? 'mds-mobile-app min-h-[100dvh] bg-[var(--mds-bg)]' : 'min-h-[360px] bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MMobileTopBar v-if="isNative" title="Hồ sơ cơ quan" @back="goBack" /><MEmptyState :title="state.error.status === 404 ? 'Không tìm thấy cơ quan' : state.error.status === 403 ? 'Bạn không có quyền xem cơ quan này' : 'Không thể mở hồ sơ'" :description="state.error.message" /></section>
   <PartnerEditFormMobile v-else-if="isNative && state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveEdit" />
-  <PartnerDetailPageMobile v-else-if="isNative" :detail="state.detail" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" :safe-area-style="safeAreaStyle" @back="goBack" @edit="state.mode = 'edit'" @delete-partner="deletePartner" @navigate="emit('navigate', $event)" />
+  <PartnerAgreementCreateMobile v-else-if="isNative && state.mode === 'agreement-create'" :saving="state.saving" :server-error="state.saveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveAgreement" />
+  <PartnerWorkLogCreateMobile v-else-if="isNative && state.mode === 'work-log-create'" :saving="state.saving" :server-error="state.saveError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="saveWorkLog" />
+  <PartnerDetailPageMobile v-else-if="isNative" :detail="state.detail" :can-edit="canEdit" :can-delete="canDelete" :can-create-cooperation="canCreateCooperation" :delete-working="state.deleting" :delete-error="state.deleteError" :safe-area-style="safeAreaStyle" @back="goBack" @edit="state.mode = 'edit'" @create-agreement="state.mode = 'agreement-create'" @create-work-log="state.mode = 'work-log-create'" @delete-partner="deletePartner" @navigate="emit('navigate', $event)" />
   <PartnerEditFormDesktop v-else-if="state.mode === 'edit'" :record="state.record" :saving="state.saving" :server-error="state.saveError" @cancel="state.mode = 'read'" @save="saveEdit" />
-  <PartnerDetailPage v-else :detail="state.detail" :can-edit="canEdit" :can-delete="canDelete" :delete-working="state.deleting" :delete-error="state.deleteError" @back="goBack" @edit="state.mode = 'edit'" @delete-partner="deletePartner" @navigate="emit('navigate', $event)" />
+  <PartnerAgreementCreateDesktop v-else-if="state.mode === 'agreement-create'" :saving="state.saving" :server-error="state.saveError" @cancel="state.mode = 'read'" @save="saveAgreement" />
+  <PartnerWorkLogCreateDesktop v-else-if="state.mode === 'work-log-create'" :saving="state.saving" :server-error="state.saveError" @cancel="state.mode = 'read'" @save="saveWorkLog" />
+  <PartnerDetailPage v-else :detail="state.detail" :can-edit="canEdit" :can-delete="canDelete" :can-create-cooperation="canCreateCooperation" :delete-working="state.deleting" :delete-error="state.deleteError" @back="goBack" @edit="state.mode = 'edit'" @create-agreement="state.mode = 'agreement-create'" @create-work-log="state.mode = 'work-log-create'" @delete-partner="deletePartner" @navigate="emit('navigate', $event)" />
 </template>
