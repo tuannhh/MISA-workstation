@@ -1,15 +1,16 @@
 <script setup>
-import { ref } from 'vue';
+import { provide, ref } from 'vue';
 import MButton from '../../../components/mds/MButton.vue';
 import MEmptyState from '../../../components/mds/MEmptyState.vue';
 import MMobileTopBar from '../../../components/mds/MMobileTopBar.vue';
 import MTabs from '../../../components/mds/MTabs.vue';
 import SupplierFilesPanel from '../SupplierFilesPanel.vue';
 import SupplierDirectRecordsMobile from './SupplierDirectRecordsMobile.vue';
-defineProps({ detail: { type: Object, required: true }, safeAreaStyle: { type: Object, default: () => ({}) }, canEdit: { type: Boolean, default: false }, canReassign: { type: Function, default: () => false }, canUploadFiles: { type: Boolean, default: false }, canOpenFiles: { type: Boolean, default: false }, uploading: { type: Boolean, default: false }, fileError: { type: String, default: '' } });
-const emit = defineEmits(['back', 'edit', 'reassign', 'upload-files']);
+const props = defineProps({ detail: { type: Object, required: true }, safeAreaStyle: { type: Object, default: () => ({}) }, canEdit: { type: Boolean, default: false }, canCreateDirect: Boolean, canEditDirect: { type: Function, default: () => false }, canDeleteDirect: Boolean, canReassign: { type: Function, default: () => false }, canUploadFiles: { type: Boolean, default: false }, canOpenFiles: { type: Boolean, default: false }, uploading: { type: Boolean, default: false }, fileError: { type: String, default: '' } });
+const emit = defineEmits(['back', 'edit', 'create-direct', 'edit-direct', 'delete-direct', 'reassign', 'upload-files']);
 const activeTab = ref('overview');
 const tabs = [{ key: 'overview', label: 'Thông tin' }, { key: 'quotes', label: 'Báo giá' }, { key: 'transactions', label: 'Giao dịch' }, { key: 'contacts', label: 'Đầu mối' }, { key: 'files', label: 'Tệp' }];
+provide('supplierDirectActions', Object.freeze({ canCreate: () => props.canCreateDirect, canEdit: (row) => props.canEditDirect(row), canDelete: () => props.canDeleteDirect, canReassign: (row) => props.canReassign(row), create: (kind) => emit('create-direct', kind), edit: (payload) => emit('edit-direct', payload), delete: (payload) => emit('delete-direct', payload), reassign: ({ kind, record }) => emit('reassign', { entity: `supplier_${kind}`, record, label: kind === 'quote' ? 'Dòng báo giá' : kind === 'transaction' ? 'Giao dịch nhà cung cấp' : 'Đầu mối nhà cung cấp' }) }));
 </script>
 
 <template>

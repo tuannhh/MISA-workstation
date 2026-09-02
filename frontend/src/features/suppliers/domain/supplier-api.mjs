@@ -86,5 +86,15 @@ export function createSupplierApi({ fetchFn = globalThis.fetch, basePath = '/api
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async saveDirect(supplierId, kind, input, recordId = null) {
+      const supplier = Number(supplierId); const record = Number(recordId); const updating = Number.isInteger(record) && record > 0;
+      const endpoints = { contact: updating ? `/suppliers/${supplier}/contacts/${record}` : `/suppliers/${supplier}/contacts`, transaction: updating ? `/suppliers/${supplier}/transactions/${record}` : `/suppliers/${supplier}/transactions`, quote: `/suppliers/${supplier}/quotes` };
+      if (!Number.isInteger(supplier) || supplier < 1 || !endpoints[kind] || (kind === 'quote' && updating)) throw new TypeError('Bản ghi nhà cung cấp không hợp lệ.');
+      const response = await fetchFn(`${basePath}${endpoints[kind]}`, { method: updating ? 'PUT' : 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }); const payload = await response.json().catch(() => null); if (!response.ok) throw parseError(response.status, payload);
+      if (!updating && !Number.isInteger(Number(payload?.id))) throw new SupplierApiError({ status: 502, code: 'SUPPLIER_DIRECT_CREATE_INVALID_RESPONSE', message: 'Máy chủ chưa trả mã bản ghi hợp lệ.' }); return Object.freeze({ id: updating ? record : Number(payload.id) });
+    },
+    async deleteDirect(supplierId, kind, recordId) {
+      const supplier = Number(supplierId); const record = Number(recordId); const names = { contact: 'contacts', transaction: 'transactions', quote: 'quotes' }; if (!Number.isInteger(supplier) || supplier < 1 || !Number.isInteger(record) || record < 1 || !names[kind]) throw new TypeError('Bản ghi nhà cung cấp không hợp lệ.'); const response = await fetchFn(`${basePath}/suppliers/${supplier}/${names[kind]}/${record}`, { method: 'DELETE', credentials: 'same-origin' }); const payload = await response.json().catch(() => null); if (!response.ok) throw parseError(response.status, payload); return Object.freeze({ ok: true });
+    },
   });
 }
