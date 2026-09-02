@@ -1345,6 +1345,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > với Desktop MDS và Native mini-app riêng. Đây là cấu hình admin-only; UI không đưa hành động quét hoặc
 > Gemini vào form. `UI-MONITOR-005` kiểm allowlist và permission gate; server là authority cuối.
 
+> **Execution update — 2026-09-02 (W3.NATIVE-APP-SHELL.Events):** Native Events có taskbar app MDS
+> thay cho drawer desktop: ba lối vào chính Danh bạ/Tương tác/Sự kiện và `Khác` mở các phân hệ native
+> đã có. Hành động thêm được nâng thành CTA nổi 48px, AVA thay text AI ở top bar; empty state nêu rõ
+> bước tiếp theo. Router chỉ chuyển sang native slice đã enable (harness tự gắn đúng pilot/surface flag),
+> không rơi về legacy desktop. `UI-EVENT-NATIVE-007/008` khóa composition và contract điều hướng.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

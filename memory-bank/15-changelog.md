@@ -3381,3 +3381,13 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - **Regression:** `test:security` 6/6; SQLite 924 total/916 pass/8 skip; MySQL 926 total/925 pass/1
   skip; `verify-g0`, mapping 150/150 và Vite build PASS. Test mới khóa audio giả/thiếu consent,
   prompt injection/redaction CSV, local schema output và date semantics.
+
+## 2026-09-02 — W3.NATIVE-APP-SHELL.Events: taskbar và AVA affordance
+
+- Làm rõ ranh giới native mini-app với desktop drawer: Events Native dùng bottom taskbar MDS với
+  Danh bạ, Tương tác, Sự kiện và `Khác`; `Khác` chỉ liệt kê các slice native có contract đã build.
+  Trên localhost, router tự gắn cặp pilot/surface flag của đích; ngoài harness, item chưa được feature
+  flag AMIS bật bị disable nên không thể rơi vào legacy desktop.
+- Nút `Thêm sự kiện` thành CTA nổi 48px, giữ action chính dễ với tới; entry AI là icon asset chính thức
+  MISA AVA có accessible label/tooltip. Empty state đưa action tạo mới hoặc mở AVA thay vì để trang
+  trắng. `UI-EVENT-NATIVE-007/008` xác nhận shell, safe-area taskbar và native-only navigation.

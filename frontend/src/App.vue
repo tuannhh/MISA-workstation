@@ -219,6 +219,37 @@ function launchNativeVoice() {
   url.hash = 'interactions?voice=1';
   location.assign(url);
 }
+const nativeNavigationTargets = Object.freeze({
+  people: { label: 'Danh bạ', icon: 'users', hash: 'people', pilotParam: 'uiPeoplePilot', surfaceParam: 'uiPeopleSurface', enabled: isPeopleListPilotEnabled },
+  interactions: { label: 'Tương tác', icon: 'messages', hash: 'interactions', pilotParam: 'uiInteractionsPilot', surfaceParam: 'uiInteractionsSurface', enabled: isInteractionsPilotEnabled },
+  events: { label: 'Sự kiện', icon: 'calendar-event', hash: 'events', pilotParam: 'uiEventsPilot', surfaceParam: 'uiEventsSurface', enabled: isEventsPilotEnabled },
+  awards: { label: 'Giải thưởng', icon: 'trophy', hash: 'awards', pilotParam: 'uiAwardsPilot', surfaceParam: 'uiAwardsSurface', enabled: isAwardsPilotEnabled },
+  monitoring: { label: 'Giám sát', icon: 'radar', hash: 'monitor', pilotParam: 'uiMonitoringPilot', surfaceParam: 'uiMonitoringSurface', enabled: isMonitoringPilotEnabled },
+  reminders: { label: 'Nhắc việc', icon: 'calendar-clock', hash: 'reminders', pilotParam: 'uiRemindersPilot', surfaceParam: 'uiRemindersSurface', enabled: isRemindersPilotEnabled },
+  reports: { label: 'Báo cáo', icon: 'chart-bar', hash: 'reports', pilotParam: 'uiReportsPilot', surfaceParam: 'uiReportsSurface', enabled: isReportsPilotEnabled },
+  admin: { label: 'Quản trị', icon: 'shield-cog', hash: 'admin', pilotParam: 'uiAdminPilot', surfaceParam: 'uiAdminSurface', enabled: isAdminPilotEnabled },
+});
+const nativeNavigation = computed(() => Object.entries(nativeNavigationTargets).map(([key, target]) => ({
+  key,
+  label: target.label,
+  icon: target.icon,
+  active: key === 'events',
+  // The localhost harness can enable an already-built native slice via its
+  // explicit query flag. Production only exposes a destination after AMIS
+  // enables that slice, so this taskbar can never route to the legacy shell.
+  disabled: !isLocalUiHarness && !target.enabled(),
+})));
+function navigateNativeApp(destination) {
+  const target = nativeNavigationTargets[destination];
+  if (!target || (!isLocalUiHarness && !target.enabled())) return;
+  const url = new URL(location.href);
+  if (isLocalUiHarness) {
+    url.searchParams.set(target.pilotParam, '1');
+    url.searchParams.set(target.surfaceParam, HostSurface.NATIVE);
+  }
+  url.hash = target.hash;
+  location.assign(url);
+}
 function clearUiFeatureRoutes() { for (const routeRef of uiFeatureRouteRefs) routeRef.value = null; }
 const resolveUiFeatureRoute = (key) => { clearUiFeatureRoutes(); return resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key) || resolveAwardsRoute(key) || resolveMonitoringRoute(key) || resolveReportsRoute(key) || resolveAdminRoute(key) || resolveRemindersRoute(key); };
 
@@ -325,7 +356,7 @@ onBeforeUnmount(() => {
     @back="leaveSupplierDetail"
   />
   <InteractionsListFeature v-if="nativeInteractionsFeature" :surface="nativeInteractionsFeature.surface" :adapter="nativeInteractionsFeature.adapter" :host-unavailable="nativeInteractionsFeature.hostUnavailable" :initial-mode="nativeInteractionsFeature.initialMode" @back="leaveInteractions" />
-  <EventsListFeature v-if="nativeEventsFeature" :event-id="nativeEventsFeature.eventId" :surface="nativeEventsFeature.surface" :adapter="nativeEventsFeature.adapter" :host-unavailable="nativeEventsFeature.hostUnavailable" @back="leaveEvents" />
+  <EventsListFeature v-if="nativeEventsFeature" :event-id="nativeEventsFeature.eventId" :surface="nativeEventsFeature.surface" :adapter="nativeEventsFeature.adapter" :host-unavailable="nativeEventsFeature.hostUnavailable" :native-navigation="nativeNavigation" @back="leaveEvents" @navigate="navigateNativeApp" />
   <AwardsListFeature v-if="nativeAwardsFeature" :award-id="nativeAwardsFeature.awardId" :surface="nativeAwardsFeature.surface" :adapter="nativeAwardsFeature.adapter" :host-unavailable="nativeAwardsFeature.hostUnavailable" @back="leaveAwards" />
   <MonitoringDashboardFeature v-if="nativeMonitoringFeature" :surface="nativeMonitoringFeature.surface" :adapter="nativeMonitoringFeature.adapter" :host-unavailable="nativeMonitoringFeature.hostUnavailable" @back="leaveMonitoring" />
   <ReportsOverviewFeature v-if="nativeReportsFeature" :surface="nativeReportsFeature.surface" :adapter="nativeReportsFeature.adapter" :host-unavailable="nativeReportsFeature.hostUnavailable" @back="leaveReports" />
