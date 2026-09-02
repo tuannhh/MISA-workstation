@@ -1,6 +1,6 @@
 # 25 — W2.5 Host-adapter contract
 
-> **Status:** CONTRACT-READY — 2026-09-01. Production AMIS provider vẫn **UNVERIFIED** cho tới khi DevOps/MISA AMIS chốt O3. Đây không phải bằng chứng Native runtime trên thiết bị thật.
+> **Status:** CONTRACT-READY — 2026-09-01. Production AMIS provider vẫn **UNVERIFIED** cho tới khi DevOps/MISA AMIS chốt O3. Đây không phải bằng chứng Native runtime trên thiết bị thật. Handoff/acceptance cụ thể: [`31-o3-amis-bridge-acceptance.md`](31-o3-amis-bridge-acceptance.md).
 
 ## 1. Mục đích và ranh giới
 
