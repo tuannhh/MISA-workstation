@@ -3298,3 +3298,11 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
   khi server cấp `reminders:ack`. Mở inbox không tự đánh dấu đã đọc như legacy bell.
 - Runtime fake-native 390×844: inbox có một native root, topbar/touch 48px, không overflow hay lỗi
   console. Scheduler run, ICS và AI card được giữ ở slice riêng thay vì gộp vào UI CRUD/inbox.
+
+## 2026-09-02 — W3.MONITORING.SOURCES: Source Management MDS
+
+- Dashboard thêm Source Management Desktop/Native cho R123-R126. Client payload chỉ có
+  `name/url/type/enabled`; không phát tín hiệu scan, không gán owner/mode và không thay thế SSRF/RSS
+  validation hoặc Module-admin-only gate trên server.
+- Fake-native 390×844 tải sources API thật và mở form: root duy nhất, action 48px, không overflow.
+  `UI-MONITOR-002` khóa API allowlist, gate và hai composition.

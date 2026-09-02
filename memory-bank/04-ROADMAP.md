@@ -1320,6 +1320,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > một root/topbar/touch target 48px, không overflow; R060 scheduler, R061 ICS và AI card không bị
 > gộp vào scope này. O3/W4 host/device evidence vẫn mở.
 
+> **Execution update — 2026-09-02 (W3.MONITORING.SOURCES):** mở Source Management Desktop/Native
+> qua R123-R126, feature flag Monitoring hiện có. Browser chỉ gửi allowlist `name/url/type/enabled`;
+> URL/SSRF/RSS, module-admin-only permission và audit tiếp tục do server áp. Fake-native 390×844 với
+> nguồn tin thật có list/form root duy nhất, touch 48px, không overflow. Mention/query/competitor/
+> campaign/scan/AI là slice kế tiếp, không gộp khi chưa có flow review riêng; O3/W4 vẫn mở.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

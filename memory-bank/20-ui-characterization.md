@@ -130,3 +130,13 @@ Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/
 - Fake-native 390×844 mở/đóng hộp thư: đúng một root, topbar/action 48px, không overflow và không
   console error. Integration backend đã phủ principal/ack; UI contract `UI-REM-001` khóa client API
   và composition. R060 run scheduler, R061 ICS và R137-R138 AI card vẫn là scope riêng.
+
+## 9. W3.MONITORING.SOURCES — 2026-09-02
+
+- Dashboard nay dẫn đến Source Management Desktop/Native cho R123-R126. List chỉ render dữ liệu
+  server trả; form chỉ gửi `name/url/type/enabled`, không gửi `mode`, `owner_id` hay action quét.
+  URL client là dữ liệu chưa tin cậy: server giữ normalize HTTP, SSRF guard, RSS discovery và gate
+  Module-admin-only.
+- Runtime fake-native 390×844 với source thật từ API: list và form đều có một native root, button
+  tối thiểu 48px, không overflow. `UI-MONITOR-002` khóa allowlist/gate/composition. Các surface
+  mentions, query, competitor, campaign, scan và AI vẫn là slice riêng; AMIS device evidence chờ O3/W4.
