@@ -4,10 +4,11 @@ const express = require('express');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
 
-require('./db'); // khởi tạo + seed
+const { db } = require('./db'); // khởi tạo + seed
 const auth = require('./auth');
 const apiRouter = require('./routes');
 const aiRouter = require('./ai');
+const { createSqlSessionStore } = require('./sql-session-store');
 const { requestIdMiddleware, sendError, isDbConstraintError, isUploadParseError } = require('./error-contract');
 
 function createApp() {
@@ -28,6 +29,9 @@ function createApp() {
   app.use(cookieParser());
   app.use(session({
     secret: process.env.SESSION_SECRET || 'misa-pr-dev-secret-change-me',
+    // F2: session state must survive a restart and be shared by every Cloud Run instance that
+    // connects to this database; never fall back to express-session MemoryStore.
+    store: createSqlSessionStore({ db, ttlMs: 1000 * 60 * 60 * 8 }),
     resave: false,
     saveUninitialized: false,
     cookie: { secure: isProduction, httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 8 },

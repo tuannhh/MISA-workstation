@@ -6,6 +6,11 @@
 - **F12 closed:** thêm `event_id` vào booking write allowlist; POST/PUT nay persist đúng field đã có migration. Đây chỉ là sửa contract lưu liên kết, không thêm phép tính/aggregate chi phí sự kiện không được owner định nghĩa.
 - Bổ sung D13-017/018, R095 và R047/R048 regression; DB contract yêu cầu `attachments.classification_tier`. Test tập trung PASS: SQLite 90/90, MySQL 90/90. `DEPLOY.md` bỏ chuỗi giống credential, chỉ dẫn inject `GEMINI_API_KEY` từ Secret Manager/biến môi trường.
 
+## 2026-09-02 — F2 durable session store (Codex)
+
+- Thay `express-session` MemoryStore bằng `SqlSessionStore` + bảng `web_sessions` dùng DB hiện có; cookie chỉ mang id đã ký, session payload/principal ở server. Bản vá giữ nguyên secure-cookie, login regeneration, rate-limit và audit W1.7.
+- Regression đóng đúng rủi ro scale/restart: app instance A tạo session, tắt A, instance B đọc được session; logout xoá row bền vững và cookie cũ trả 401. PASS 22/22 ở SQLite và MySQL (bao gồm production cookie, fixation, rate-limit, DB contract).
+
 ## 2026-09-01 — W3 Event Detail read pilot (Codex)
 
 - Mở rộng strangler Event List từ `#events` sang `#events/:id`, giữ feature flag `eventsListRead`.

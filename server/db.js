@@ -561,6 +561,13 @@ function init() {
     confirmed_at TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_voiceprop_user_status ON voice_proposals(user_id, status);
+  -- F2: durable shared session state. Cookie carries only an opaque signed id; payload is held
+  -- server-side and is checked for expiry by sql-session-store on every read.
+  CREATE TABLE IF NOT EXISTS web_sessions (
+    sid TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  );
   `);
   migrate();
   seedMonitoringDefaults();
@@ -977,7 +984,7 @@ function audit(entry) {
 
 function dropAll() {
   db.exec(`DROP TABLE IF EXISTS campaigns; DROP TABLE IF EXISTS app_meta;
-    DROP TABLE IF EXISTS sentiment_audit; DROP TABLE IF EXISTS scan_runs;
+    DROP TABLE IF EXISTS sentiment_audit; DROP TABLE IF EXISTS scan_runs; DROP TABLE IF EXISTS web_sessions;
     DROP TABLE IF EXISTS monitor_alerts; DROP TABLE IF EXISTS competitors;
     DROP TABLE IF EXISTS mentions; DROP TABLE IF EXISTS sources; DROP TABLE IF EXISTS scan_queries;
     DROP TABLE IF EXISTS association_fees;

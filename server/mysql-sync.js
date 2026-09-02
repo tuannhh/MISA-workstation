@@ -25,6 +25,7 @@ function translate(sql) {
     .replace(/INSERT\s+OR\s+IGNORE/gi, 'INSERT IGNORE')
     .replace(/ON\s+CONFLICT\s*\(`?key`?\)\s*DO\s+UPDATE\s+SET\s+value\s*=\s*excluded\.value/gi, 'ON DUPLICATE KEY UPDATE value=VALUES(value)')
     .replace(/ON\s+CONFLICT\s*\(period\)\s*DO\s+UPDATE\s+SET\s+amount\s*=\s*excluded\.amount\s*,\s*note\s*=\s*excluded\.note/gi, 'ON DUPLICATE KEY UPDATE amount=VALUES(amount), note=VALUES(note)')
+    .replace(/ON\s+CONFLICT\s*\(sid\)\s*DO\s+UPDATE\s+SET\s+data\s*=\s*excluded\.data\s*,\s*expires_at\s*=\s*excluded\.expires_at/gi, 'ON DUPLICATE KEY UPDATE data=VALUES(data), expires_at=VALUES(expires_at)')
     // datetime('now') ở statement này đã bị thay UTC_TIMESTAMP() bởi rule phía trên trong CÙNG
     // chuỗi .replace() này — nên match phần đuôi theo dạng ĐÃ dịch, không phải literal gốc.
     .replace(/ON\s+CONFLICT\s*\(module,\s*field\)\s*DO\s+UPDATE\s+SET\s+is_public\s*=\s*excluded\.is_public\s*,\s*updated_by\s*=\s*excluded\.updated_by\s*,\s*updated_at\s*=\s*UTC_TIMESTAMP\(\)/gi, 'ON DUPLICATE KEY UPDATE is_public=VALUES(is_public), updated_by=VALUES(updated_by), updated_at=UTC_TIMESTAMP()');

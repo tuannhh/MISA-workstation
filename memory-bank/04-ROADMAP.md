@@ -9,7 +9,7 @@
 |---|---|
 | **D13 — RBAC v2** (4 vai trò Viewer/Nhân viên thực thi/Admin/Super Admin + visibility field-level cấu hình được + tách created_by/owner_id, áp cho 14 bảng "hoạt động") | Đây giờ là **khối việc lớn nhất, nền tảng** — mọi thứ khác (money policy, file policy, UI slice) phụ thuộc semantics phân quyền mới. W1.2–W1.4 cũ (money policy qua `org_fee`) **không còn là task riêng** — gộp vào RBAC v2 vì PolicyEngine (D1) giờ đọc bảng `field_visibility` động + role 4 cấp + ownership, không phải `org_fee` hard-code. F11 (role drift) **bị nuốt trọn** — thay cả hệ vai trò thì không "dọn banner" nữa mà xây mới. |
 | **Dữ liệu Cloud Run = test, bỏ được** | Chuỗi **R1.0–R1.7 sụp gọn**: không cần dual-write/backfill/reconcile/shadow/canary cẩn trọng (những cái đó sinh ra CHÍNH VÌ giả định dữ liệu sống). Thay bằng **redesign schema + seed lại sạch** 1 lần. Nhiều Tier-A "phải đúng từ dòng đầu vì dữ liệu đã ghi" **giãn ưu tiên** — code vẫn phải đúng cho khi dữ liệu thật xuất hiện, nhưng không cần retrofit cho dữ liệu ĐANG có. Target `browser-production` **lùi thời điểm** — chưa có người dùng/dữ liệu thật (xem `README.md` bối cảnh audit). |
-| **O3 (contract auth AMIS) + O4 (session store) + O5 (SLO) → DevOps MISA** | Cả 3 giao DevOps (owner 2026-08-24). W1.7 dựng **seam** durable-session (interface fail-closed), backend do DevOps chọn. W2.3 ngưỡng SLO + topology do DevOps chốt — Claude dựng harness đo. W2.5/W4.1: bridge contract AMIS Mobile do DevOps + team AMIS làm rõ; Claude dựng adapter theo contract khi có. |
+| **O3 (contract auth AMIS) + O5 (SLO) → DevOps MISA** | O4 session store đã được code-close 2026-09-02: `SqlSessionStore` dùng shared DB `web_sessions`, verified cross-instance trên SQLite/MySQL. DevOps chỉ vận hành DB/`SESSION_SECRET`. W2.3 ngưỡng SLO + topology do DevOps chốt; W2.5/W4.1 bridge AMIS Mobile do DevOps + team AMIS làm rõ. |
 | **O6 duyệt $200** | W2.6 (Gemini eval) chạy được — ngân sách cứng $200 cho toàn bộ golden eval. |
 | **O2/O7 superseded** | Không còn quyết riêng — nuốt vào D13. |
 | **D14 — Voice Assistant vision** (gọi từ mọi màn hình + AI tự chuẩn bị hành động, **người dùng xác nhận** trước khi ghi — D14.2 đã chốt human-in-the-loop 2026-08-24) | Track riêng Wave 3/4. **KHÔNG bỏ human-in-the-loop** (owner chốt: speech-to-text sai được, phải xác nhận). Khác biệt thực chất thu hẹp còn: gọi-từ-mọi-màn-hình + AI chuẩn bị hành động đa bước chờ xác nhận 1 lần. Còn mở: quy tắc AI đề xuất mức đổi `relationship_score` (BA định nghĩa, không chặn vì đã có bước xác nhận). |
@@ -1377,7 +1377,7 @@ cần Security/Legal duyệt lại.
 | Finding | Mapping v3 | Ghi chú |
 |---|---|---|
 | F1 money bypass | **Nuốt vào W1.POLICY/W1.POLICY.2** (tiền = field `private` trong D13, không còn `org_fee` riêng) → G1B.1/G1B.2 → `regression` | không còn W1.2-1.4 tách rời |
-| F2 session | G1B.3 → W1.7 (seam; backend DevOps chốt O4) | |
+| F2 session | **CLOSED 2026-09-02:** W1.7 hardening + DB-backed durable store cross-instance | DevOps vận hành DB/secret, không còn MemoryStore dependency |
 | F3 SSRF | G1B.4 → W1.8 | **CLOSED 2026-08-27** |
 | F4/O8 AI governance | G0.8 + O8(provisional) → W1.AI-POLICY (gateway) → W3.VOICE (D14) → W4.VOICE | O8 tạm cho phép; gateway siết được sau bằng config |
 | F5 mobile native | G0.4 (matrix, Section B/C do Codex dựng — C0.3) → W2.5 (contract-ready) → slice Wave 3 → W4.1-4.3 (runtime) | **D15: web-in-WebView + composition Native-Mobile RIÊNG BIỆT (không phải desktop responsive) — giảm khối lượng (không codebase native song song), KHÔNG giảm severity P0 (Codex C0.7)** |

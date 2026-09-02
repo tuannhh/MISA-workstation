@@ -299,14 +299,14 @@ function verifySchema() {
   // 09-db-schema.md §E + 04-ROADMAP.md W1.RBAC.1) — nên đây là 1 omission MỚI có chủ ý, không
   // phải regression giống 6 omission Gate-0 cũ. W3.VOICE.SECURE-COMMAND (2026-08-31) thêm bảng
   // `voice_proposals` — cùng lý do (dropAll()/RESET_DB không còn là cơ chế reset), thêm omission
-  // thứ 8, có chủ ý.
-  ok(new Set(tables).size === 36, `tables=${new Set(tables).size}, expected 36`);
+  // thứ 8, có chủ ý. F2 thêm `web_sessions`, dữ liệu ephemeral nên được reset cùng test/dev data.
+  ok(new Set(tables).size === 37, `tables=${new Set(tables).size}, expected 37`);
   ok(new Set(indexes).size === 23, `indexes=${new Set(indexes).size}, expected 23`);
-  ok(new Set(drops).size === 28, `drop targets=${new Set(drops).size}, expected 28`);
+  ok(new Set(drops).size === 29, `drop targets=${new Set(drops).size}, expected 29`);
   const omissions = [...new Set(tables)].filter((table) => !new Set(drops).has(table)).sort();
   const expected = ['agreements', 'benefit_usages', 'gifts', 'supplier_contacts', 'supplier_transactions', 'work_logs', 'field_visibility', 'voice_proposals'].sort();
   ok(JSON.stringify(omissions) === JSON.stringify(expected), `drop omissions=${omissions}, expected=${expected}`);
-  pass(`schema facts: 36 tables, 23 indexes, 28 drops; omissions=${omissions.join(',')}`);
+  pass(`schema facts: 37 tables, 23 indexes, 29 drops; omissions=${omissions.join(',')}`);
 }
 
 function verifyErrorExample() {

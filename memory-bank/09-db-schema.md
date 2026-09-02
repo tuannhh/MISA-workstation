@@ -18,10 +18,10 @@ Theo `mysql-sync.js:30-45`, khi gặp `CREATE TABLE`:
 - `CREATE INDEX` bị bỏ qua hoàn toàn trên nhánh MySQL (`translate()` trả `''` — dòng 29) — nghĩa là **các index khai báo trong `init()` chỉ tồn tại thật trên SQLite**; MySQL production **không có các index này** trừ khi tạo tay. Ghi rõ ở mục C.
 - `ALTER TABLE ... ADD COLUMN` cũng dịch `INTEGER` → `BIGINT` (`mysql-sync.js:46-48`), TEXT giữ nguyên `TEXT`.
 - Modifier ngày `datetime('now','-30 day')` / `date('now','-N day')` được dịch sang `INTERVAL` MySQL (`mysql-sync.js:18-19`); `strftime('%Y-%m', x)` → `DATE_FORMAT(x,'%Y-%m')` (dòng 22-24) — dùng nhiều trong `routes.js` (dashboard, report).
-- `INSERT OR IGNORE` → `INSERT IGNORE`; `ON CONFLICT(...) DO UPDATE SET value=excluded.value` (app_meta) và `...amount=excluded.amount, note=excluded.note` (budgets) → `ON DUPLICATE KEY UPDATE ...=VALUES(...)` (dòng 25-27) — **chỉ 2 pattern `ON CONFLICT` này được nhận diện regex cứng**; thêm `upsert` mới theo cú pháp khác sẽ KHÔNG được dịch và lỗi trên MySQL.
+- `INSERT OR IGNORE` → `INSERT IGNORE`; ba mẫu `ON CONFLICT(...) DO UPDATE` đã có hợp đồng dịch riêng: `app_meta.key`, `budgets.period`, và `web_sessions.sid` → `ON DUPLICATE KEY UPDATE ...=VALUES(...)`. Thêm `upsert` mới theo cú pháp khác phải bổ sung contract dịch + test MySQL, nếu không sẽ lỗi trên MySQL.
 - Prepared statement dùng object binding kiểu SQLite (`run({ name: value })` với placeholder `@name`) được adapter chuẩn hóa qua `bindSqliteNamedParams()` (`mysql-sync.js`) thành placeholder positional `?` trước khi gửi sang mysql2. Không truyền object named binding trực tiếp xuống worker: MySQL sẽ hiểu `@name` là session user variable và có thể ghi `NULL` mà không báo lỗi (F20).
 
-## B. Danh sách bảng đầy đủ (36 bảng — 34 Gate-0 + `field_visibility` thêm ở W1.RBAC.1 + `voice_proposals` thêm ở W3.VOICE.SECURE-COMMAND, xem §E)
+## B. Danh sách bảng đầy đủ (37 bảng — 34 Gate-0 + `field_visibility`, `voice_proposals`, `web_sessions` thêm sau, xem §E)
 
 Ký hiệu: **PK** khoá chính, **FK** khoá ngoại (kèm `ON DELETE`), **U** unique, cột không ghi rõ NOT NULL/DEFAULT nghĩa là cho phép NULL.
 
@@ -534,9 +534,19 @@ Proposal opaque cho luồng AI voice "chuẩn bị hành động, người dùng
 
 Index: `idx_voiceprop_user_status(user_id,status)`.
 
+### web_sessions (`db.js`, F2 durable-session 2026-09-02)
+
+Session store dùng chung giữa các app instance. Cookie chỉ mang session id có chữ ký; principal/payload nằm trong DB, vì vậy restart/scale-out không làm mất session.
+
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| sid | TEXT PK | id opaque do `express-session` tạo; không chứa principal |
+| data | TEXT NOT NULL | JSON session server-side |
+| expires_at | TEXT NOT NULL | `SqlSessionStore` kiểm tra/lazy-delete trước khi restore |
+
 ## C. Index chỉ tồn tại trên SQLite — KHÔNG có trên MySQL production
 
-`translate()` bỏ toàn bộ `CREATE INDEX` khi `DB_CLIENT=mysql` (`mysql-sync.js:29`). **23 index** khai báo trong `init()` (22 Gate-0 + `idx_voiceprop_user_status` thêm W3.VOICE.SECURE-COMMAND 2026-08-31; xác nhận bằng parser trực tiếp trên `server/db.js`: `grep -c "CREATE INDEX IF NOT EXISTS" server/db.js`) **không tồn tại trên MySQL/Cloud SQL**. Ngoại lệ: cột `UNIQUE`/PK (`budgets.period`, `mentions.link`, `assignments(user_id,subject_type,subject_id)`, `voice_proposals.id`) vẫn có index ngầm vì MySQL tự tạo index cho `UNIQUE`/`PRIMARY KEY`. Đây là bẫy hiệu năng — xem [`14-known-traps.md`](14-known-traps.md).
+`translate()` bỏ toàn bộ `CREATE INDEX` khi `DB_CLIENT=mysql` (`mysql-sync.js:29`). **23 index** khai báo trong `init()` (22 Gate-0 + `idx_voiceprop_user_status` thêm W3.VOICE.SECURE-COMMAND 2026-08-31; xác nhận bằng parser trực tiếp trên `server/db.js`: `grep -c "CREATE INDEX IF NOT EXISTS" server/db.js`) **không tồn tại trên MySQL/Cloud SQL**. Ngoại lệ: cột `UNIQUE`/PK (`budgets.period`, `mentions.link`, `assignments(user_id,subject_type,subject_id)`, `voice_proposals.id`, `web_sessions.sid`) vẫn có index ngầm vì MySQL tự tạo index cho `UNIQUE`/`PRIMARY KEY`. Đây là bẫy hiệu năng — xem [`14-known-traps.md`](14-known-traps.md).
 
 ## D. Idempotent migration — cơ chế và rủi ro
 
@@ -548,7 +558,7 @@ Index: `idx_voiceprop_user_status(user_id,status)`.
 
 **Sửa lại toàn bộ (Codex round-3 re-audit, R3-02B — bản trước sai và tự mâu thuẫn: nói "22 bảng" rồi liệt kê chính các bảng giám sát bị DROP như bằng chứng "không đụng tới", và nói sai `attachments`/`supplier_quotes` không bị DROP dù thực tế có):**
 
-`dropAll()` (`db.js:868-884`) chứa đúng **28 lệnh `DROP TABLE`** (đếm bằng parser trực tiếp: `grep -o "DROP TABLE IF EXISTS [a-z_]*" server/db.js | wc -l` → 28) trên tổng **36 bảng** khai báo trong `init()` (34 Gate-0 + `field_visibility` thêm ở W1.RBAC.1, commit `9ef286a`, 2026-08-27 + `voice_proposals` thêm ở W3.VOICE.SECURE-COMMAND, 2026-08-31). **8 bảng KHÔNG có trong danh sách DROP** (kiểm tra chéo `CREATE TABLE` vs `DROP TABLE`, không đoán): `agreements`, `work_logs`, `gifts`, `benefit_usages`, `supplier_transactions`, `supplier_contacts` (6 bảng Gate-0), cộng `field_visibility` và `voice_proposals` (2 omission có chủ ý — khác 6 bảng kia ở chỗ dropAll() bị BỎ làm cơ chế reset cho W1 chứ không phải bị sót). Ngược với bản trước: `attachments` (`db.js:881`) và `supplier_quotes` (`db.js:875`) **CÓ bị DROP** — không phải ngoại lệ.
+`dropAll()` chứa đúng **29 lệnh `DROP TABLE`** trên tổng **37 bảng**. `web_sessions` được drop có chủ ý vì dữ liệu session là ephemeral; vẫn còn **8 bảng không DROP**: `agreements`, `work_logs`, `gifts`, `benefit_usages`, `supplier_transactions`, `supplier_contacts`, `field_visibility`, `voice_proposals`. `dropAll()` không phải reset production/migration mechanism.
 
 **Rủi ro vận hành cụ thể:** nếu dùng `dropAll()`/`RESET_DB=1`/`npm run seed` làm cơ chế "xoá sạch + seed lại" cho W1 (RBAC v2 redesign, xem `04-ROADMAP.md` W1.RBAC.1), 6 bảng trên sẽ **giữ lại dữ liệu cũ** trong khi 28 bảng kia đã sạch — dữ liệu con mồ côi, khả năng vỡ FK khi seed lại theo thứ tự mới trên MySQL, hoặc lẫn dữ liệu cũ/mới không nhất quán. **Không dùng `dropAll()` hiện tại làm cơ chế reset sạch cho W1** — cần chuyển hẳn sang tạo database/schema mới rồi áp migration từ đầu (xem `04-ROADMAP.md` §C0.5 reset strategy).
 
