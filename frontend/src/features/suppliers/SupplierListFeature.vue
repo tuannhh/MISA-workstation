@@ -1,0 +1,28 @@
+<script setup>
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import MEmptyState from '../../components/mds/MEmptyState.vue';
+import MMobileTopBar from '../../components/mds/MMobileTopBar.vue';
+import MSpinner from '../../components/mds/MSpinner.vue';
+import { HostEvent, HostSurface } from '../../platform/host-adapter.mjs';
+import { createSupplierApi, SupplierApiError } from './domain/supplier-api.mjs';
+import { supplierListViewModel } from './domain/supplier-list.mjs';
+import SupplierListDesktop from './desktop/SupplierListDesktop.vue';
+import SupplierCreateDesktop from './desktop/SupplierCreateDesktop.vue';
+import SupplierListMobile from './mobile/SupplierListMobile.vue';
+import SupplierCreateMobile from './mobile/SupplierCreateMobile.vue';
+
+const props = defineProps({ surface: { type: String, required: true }, adapter: { type: Object, default: null }, hostUnavailable: { type: Boolean, default: false }, nativeNavigation: { type: Array, default: () => [] } });
+const emit = defineEmits(['back', 'open', 'navigate']);
+const api = createSupplierApi(); const unsubscribers = []; const safeArea = ref(props.adapter?.getSafeArea?.() || {});
+const state = reactive({ phase: 'loading', rows: [], total: 0, page: 1, pageSize: 20, search: '', permissions: null, mode: 'read', creating: false, createError: '', error: null });
+const isNative = computed(() => props.surface === HostSurface.NATIVE); const canCreate = computed(() => state.permissions?.modules?.suppliers?.includes('create') === true);
+const safeAreaStyle = computed(() => Object.fromEntries(['top', 'right', 'bottom', 'left'].flatMap((side) => Number.isFinite(Number(safeArea.value?.[side])) ? [[`--mds-mobile-safe-${side}`, `${Number(safeArea.value[side])}px`]] : [])));
+function setError(error) { state.error = error instanceof SupplierApiError ? error : new SupplierApiError({ status: 0, code: 'SUPPLIER_LIST_NETWORK', message: 'Không thể tải danh sách nhà cung cấp. Vui lòng thử lại.' }); state.phase = 'error'; }
+async function load({ page = state.page, search = state.search } = {}) { if (props.hostUnavailable) { setError(new SupplierApiError({ status: 503, code: 'HOST_ADAPTER_UNAVAILABLE', message: 'Native host chưa sẵn sàng. Ứng dụng không chuyển sang giao diện desktop thay thế.' })); return; } state.phase = 'loading'; state.error = null; try { const [payload, session] = await Promise.all([api.getList({ page, pageSize: state.pageSize, search }), api.getCurrentUser()]); const model = supplierListViewModel(payload); Object.assign(state, { ...model, search, permissions: session?.permissions || null, mode: 'read', phase: 'ready' }); } catch (error) { setError(error); } }
+function search(value) { load({ page: 1, search: value }); } function changePage(page) { load({ page, search: state.search }); } function beginCreate() { if (canCreate.value) { state.createError = ''; state.mode = 'create'; } }
+async function createSupplier(input) { state.creating = true; state.createError = ''; try { const result = await api.createSupplier(input); emit('open', result.id); } catch (error) { state.createError = error instanceof SupplierApiError ? error.message : 'Không thể tạo nhà cung cấp. Vui lòng thử lại.'; } finally { state.creating = false; } }
+async function goBack() { if (isNative.value && props.adapter) { await props.adapter.goBack({ reason: 'supplier-list' }); return; } emit('back'); }
+function listenToHost() { if (!props.adapter || props.hostUnavailable) return; unsubscribers.push(props.adapter.subscribe(HostEvent.VIEWPORT, (payload) => { if (payload?.safeArea) safeArea.value = { ...safeArea.value, ...payload.safeArea }; })); unsubscribers.push(props.adapter.subscribe(HostEvent.LIFECYCLE, (payload) => { if (payload?.state === 'foreground') load(); })); }
+onMounted(() => { listenToHost(); load(); }); onBeforeUnmount(() => { while (unsubscribers.length) unsubscribers.pop()(); });
+</script>
+<template><div v-if="state.phase === 'loading'" :class="isNative ? 'mds-mobile-app grid h-[100dvh] place-items-center bg-[var(--mds-bg)]' : 'grid min-h-[360px] place-items-center bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MSpinner :size="28" /></div><section v-else-if="state.phase === 'error'" :class="isNative ? 'mds-mobile-app min-h-[100dvh] bg-[var(--mds-bg)]' : 'min-h-[360px] bg-[var(--mds-bg-page)]'" :style="isNative ? safeAreaStyle : undefined"><MMobileTopBar v-if="isNative" title="Nhà cung cấp" @back="goBack"/><MEmptyState :title="state.error.status === 403 ? 'Bạn không có quyền xem nhà cung cấp' : 'Không thể mở danh sách nhà cung cấp'" :description="state.error.message"/></section><SupplierCreateMobile v-else-if="isNative && state.mode === 'create'" :saving="state.creating" :server-error="state.createError" :safe-area-style="safeAreaStyle" @cancel="state.mode = 'read'" @save="createSupplier"/><SupplierListMobile v-else-if="isNative" :rows="state.rows" :total="state.total" :page="state.page" :page-size="state.pageSize" :search="state.search" :can-create="canCreate" :safe-area-style="safeAreaStyle" :native-navigation="nativeNavigation" @back="goBack" @search="search" @page="changePage" @open="emit('open', $event)" @create="beginCreate" @navigate="emit('navigate', $event)"/><SupplierCreateDesktop v-else-if="state.mode === 'create'" :saving="state.creating" :server-error="state.createError" @cancel="state.mode = 'read'" @save="createSupplier"/><SupplierListDesktop v-else :rows="state.rows" :total="state.total" :page="state.page" :page-size="state.pageSize" :search="state.search" :can-create="canCreate" @search="search" @page="changePage" @open="emit('open', $event)" @create="beginCreate"/></template>

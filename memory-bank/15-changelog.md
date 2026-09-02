@@ -1,5 +1,16 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-02 — W2.2/F6: Supplier List/Create Desktop + Native Mobile strangler (Codex)
+
+- Tách hash `suppliers` thành danh sách/tạo mới độc lập với Supplier Detail, có shared API/domain
+  contract, Desktop MDS và Native-Mobile composition riêng. Native có taskbar/safe-area/MDS control;
+  desktop có bảng, search và pagination.
+- API client chỉ nhận list projection từ `GET /api/suppliers`; payload tạo mới là allowlist thông tin
+  nhận diện/liên hệ. `service_fee_pct` và `deposit_pct` bị loại từ view model lẫn payload; giao dịch,
+  báo giá và phí tiếp tục nằm trong luồng RBAC/PolicyEngine của detail.
+- Verify: `UI-SUPPLIER-LIST-001..002`, UI characterization, Vite build và `git diff --check` xanh.
+  Browser fake-native sẽ được đưa vào matrix audit cuối; không tuyên bố device-test AMIS.
+
 ## 2026-09-02 — W2.2/F6: Dashboard Desktop + Native Mobile strangler (Codex)
 
 - Tách `#dashboard` khỏi fallback legacy bằng API/domain projection riêng và hai composition độc lập:

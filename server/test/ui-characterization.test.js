@@ -70,7 +70,7 @@ test('UI-CHAR-004: compact hiện là desktop responsive, chưa phải native co
 });
 
 test('UI-CHAR-005: đổi hash chỉ được giữ đúng một Vue strangler route, không để mini-app cũ còn trên DOM', () => {
-  for (const routeRef of ['peopleFeatureRoute', 'peopleListFeatureRoute', 'partnerFeatureRoute', 'partnerListFeatureRoute', 'supplierFeatureRoute', 'interactionsFeatureRoute', 'eventsFeatureRoute', 'awardsFeatureRoute', 'monitoringFeatureRoute', 'reportsFeatureRoute', 'adminFeatureRoute', 'remindersFeatureRoute', 'dashboardFeatureRoute']) {
+  for (const routeRef of ['peopleFeatureRoute', 'peopleListFeatureRoute', 'partnerFeatureRoute', 'partnerListFeatureRoute', 'supplierFeatureRoute', 'supplierListFeatureRoute', 'interactionsFeatureRoute', 'eventsFeatureRoute', 'awardsFeatureRoute', 'monitoringFeatureRoute', 'reportsFeatureRoute', 'adminFeatureRoute', 'remindersFeatureRoute', 'dashboardFeatureRoute']) {
     assert.match(appVue, new RegExp(`uiFeatureRouteRefs = Object\\.freeze\\(\\[[\\s\\S]*${routeRef}`), `${routeRef} phải vào cùng tập reset`);
   }
   assert.match(appVue, /function clearUiFeatureRoutes\(\) \{ for \(const routeRef of uiFeatureRouteRefs\) routeRef\.value = null; \}/,
