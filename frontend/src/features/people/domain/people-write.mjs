@@ -30,8 +30,9 @@ export function validatePeopleEditDraft(draft) {
   const errors = {};
   if (!String(draft?.full_name || '').trim()) errors.full_name = 'Họ và tên không được để trống.';
   const score = draft?.relationship_score;
-  if (score !== '' && score !== null && score !== undefined && !Number.isFinite(Number(score))) {
-    errors.relationship_score = 'Điểm quan hệ phải là một số hợp lệ.';
+  if (score !== '' && score !== null && score !== undefined
+    && (!Number.isInteger(Number(score)) || Number(score) < 0 || Number(score) > 100)) {
+    errors.relationship_score = 'Điểm quan hệ phải là số nguyên từ 0 đến 100.';
   }
   return Object.freeze(errors);
 }

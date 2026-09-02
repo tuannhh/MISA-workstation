@@ -1,5 +1,15 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-02 — D14.3a: relationship score nhập tay, Voice/Gemini không được ghi (owner + Codex)
+
+- Theo quyết định owner, bỏ `suggested_score_delta` khỏi schema/prompt/payload/response Voice và bỏ
+  trường điều chỉnh điểm khỏi hai UI Desktop/Native. Server cũng bỏ qua `score_delta` do client chèn
+  lúc confirm, nên proposal cũ không thể ghi đè một điểm đã nhập tay.
+- Điều chỉnh điểm thủ công 0–100 giữa lúc tạo và xác nhận voice không làm interaction stale; xác
+  nhận chỉ ghi interaction. Xóa/đổi tên người/cơ quan vẫn giữ stale guard/transaction như cũ.
+- Sửa nhãn form Person từ sai `0–10` thành `0–100, nhập thủ công`, và validation client chỉ nhận số
+  nguyên 0–100. `integration-voice-secure-command` 16/16 + Vite build PASS.
+
 ## 2026-09-02 — W2.2/F6: Supplier List/Create Desktop + Native Mobile strangler (Codex)
 
 - Tách hash `suppliers` thành danh sách/tạo mới độc lập với Supplier Detail, có shared API/domain

@@ -126,16 +126,6 @@ Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
 //  /interaction-voice o tren (giu nguyen cho luong thu cong hien co).
 // ========================================================================
 const VOICE_PROPOSAL_TTL_MS = Number(process.env.VOICE_PROPOSAL_TTL_MS) || 10 * 60 * 1000;
-const SCORE_DELTA_MIN = -10;
-const SCORE_DELTA_MAX = 10;
-
-// AI tu de xuat muc doi diem trong loi noi (khong phai quy tac cung cua Claude -- BA chua dinh
-// nghia chinh thuc theo D14.3). Server chi kep bien an toan tren so AI tu goi y, mac dinh 0.
-function clampScoreDelta(v) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(SCORE_DELTA_MIN, Math.min(SCORE_DELTA_MAX, Math.round(n)));
-}
 function expiresAtString(ttlMs) {
   return new Date(Date.now() + ttlMs).toISOString().slice(0, 19).replace('T', ' ');
 }
@@ -157,16 +147,9 @@ function matchCandidates(name, kind) {
   return { confidence: 'ambiguous', candidates: rows };
 }
 
-const VOICE_PROPOSAL_SCHEMA = {
-  type: 'object',
-  properties: {
-    ...VOICE_SCHEMA.properties,
-    // Server luôn clamp sau khi nhận output; schema không chặn số ngoài biên để test được cả lớp
-    // defense-in-depth này khi model trả một số bất thường.
-    suggested_score_delta: { type: 'integer', description: `Mức đề xuất TĂNG/GIẢM điểm quan hệ (relationship_score) dựa trên sắc thái cuộc nói chuyện, số nguyên trong khoảng ${SCORE_DELTA_MIN}..${SCORE_DELTA_MAX}. 0 nếu không có căn cứ rõ ràng để đề xuất.` },
-  },
-  required: VOICE_SCHEMA.required,
-};
+// Owner decision 2026-09-02: relationship_score is manual-only. Voice/Gemini
+// creates a reviewed interaction draft, never a score proposal or score write.
+const VOICE_PROPOSAL_SCHEMA = VOICE_SCHEMA;
 
 // Buoc 1: AI nghe + trich xuat + khop candidate, tao 1 proposal opaque gan voi principal hien tai,
 // het han sau VOICE_PROPOSAL_TTL_MS. KHONG ghi interactions/people o buoc nay.
@@ -183,8 +166,7 @@ Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
 - person_name: tên người được nhắc tới (ví dụ "chị Minh Anh" -> "Minh Anh").
 - org_name: tên cơ quan/báo/đơn vị (ví dụ "báo VnExpress" -> "VnExpress").
 - date: chỉ điền nếu trong lời nói nói rõ ngày, định dạng YYYY-MM-DD; nếu nói "hôm nay" hoặc không nói thì để trống.
-- summary: mô tả ngắn gọn, lịch sự nội dung đã làm.
-- suggested_score_delta: nếu lời nói thể hiện rõ mối quan hệ tốt lên/xấu đi, đề xuất mức tăng/giảm điểm quan hệ hợp lý (vd tương tác rất tích cực, hợp tác tốt -> số dương nhỏ; căng thẳng/từ chối hợp tác -> số âm nhỏ); nếu không rõ ràng, để 0.`;
+- summary: mô tả ngắn gọn, lịch sự nội dung đã làm.`;
     const parts = [
       { text: prompt },
       { inlineData: { mimeType: req.file.mimetype || 'audio/webm', data: req.file.buffer.toString('base64') } },
@@ -193,14 +175,12 @@ Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
     const personMatch = matchCandidates(ai.person_name, 'person');
     const orgMatch = matchCandidates(ai.org_name, 'org');
     const extracted = voiceExtractionOf(ai);
-    const suggestedScoreDelta = clampScoreDelta(ai.suggested_score_delta);
     const id = crypto.randomBytes(16).toString('hex');
     const expiresAt = expiresAtString(VOICE_PROPOSAL_TTL_MS);
     const payload = {
       ...extracted,
       personCandidates: personMatch.candidates,
       orgCandidates: orgMatch.candidates,
-      suggested_score_delta: suggestedScoreDelta,
     };
     buildInsert('voice_proposals', { id, user_id: req.principal.id, payload_json: JSON.stringify(payload), expires_at: expiresAt });
     res.json({
@@ -210,7 +190,6 @@ Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
       personCandidates: personMatch.candidates,
       orgCandidates: orgMatch.candidates,
       matchConfidence: { person: personMatch.confidence, org: orgMatch.confidence },
-      suggestedScoreDelta,
     });
   } catch (e) {
     res.status(502).json({ error: 'Lỗi xử lý giọng nói: ' + e.message });
@@ -225,18 +204,16 @@ Hãy NGHE, gỡ băng (transcript) và TRÍCH XUẤT thông tin tương tác.
 //   biet duoc voi 1 lan confirm moi.
 // - Loi giua chung claim va ghi (vd INSERT interactions that bai) truoc day de proposal ket thuc o
 //   trang thai 'confirmed' MO COI (khong co interaction, khong the retry that) -- F25. Nay bao boc
-//   claim + insert interaction + audit + cap nhat result_interaction_id + CAS diem trong 1
+//   claim + insert interaction + audit + cap nhat result_interaction_id trong 1
 //   withTransaction(): loi o buoc nao cung ROLLBACK ve nguyen trang 'pending', proposal dung nghia
 //   con dung lai duoc.
-// - CAS diem quan he stale (F26): truoc day chi bo qua phan diem, van tao interaction -- trai
-//   D14.4 ("tu choi va yeu cau chuan bi lai" khi snapshot khac hien tai). Nay ROLLBACK toan bo,
-//   tra 409 PROPOSAL_STALE. Phan biet ro voi truong hop KHONG co quyen sua diem (PolicyForbidden)
-//   -- truong hop do van giu hanh vi cu (tao interaction, bo qua phan diem), vi khong phai loi du
-//   lieu dua-tren-thoi-diem, ma la thieu quyen tu dau.
+// - relationship_score is explicitly out of this flow. A manual score edit made
+//   between propose and confirm is valid and must neither be overwritten nor make
+//   the interaction draft stale.
 class ConfirmConflictError extends Error {}
 
 // Remediation F27 (Codex audit 2026-08-31, xem 25-audit-remediation-f25-f26.md muc F27): snapshot
-// candidate luc propose chi co id/name/org_name/relationship_score, KHONG duoc doc lai luc confirm
+// candidate luc propose chi co id/name/org_name, KHONG duoc doc lai luc confirm
 // -- person/org bi xoa hoac doi giua propose/confirm khong bi phat hien, interaction van duoc tao
 // tro toi 1 ban ghi da mat/da doi. Doc lai dung field da snapshot va so sanh truoc khi ghi bat ky
 // gi -- coi day la "revision" thuc te (toan bo field nguoi dung da thay khi xac nhan), khong can
@@ -248,7 +225,7 @@ class ConfirmConflictError extends Error {}
 // transaction nay COMMIT/ROLLBACK. SQLite khong ho tro FOR UPDATE va khong can: UPDATE claim ben
 // tren da lay write lock toan DB (SQLite chi co 1 writer tai 1 thoi diem).
 function fetchPersonSnapshot(id) {
-  const sql = `SELECT p.id, p.full_name AS name, o.name AS org_name, p.relationship_score
+  const sql = `SELECT p.id, p.full_name AS name, o.name AS org_name
     FROM people p LEFT JOIN organizations o ON o.id=p.org_id WHERE p.id=?${isMysql ? ' FOR UPDATE' : ''}`;
   return db.prepare(sql).get(id);
 }
@@ -344,20 +321,7 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
       throw err;
     }
 
-    const scoreDelta = clampScoreDelta(e.score_delta != null ? e.score_delta : payload.suggested_score_delta);
-    let personEditAllowed = false;
-    if (scoreDelta !== 0 && selectedPerson) {
-      try {
-        policyService.assertWritable({ principal: req.principal, entity: 'person', action: 'edit' });
-        personEditAllowed = true;
-      } catch (err) {
-        if (!(err instanceof PolicyForbiddenError)) throw err;
-        // Khong tu choi ca request vi 1 phan (doi diem) khong du quyen -- van cho tao interaction,
-        // chi bo qua phan doi diem (an toan hon: khong mat du lieu tuong tac vi 1 quyen phu).
-      }
-    }
-
-    // Claim + (F27) re-check parent con ton tai/khong doi + ghi interaction + audit + CAS diem
+    // Claim + (F27) re-check parent con ton tai/khong doi + ghi interaction + audit
     // trong 1 transaction: loi that o bat ky buoc nao (vd INSERT interactions that bai) deu
     // ROLLBACK ve dung 'pending' -- proposal khong bao gio ket thuc o trang thai 'confirmed' mo coi
     // (F25). Dieu kien TTL dua vao chinh cau UPDATE claim (khong chi dua vao isExpired() da kiem
@@ -383,7 +347,7 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
         let stale = false;
         if (selectedPerson) {
           const freshPerson = fetchPersonSnapshot(selectedPerson.id);
-          if (snapshotDrifted(freshPerson, selectedPerson, ['name', 'org_name', 'relationship_score'])) stale = true;
+          if (snapshotDrifted(freshPerson, selectedPerson, ['name', 'org_name'])) stale = true;
         }
         if (!stale && selectedOrg) {
           const freshOrg = fetchOrgSnapshot(selectedOrg.id);
@@ -398,22 +362,7 @@ router.post('/interaction-voice-confirm', requirePerm('interactions', 'create'),
         logEdit(req, 'CREATE', 'interaction', r.lastInsertRowid, interactionInput.summary);
         buildUpdate('voice_proposals', proposalId, { result_interaction_id: r.lastInsertRowid });
 
-        let personResult = null;
-        if (personEditAllowed) {
-          const newScore = Math.max(0, Math.min(100, Number(selectedPerson.relationship_score || 0) + scoreDelta));
-          // Da xac nhan snapshot con dung nguyen (khong stale) o buoc tren TRONG CUNG transaction
-          // nay -- khong co ghi nao khac chen duoc vao giua (xem giai thich withTransaction trong
-          // db.js). CAS van giu lam luoi an toan thu 2 (defense-in-depth): neu no THAT BAI o day du
-          // vua xac nhan fresh, do la bat thuong that (vi pham gia dinh 1-connection dong bo), nem
-          // loi that de ROLLBACK toan bo + 502 thay vi coi la "stale" binh thuong.
-          const cas = db.prepare('UPDATE people SET relationship_score=? WHERE id=? AND relationship_score=?')
-            .run(newScore, selectedPerson.id, selectedPerson.relationship_score);
-          if (cas.changes !== 1) throw new Error('CAS relationship_score that bai ngay sau khi xac nhan fresh -- vi pham gia dinh dong bo cua withTransaction()');
-          logEdit(req, 'EDIT', 'person', selectedPerson.id, `AI voice: relationship_score ${selectedPerson.relationship_score} -> ${newScore} (proposal ${proposalId})`);
-          personResult = { id: selectedPerson.id, relationship_score: newScore, scoreApplied: true };
-        }
-
-        return { interactionId: r.lastInsertRowid, person: personResult };
+        return { interactionId: r.lastInsertRowid };
       });
     } catch (err) {
       if (err instanceof ConfirmConflictError) {
@@ -659,8 +608,8 @@ router.get('/status', (req, res) => res.json({ enabled: cfg.hasKey(), textModel:
 // hành vi để "đổi"), không đổi hành vi router (giống routes.js.testables).
 router.testables = {
   stripHtml, limitEventExtract, VOICE_SCHEMA, AWARD_SCHEMA, ADVICE_SCHEMA, EVENT_SCHEMA,
-  VOICE_PROPOSAL_SCHEMA, clampScoreDelta, matchCandidates, isExpired, expiresAtString,
-  SCORE_DELTA_MIN, SCORE_DELTA_MAX, VOICE_PROPOSAL_TTL_MS, isYmd, normalizeOptionalYmd, voiceExtractionOf,
+  VOICE_PROPOSAL_SCHEMA, matchCandidates, isExpired, expiresAtString,
+  VOICE_PROPOSAL_TTL_MS, isYmd, normalizeOptionalYmd, voiceExtractionOf,
   protectUntrustedText,
 };
 

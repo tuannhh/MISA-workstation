@@ -16,7 +16,7 @@ const fields = [
   ['full_name', 'Họ và tên', 'Nhập họ và tên', 'text'], ['position', 'Chức danh', 'Ví dụ: Phóng viên', 'text'],
   ['beat', 'Mảng phụ trách', 'Ví dụ: Kinh tế', 'text'], ['level', 'Cấp độ', 'Ví dụ: Senior', 'text'],
   ['email_work', 'Email công việc', 'name@example.com', 'email'], ['phone_work', 'Điện thoại công việc', 'Nhập số điện thoại', 'tel'],
-  ['relationship_score', 'Điểm quan hệ', '0–10', 'number'], ['status', 'Trạng thái', 'Ví dụ: Active', 'text'],
+  ['relationship_score', 'Điểm quan hệ', '0–100, nhập thủ công', 'number'], ['status', 'Trạng thái', 'Ví dụ: Active', 'text'],
 ];
 const isDirty = computed(() => JSON.stringify(draft) !== initialDraft.value);
 function resetDraft() { Object.assign(draft, toPeopleEditDraft(props.record)); initialDraft.value = JSON.stringify(draft); Object.keys(errors).forEach((key) => delete errors[key]); }

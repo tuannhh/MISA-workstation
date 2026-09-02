@@ -128,18 +128,19 @@ async function confirm(cookie, payload) {
   return { res, body: await res.json() };
 }
 
-test('propose: khớp đúng 1 candidate -> confidence high, đề xuất điểm được kẹp biên', async () => {
+test('propose: khớp đúng 1 candidate -> confidence high; score từ model bị bỏ qua hoàn toàn', async () => {
   const pid = insertPerson(`Nguyễn Thị Voice ${Date.now()}`, 50);
   const person = getPerson(pid);
   const { res, body } = await propose(execACookie, {
     transcript: 't', summary: 's', channel: 'Điện thoại', result: 'Tích cực',
-    person_name: person.full_name, org_name: '', suggested_score_delta: 999, // vượt biên, phải bị kẹp
+    person_name: person.full_name, org_name: '', suggested_score_delta: 999,
   });
   assert.equal(res.status, 200);
   assert.equal(body.matchConfidence.person, 'high');
   assert.equal(body.personCandidates.length, 1);
   assert.equal(body.personCandidates[0].id, pid);
-  assert.equal(body.suggestedScoreDelta, 10); // SCORE_DELTA_MAX
+  assert.equal('suggestedScoreDelta' in body, false);
+  assert.equal('suggested_score_delta' in JSON.parse(getProposal(body.proposalId).payload_json), false);
   assert.ok(body.proposalId);
 });
 
@@ -190,7 +191,7 @@ test('confirm: proposal nhieu candidate bat buoc chon dung mot; thieu hoac chon 
   assert.equal(countInteractions(), before_ + 1);
 });
 
-test('propose->confirm happy path: tao interaction + doi relationship_score dung mot lan', async () => {
+test('propose->confirm happy path: tao interaction, khong tu dong doi relationship_score', async () => {
   const pid = insertPerson(`Happy Path ${Date.now()}`, 50);
   const before_ = countInteractions();
   const { body: p } = await propose(execACookie, {
@@ -201,10 +202,9 @@ test('propose->confirm happy path: tao interaction + doi relationship_score dung
   assert.equal(res.status, 200);
   assert.equal(body.ok, true);
   assert.ok(body.interactionId);
-  assert.equal(body.person.scoreApplied, true);
-  assert.equal(body.person.relationship_score, 55);
+  assert.equal('person' in body, false);
   assert.equal(countInteractions(), before_ + 1);
-  assert.equal(getPerson(pid).relationship_score, 55);
+  assert.equal(getPerson(pid).relationship_score, 50);
   const row = db.prepare('SELECT * FROM interactions WHERE id=?').get(body.interactionId);
   assert.equal(Number(row.partner_id), pid);
   assert.equal(row.partner_type, 'person');
@@ -284,7 +284,7 @@ test('confirm 2 lan KHONG cung idempotencyKey: lan 2 bi tu choi 409, khong tao t
   assert.equal(countInteractions(), before_ + 1);
 });
 
-test('confirm: relationship_score bi doi song song (stale) -> TU CHOI TOAN BO 409, KHONG tao interaction (D14.4, remediation F26)', async () => {
+test('confirm: relationship_score sua tay giua propose va confirm duoc giu nguyen, interaction van tao', async () => {
   const pid = insertPerson(`Stale Score ${Date.now()}`, 50);
   const before_ = countInteractions();
   const { body: p } = await propose(execACookie, {
@@ -294,16 +294,11 @@ test('confirm: relationship_score bi doi song song (stale) -> TU CHOI TOAN BO 40
   // chuẩn bị và lúc xác nhận.
   db.prepare('UPDATE people SET relationship_score=? WHERE id=?').run(70, pid);
   const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-stale' });
-  assert.equal(res.status, 409);
-  assert.equal(body.code, 'PROPOSAL_STALE');
-  assert.equal(countInteractions(), before_); // KHONG tao interaction mo coi khi chi ghi duoc mot nua
-  assert.equal(getPerson(pid).relationship_score, 70); // giữ nguyên giá trị ghi song song, KHÔNG bị đè
-  // F27: trang thai terminal 'stale' (KHONG con la 'pending') -- khong the "song lai" du du lieu vo
-  // tinh quay ve dung snapshot cu; client phai tao proposal moi, khong retry proposal nay.
-  assert.equal(getProposal(p.proposalId).status, 'stale');
-  const retry = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-stale-retry' });
-  assert.equal(retry.res.status, 409);
-  assert.equal(retry.body.code, 'PROPOSAL_STALE');
+  assert.equal(res.status, 200);
+  assert.ok(body.interactionId);
+  assert.equal(countInteractions(), before_ + 1);
+  assert.equal(getPerson(pid).relationship_score, 70); // manual value is never overwritten by AI/voice
+  assert.equal(getProposal(p.proposalId).status, 'confirmed');
 });
 
 test('confirm: person bi XOA giua propose va confirm (khong co score delta) -> 409 PROPOSAL_STALE, khong tao interaction (remediation F27)', async () => {
@@ -341,12 +336,12 @@ test('confirm: person DOI TEN (khong phai diem) giua propose va confirm -> 409 P
   assert.equal(countInteractions(), before_);
 });
 
-test('confirm: khong co suggested_score_delta -> chi tao interaction, khong dung toi people', async () => {
+test('confirm: client chen score_delta vao edits bi server bo qua; chi tao interaction', async () => {
   const pid = insertPerson(`No Delta ${Date.now()}`, 50);
   const { body: p } = await propose(execACookie, { transcript: 't', summary: 's', person_name: getPerson(pid).full_name, org_name: '' });
-  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-nodelta' });
+  const { res, body } = await confirm(execACookie, { proposalId: p.proposalId, idempotencyKey: 'k-nodelta', edits: { score_delta: 10 } });
   assert.equal(res.status, 200);
-  assert.equal(body.person, null);
+  assert.equal('person' in body, false);
   assert.equal(getPerson(pid).relationship_score, 50);
 });
 

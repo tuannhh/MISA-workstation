@@ -27,7 +27,7 @@ export function createVoiceApi({ fetchFn = globalThis.fetch, basePath = '/api' }
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw errorOf(response.status, payload);
       if (!String(payload?.proposalId || '').trim() || !String(payload?.expiresAt || '').trim()) throw new InteractionsApiError({ status: 502, code: 'VOICE_PROPOSAL_INVALID_RESPONSE', message: 'Máy chủ trả đề xuất ghi âm không hợp lệ.' });
-      return Object.freeze({ proposalId: payload.proposalId, expiresAt: payload.expiresAt, extracted: Object.freeze(payload.extracted || {}), personCandidates: rows(payload.personCandidates, 'VOICE_PERSON_CANDIDATES_INVALID', 'Danh sách người liên hệ không hợp lệ.'), orgCandidates: rows(payload.orgCandidates, 'VOICE_ORG_CANDIDATES_INVALID', 'Danh sách cơ quan không hợp lệ.'), matchConfidence: Object.freeze(payload.matchConfidence || {}), suggestedScoreDelta: Number(payload.suggestedScoreDelta || 0) });
+      return Object.freeze({ proposalId: payload.proposalId, expiresAt: payload.expiresAt, extracted: Object.freeze(payload.extracted || {}), personCandidates: rows(payload.personCandidates, 'VOICE_PERSON_CANDIDATES_INVALID', 'Danh sách người liên hệ không hợp lệ.'), orgCandidates: rows(payload.orgCandidates, 'VOICE_ORG_CANDIDATES_INVALID', 'Danh sách cơ quan không hợp lệ.'), matchConfidence: Object.freeze(payload.matchConfidence || {}) });
     },
     async confirm({ proposalId, idempotencyKey, edits = {} }) {
       if (!String(proposalId || '').trim() || !String(idempotencyKey || '').trim()) throw new InteractionsApiError({ status: 400, code: 'VOICE_CONFIRM_REQUIRED', message: 'Thiếu mã đề xuất hoặc mã xác nhận an toàn.' });
@@ -35,7 +35,7 @@ export function createVoiceApi({ fetchFn = globalThis.fetch, basePath = '/api' }
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw errorOf(response.status, payload);
       if (!Number.isInteger(Number(payload?.interactionId))) throw new InteractionsApiError({ status: 502, code: 'VOICE_CONFIRM_INVALID_RESPONSE', message: 'Máy chủ chưa trả mã tương tác hợp lệ.' });
-      return Object.freeze({ interactionId: Number(payload.interactionId), idempotent: payload.idempotent === true, person: payload.person || null });
+      return Object.freeze({ interactionId: Number(payload.interactionId), idempotent: payload.idempotent === true });
     },
   });
 }

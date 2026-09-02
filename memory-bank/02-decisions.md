@@ -164,6 +164,16 @@ Owner: *"Người dùng phải xác nhận chứ. Vì speech to text có thể s
 - Route AI voice: giữ "trích-xuất-chờ-duyệt" (D14.2 đã chốt human-in-the-loop) nhưng mở rộng thành **hành động đa bước chờ-xác-nhận-1-lần**; rào chắn: confidence threshold khi match entity (thấp/nhiều khớp → bắt người dùng chọn), log mọi lần ghi để audit.
 - O8: owner đã cho phép gửi Gemini tạm thời (dữ liệu test) — nhưng khi có dữ liệu thật, khía cạnh "AI ghi dữ liệu nghiệp vụ sau xác nhận" nhẹ rủi ro hơn vì đã có human-in-the-loop; khía cạnh "gửi voice/PII cho Gemini" vẫn là cái cần Security/Legal cân nhắc nhất.
 
+### D14.3a — Amendment: `relationship_score` nhập tay, không do AI/Voice đề xuất hay ghi (owner, 2026-09-02)
+
+Owner quyết định không áp dụng bảng quy tắc AI cho `relationship_score` ở phiên bản này. Trường này
+giữ thang 0–100 và được người dùng có quyền sửa trực tiếp trong hồ sơ Nhân sự; không có suy luận,
+delta, hay ghi tự động từ Gemini/Voice. Voice Assistant chỉ tạo bản nháp interaction chờ xác nhận.
+Server bỏ qua cả `suggested_score_delta` của provider và `score_delta` bị client chèn vào confirm,
+kể cả với proposal còn pending từ trước quyết định. Một lần sửa tay điểm giữa propose/confirm không
+làm proposal stale và tuyệt đối không bị Voice ghi đè. Nếu sau này muốn mở lại, đó là feature mới:
+phải có BA policy versioned, migration/compatibility review và test dual-driver riêng.
+
 ### D14.4 — Secure proposal/confirmation contract (mới, theo Codex round-3 re-audit R3-08 — bắt buộc trước khi triển khai Wave 3 voice)
 D14.2 chốt human-in-the-loop đúng hướng, nhưng "AI chuẩn bị, người dùng xác nhận 1 lần" **chưa đủ an toàn nếu chỉ mô tả ở mức ý tưởng** — Codex chỉ ra 3 lỗ hổng cụ thể nếu bước xác nhận không có hợp đồng kỹ thuật rõ:
 1. **Tampering**: nếu client tự giữ payload đề xuất giữa lúc AI chuẩn bị và lúc xác nhận, client có thể sửa payload trước khi gửi xác nhận (vd đổi entity, đổi mức tăng `relationship_score`) mà server không biết đã bị đổi so với cái AI thực sự đề xuất.

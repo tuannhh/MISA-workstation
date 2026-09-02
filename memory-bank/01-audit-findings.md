@@ -223,6 +223,11 @@ Hợp đồng nguồn D14.4 (`02-decisions.md` §E) yêu cầu khi optimistic-co
 - **Resolution:** CAS điểm thất bại do snapshot stale (khác với thiếu QUYỀN sửa điểm — nhánh `PolicyForbiddenError` giữ nguyên hành vi cũ, vẫn tạo interaction bỏ qua phần điểm, vì đó là thiếu quyền chứ không phải dữ liệu lệch thời điểm) nay `throw` bên trong `withTransaction()`, ROLLBACK TOÀN BỘ (kể cả interaction vừa insert), trả `409 PROPOSAL_STALE` yêu cầu tạo lại đề xuất — đúng nghĩa "từ chối, không tạo được cả 2 phần" theo D14.4.
 - Test sửa: "confirm: relationship_score bị đổi song song (stale)" đổi kỳ vọng từ `200`/`scoreApplied:false` sang `409 PROPOSAL_STALE` + `countInteractions()` không đổi + điểm giữ nguyên giá trị ghi song song + proposal quay về `pending` (có thể tạo proposal mới).
 
+> **Superseded by owner decision 2026-09-02:** `relationship_score` nay nhập tay và hoàn toàn ngoài
+> Voice/Gemini. Vì Voice không còn đọc/ghi điểm, một sửa tay điểm giữa propose/confirm không phải
+> stale condition; interaction vẫn được xác nhận và score tay được giữ nguyên. F26 là lịch sử đúng
+> của cơ chế cũ, không còn là hành vi runtime.
+
 ### P2 — `idempotencyKey` không bắt buộc, ghi `null` khi thiếu · **P2 / gộp remediation cùng F25 theo quyết định Codex (không audit vòng riêng)**
 `idempotencyKey` được destructure nhưng không validate, ghi thẳng `null` xuống `voice_proposals.idempotency_key` khi client không gửi — mất khả năng retry đáng tin cậy khi mobile/network timeout (2 request không có key coi như 2 lần confirm khác nhau, gate atomic chỉ dedupe được khi CÓ key trùng).
 - **Resolution:** bắt buộc `idempotencyKey` là string không rỗng, tối đa 200 ký tự; thiếu/rỗng/quá dài trả `400 VALIDATION_FAILED` trước khi chạm DB.
