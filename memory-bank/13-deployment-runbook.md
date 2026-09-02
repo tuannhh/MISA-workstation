@@ -12,7 +12,7 @@ cp .env.example .env
 docker compose up --build
 # Mở http://localhost:3007
 ```
-`docker-compose.yml` dựng 2 service: `db` (MySQL 8.4 — **chỉ xác nhận cho local Docker**, `utf8mb4_unicode_ci`, volume `mysql_data`) + `app` (build từ `Dockerfile`, đọc biến `MYSQL_HOST=db`). Lần khởi động đầu tự tạo bảng + seed 2 tài khoản (`server/db.js` — `init()`+`seed()` chạy ngay khi `require('./db')`, không cần lệnh riêng). **Sửa lại (Codex round-3 re-audit, R3-02E):** phiên bản engine thật của Cloud SQL (môi trường test hiện tại, xem §B) là **UNVERIFIED** — không có artifact nào trong repo xác nhận Cloud SQL cũng chạy 8.4; không suy ra bằng version local Docker.
+`docker-compose.yml` dựng 2 service: `db` (MySQL 8.4 — **chỉ xác nhận cho local Docker**, `utf8mb4_unicode_ci`, volume `mysql_data`) + `app` (build từ `Dockerfile`, đọc biến `MYSQL_HOST=db`). Compose đặt tường minh `NODE_ENV=development` + `LOCAL_DEMO=1`; lần khởi động đầu tự tạo bảng + seed idempotent bốn tài khoản demo D13 (`server/db.js` — `init()`+`seed()` chạy ngay khi `require('./db')`, không cần lệnh riêng). `NODE_ENV=production` luôn chặn demo seed, kể cả nếu có cờ local bị cấu hình nhầm; production MISA phải provision principal thật qua DevOps/SSO. **Sửa lại (Codex round-3 re-audit, R3-02E):** phiên bản engine thật của Cloud SQL (môi trường test hiện tại, xem §B) là **UNVERIFIED** — không có artifact nào trong repo xác nhận Cloud SQL cũng chạy 8.4; không suy ra bằng version local Docker.
 
 ### A.2 SQLite (nhanh, chỉ tương thích — không phải đường chính)
 ```bash

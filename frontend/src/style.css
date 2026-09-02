@@ -166,13 +166,6 @@ input[type='checkbox']:disabled, input[type='radio']:disabled {
 }
 .login-submit { width: 100%; margin-top: 8px; }
 .login-err { min-height: 18px; color: var(--mds-danger, #f04438); }
-.quick { display: grid; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--mds-stroke-neutral-light, #e9eaeb); }
-.quick .qt { color: var(--mds-text-secondary, #6b707a); font-size: 12px; }
-.quick button { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--mds-border, #ced1d6); border-radius: 8px; padding: 8px 12px; background: #fff; text-align: left; }
-.quick button b { flex: 0 0 auto; }
-.quick button span { text-align: right; }
-.quick button:hover { border-color: var(--mds-brand-600, #245fdf); background: var(--mds-bg-brand-brand-light, #f0f6fe); }
-.quick button span { color: var(--mds-text-secondary, #6b707a); font-size: 12px; }
 .copyright { margin-top: 24px; color: var(--mds-text-secondary, #6b707a); text-align: center; font-size: 11px; }
 
 .mds-app { display: flex !important; flex-direction: column; width: 100vw; height: 100dvh; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }

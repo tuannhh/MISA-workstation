@@ -769,18 +769,63 @@ function migrate() {
   db.exec("UPDATE users SET role='executor' WHERE role='pr_staff'");
 }
 
+const LOCAL_DEMO_ACCOUNTS = Object.freeze([
+  // Chỉ dùng khi LOCAL_DEMO=1 ngoài production. Không thay đổi bản ghi đã tồn tại: dữ liệu người
+  // dùng thật luôn phải đi qua luồng quản trị/SSO, không bị seed ghi đè khi app khởi động.
+  { username: 'admin', password: 'admin123', fullName: 'Quản lý phòng PR', role: 'super_admin', email: 'tkmedia@misa.com.vn', sensitivePerms: ['contact', 'private', 'social', 'finance', 'iddoc', 'org_fee'] },
+  { username: 'quantri', password: '123456', fullName: 'Quản trị viên PR', role: 'admin', email: null, sensitivePerms: ['contact', 'private', 'social', 'finance', 'iddoc', 'org_fee'] },
+  { username: 'chuyenvien', password: '123456', fullName: 'Chuyên viên PR', role: 'executor', email: null, sensitivePerms: ['contact'] },
+  { username: 'lanhdao', password: '123456', fullName: 'Ban Lãnh đạo', role: 'viewer', email: null, sensitivePerms: [] },
+]);
+
+function isLocalDemoSeedEnabled() {
+  // Fail-closed even when an environment accidentally carries LOCAL_DEMO=1 into production.
+  return process.env.NODE_ENV !== 'production' && process.env.LOCAL_DEMO === '1';
+}
+
+// Seed idempotent cho local/demo: database cũ có admin/chuyenvien vẫn nhận thêm hai role còn
+// thiếu, nhưng tuyệt đối không reset mật khẩu, role hay quyền của username đã tồn tại.
+function ensureLocalDemoAccounts() {
+  const insUser = db.prepare('INSERT INTO users (username, password_hash, full_name, role, email, sensitive_perms) VALUES (?,?,?,?,?,?)');
+  const findUser = db.prepare('SELECT id FROM users WHERE username=?');
+  const accountIds = new Map();
+  let created = 0;
+
+  withTransaction(() => {
+    for (const account of LOCAL_DEMO_ACCOUNTS) {
+      const existing = findUser.get(account.username);
+      if (existing) {
+        accountIds.set(account.username, existing.id);
+        continue;
+      }
+      const result = insUser.run(
+        account.username,
+        bcrypt.hashSync(account.password, 10),
+        account.fullName,
+        account.role,
+        account.email,
+        JSON.stringify(account.sensitivePerms)
+      );
+      accountIds.set(account.username, result.lastInsertRowid);
+      created += 1;
+    }
+  });
+  return { accountIds, created };
+}
+
 function seed() {
   const userCount = db.prepare('SELECT COUNT(*) c FROM users').get().c;
-  if (userCount > 0) return;
+  // Không tạo credential dự đoán được nếu local demo không được owner/runner opt-in rõ ràng.
+  if (!isLocalDemoSeedEnabled()) {
+    if (userCount === 0) console.warn('⚠ Chưa có user và LOCAL_DEMO!=1 (hoặc production): không tự tạo tài khoản demo. Hãy provision principal thật hoặc chạy local với LOCAL_DEMO=1.');
+    return;
+  }
 
-  const hash = (p) => bcrypt.hashSync(p, 10);
-  const ALL = JSON.stringify(['contact', 'private', 'social', 'finance', 'iddoc', 'org_fee']);
-  const insUser = db.prepare('INSERT INTO users (username, password_hash, full_name, role, email, sensitive_perms) VALUES (?,?,?,?,?,?)');
-  // Seed demo 2 tài khoản trong 4 vai trò D13 (viewer/executor/admin/super_admin): Quản lý phòng
-  // (super_admin, toàn quyền) + Chuyên viên PR (executor, CRUD nghiệp vụ, xem mật theo phân quyền).
-  // viewer/admin tạo qua POST /api/admin/users khi cần (rbac.ROLES đã khai đủ 4 vai trò).
-  insUser.run('admin', hash('admin123'), 'Quản lý phòng PR', 'super_admin', 'tkmedia@misa.com.vn', ALL);
-  insUser.run('chuyenvien', hash('123456'), 'Chuyên viên PR', 'executor', null, JSON.stringify(['contact']));
+  const { accountIds, created } = ensureLocalDemoAccounts();
+  if (userCount > 0) {
+    if (created > 0) console.log(`✓ Đã bổ sung ${created} tài khoản demo local còn thiếu (đủ 4 vai trò D13).`);
+    return;
+  }
 
   // Dữ liệu mẫu demo chỉ tạo khi chạy với --demo (mặc định: sạch để nhập liệu thật)
   const DEMO = process.argv.includes('--demo') || process.env.SEED_DEMO === '1';
@@ -915,10 +960,12 @@ function seed() {
 
   // ---------- Phân công người chăm sóc ----------
   const insAssign = db.prepare('INSERT OR IGNORE INTO assignments (user_id, subject_type, subject_id) VALUES (?,?,?)');
-  // user 3 = chuyenvien, 2 = truongphong
-  insAssign.run(2, 'org', oVne); insAssign.run(2, 'person', pMinhAnh); insAssign.run(2, 'award', awSaoKhue);
-  insAssign.run(2, 'org', oTuoiTre); insAssign.run(2, 'person', pMinhAnh); insAssign.run(2, 'award', awSaoKhue);
-  insAssign.run(2, 'org', oVTV);
+  // Luôn lấy id executor từ seed thay vì phụ thuộc thứ tự INSERT. Khi thêm role demo mới,
+  // assignment demo vẫn phải thuộc Chuyên viên PR chứ không vô tình chuyển sang Admin.
+  const executorId = accountIds.get('chuyenvien');
+  insAssign.run(executorId, 'org', oVne); insAssign.run(executorId, 'person', pMinhAnh); insAssign.run(executorId, 'award', awSaoKhue);
+  insAssign.run(executorId, 'org', oTuoiTre); insAssign.run(executorId, 'person', pMinhAnh); insAssign.run(executorId, 'award', awSaoKhue);
+  insAssign.run(executorId, 'org', oVTV);
 
   // Liên kết 1 booking với giải Sao Khuê (demo "chi phí truyền thông cho giải")
   db.prepare(`UPDATE bookings SET award_id=? WHERE title LIKE 'Bài PR ra mắt AMIS%'`).run(awSaoKhue);
@@ -973,7 +1020,7 @@ function seed() {
   db.prepare("UPDATE events SET misa_keynotes=? WHERE id=?").run(1, evWebinar);
   } // end if (DEMO)
 
-  console.log(DEMO ? '✓ Đã seed 2 tài khoản + dữ liệu mẫu (demo).' : '✓ Đã seed sạch: 2 tài khoản (Quản lý phòng + Chuyên viên PR), chưa có dữ liệu nghiệp vụ.');
+  console.log(DEMO ? '✓ Đã seed 4 tài khoản local + dữ liệu mẫu (demo).' : '✓ Đã seed sạch: 4 tài khoản demo local (đủ vai trò D13), chưa có dữ liệu nghiệp vụ.');
 }
 
 function audit(entry) {

@@ -2899,7 +2899,6 @@ async function doLogin(username, password) {
   } catch (e) { $('#loginErr').textContent = e.message; }
 }
 $('#loginForm').addEventListener('submit', (e) => { e.preventDefault(); doLogin($('#username').value, $('#password').value); });
-document.querySelectorAll('.quick button').forEach((b) => b.onclick = () => { $('#username').value = b.dataset.u; $('#password').value = b.dataset.p; doLogin(b.dataset.u, b.dataset.p); });
 $('#logoutBtn').addEventListener('click', async () => { await api('POST', '/logout'); state = { user: null, perms: null }; location.hash = ''; showLogin(); });
 
 // ---------------- boot ----------------

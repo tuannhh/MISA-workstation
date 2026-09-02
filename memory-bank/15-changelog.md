@@ -1,5 +1,12 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-02 — Đồng bộ demo login với bốn role D13 (Codex)
+
+- Bỏ hoàn toàn UI/handler “Đăng nhập nhanh”; mọi phiên demo đi qua form login và endpoint thật, không còn client-side credential bypass.
+- `server/db.js` seed idempotent bốn tài khoản local/dev tương ứng `super_admin`/`admin`/`executor`/`viewer`, đồng thời sửa assignment dữ liệu mẫu lấy id executor thay vì phụ thuộc thứ tự INSERT. Bản ghi đã tồn tại không bị đổi role/mật khẩu.
+- `LOCAL_DEMO=1` là opt-in; `NODE_ENV=production` luôn từ chối credential dự đoán được. Log cũng không in mật khẩu. DevOps/SSO provision principal thật trước khi phục vụ người dùng.
+- Thêm `AUTH-DEMO-001/002` (login HTTP thật đủ bốn role, dual-driver; production từ chối seed kể cả nếu cờ local bị cấu hình nhầm) và `UI-LOGIN-001` (không còn markup/handler/CSS bypass). README/runbook/known-traps/roadmap đã đồng bộ.
+
 ## 2026-09-02 — Hardening F9 attachment classification + F12 booking event link (Codex)
 
 - **F9 closed:** thêm `attachments.classification_tier` cùng backfill idempotent (portrait=`Public`, id_doc=`Restricted`, còn lại=`Confidential`); registry `attachmentPolicyFor()` là nguồn server-side duy nhất cho tier/ceiling. Event chỉ nhận allowlist kind, chuẩn hoá alias legacy `doc`/`Tài liệu` thành `Khác`, và reject kind lạ **trước Multer** để không tạo row/tệp mồ côi. Mọi đường upload hiện persist tier + `private` ceiling rõ ràng.

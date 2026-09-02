@@ -18,30 +18,34 @@ docker compose up --build
 # Mở http://localhost:3007
 ```
 
-MySQL và thư mục tệp tải lên được lưu bằng Docker volume. Khi khởi động lần đầu, backend tự tạo bảng và dữ liệu tài khoản mặc định.
+MySQL và thư mục tệp tải lên được lưu bằng Docker volume. Docker Compose này là local development; lần khởi động đầu tự tạo bảng và bốn tài khoản demo D13.
 
 ## Chạy nhanh với SQLite cũ
 
 ```bash
 npm install
-DB_CLIENT=sqlite npm start
+npm run start:local
 # Mở http://localhost:3007
 ```
 - Đặt lại dữ liệu mẫu SQLite: `DB_CLIENT=sqlite npm run seed`
 - Dữ liệu tương thích SQLite lưu ở `data/pr.db`.
 
-## Tài khoản demo
+## Tài khoản demo local
+
+Chỉ có khi bật `LOCAL_DEMO=1` ngoài production để kiểm thử đủ bốn vai trò. Không còn nút “Đăng nhập nhanh”; nhập tài khoản/mật khẩu như người dùng thật. Nếu DB local đã có `admin`/`chuyenvien` từ bản cũ, lần khởi động kế tiếp chỉ bổ sung các tài khoản còn thiếu và không ghi đè bản ghi hiện có.
+
 | Tài khoản | Mật khẩu | Vai trò | Đặc điểm |
 |---|---|---|---|
-| `admin` | `admin123` | Super Admin (IT) | Toàn quyền + quản trị + xem dữ liệu mật |
-| `truongphong` | `123456` | Trưởng phòng PR | Toàn quyền nghiệp vụ + **xem dữ liệu mật** |
-| `chuyenvien` | `123456` | Chuyên viên PR | Thêm/sửa, **KHÔNG xem dữ liệu mật** (hiển thị ●●●) |
-| `lanhdao` | `123456` | Ban Lãnh đạo | **Chỉ xem**, không sửa, không dữ liệu mật |
-| `xem` | `123456` | Cộng tác viên | Xem hạn chế (không CQNN/Danh bạ/Quản trị) |
+| `admin` | `admin123` | `super_admin` — Quản lý phòng | Toàn quyền, quản trị và xem dữ liệu mật |
+| `quantri` | `123456` | `admin` — Quản trị viên | Quản trị nghiệp vụ; không quản lý tài khoản Admin/Super Admin |
+| `chuyenvien` | `123456` | `executor` — Chuyên viên PR | Nhập liệu theo quyền, dữ liệu mật theo cấp riêng |
+| `lanhdao` | `123456` | `viewer` — Ban Lãnh đạo | Chỉ xem, không thao tác ghi |
+
+`NODE_ENV=production` luôn chặn seed này, kể cả khi ai đó đặt nhầm `LOCAL_DEMO=1`. DevOps/SSO phải provision principal thật trước khi phục vụ người dùng; không dùng mật khẩu demo ở trên.
 
 ## Tính năng prototype
 - **CRM đối ngoại:** Cơ quan báo chí · Phóng viên (điểm quan hệ) · Hiệp hội (hội phí, tài trợ, giải thưởng) · CQNN · Danh bạ/VIP · Lịch sử tương tác.
-- **RBAC:** 5 vai trò, gác quyền theo module + hành động (xem/thêm/sửa/xóa), menu dựng động theo quyền.
+- **RBAC:** 4 vai trò D13 (`viewer`/`executor`/`admin`/`super_admin`), gác quyền theo module + hành động (xem/thêm/sửa/xóa), menu dựng động theo quyền.
 - **Bảo mật trường nhạy cảm:** đời tư phóng viên, hội phí, ngân sách tài trợ bị che `●●●` với người không đủ quyền; **ghi audit log** khi người đủ quyền mở dữ liệu mật.
 - **Dashboard** tổng quan + **trang Quản trị** (người dùng + nhật ký truy cập).
 - Bảng có **tìm kiếm + phân trang server-side** (sẵn sàng chịu tải nhiều bản ghi).

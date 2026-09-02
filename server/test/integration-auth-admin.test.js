@@ -6,6 +6,10 @@
 // không có :id hoặc không có khái niệm "invalid body" thì bỏ qua case đó có ghi chú tại sao).
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 const isMysql = String(process.env.DB_CLIENT || 'mysql').toLowerCase() === 'mysql';
 const dbHarness = require('../test-support/db-harness');
@@ -85,6 +89,53 @@ test('R143 invalid: thiếu username/password trả 401 (không 400/500)', async
     body: JSON.stringify({}),
   });
   assert.equal(res.status, 401);
+});
+
+test('AUTH-DEMO-001: seed local có đủ bốn role D13 và mọi tài khoản demo đăng nhập qua HTTP thật', async () => {
+  const expected = [
+    ['admin', 'admin123', 'super_admin'],
+    ['quantri', '123456', 'admin'],
+    ['chuyenvien', '123456', 'executor'],
+    ['lanhdao', '123456', 'viewer'],
+  ];
+  const { db } = require('../db');
+  const rows = db.prepare(`SELECT username, role FROM users WHERE username IN ('admin','quantri','chuyenvien','lanhdao') ORDER BY username`).all()
+    .map(({ username, role }) => ({ username, role }));
+  assert.deepEqual(rows, [
+    { username: 'admin', role: 'super_admin' },
+    { username: 'chuyenvien', role: 'executor' },
+    { username: 'lanhdao', role: 'viewer' },
+    { username: 'quantri', role: 'admin' },
+  ]);
+
+  for (const [username, password, role] of expected) {
+    const res = await fetch(`${baseUrl}/api/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    assert.equal(res.status, 200, `${username} phải đăng nhập được`);
+    assert.equal((await res.json()).user.role, role, `${username} phải có đúng role D13`);
+  }
+});
+
+test('AUTH-DEMO-002: production từ chối demo seed kể cả khi LOCAL_DEMO=1', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-demo-production-'));
+  try {
+    const stdout = execFileSync(process.execPath, ['-e', `
+      const { db, closeDb } = require('./server/db');
+      console.log(db.prepare('SELECT COUNT(*) c FROM users').get().c);
+      Promise.resolve(closeDb()).then(() => process.exit(0));
+    `], {
+      cwd: path.resolve(__dirname, '..', '..'),
+      env: { ...process.env, DB_CLIENT: 'sqlite', DATA_DIR: dataDir, NODE_ENV: 'production', LOCAL_DEMO: '1' },
+      encoding: 'utf8',
+    });
+    assert.equal(Number(stdout.trim().split(/\s+/).at(-1)), 0,
+      'production không được tạo bất kỳ tài khoản demo nào');
+  } finally {
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -498,8 +498,9 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 > quan tới việc bỏ 2-role vừa xong (route chưa gắn PolicyEngine đã tự động đúng cho 4 vai trò nhờ
 > MATRIX, không bị chặn bởi việc PolicyEngine wiring chưa xong). `08-permission-matrix.md` §B.2
 > (UI-flow theo role×device) vẫn giữ 2 cột role cũ — phạm vi UI/characterization (Codex lane), chưa
-> rebuild cho 4 vai trò, đã ghi chú rõ trong file đó. Seed demo (`server/db.js`) vẫn giữ 2 tài khoản
-> (super_admin + executor) — viewer/admin tạo qua API thật khi cần, không seed thêm.
+> rebuild cho 4 vai trò, đã ghi chú rõ trong file đó. **Cập nhật 2026-09-02:** seed local/dev nay
+> idempotent đủ 4 tài khoản D13, không có quick-login UI; `LOCAL_DEMO=1` opt-in và production tắt
+> demo seed hoàn toàn.
 
 > **Execution update — 2026-08-30 (RBAC-FIELDVIS-FIX: P0 tự phát hiện trước khi bắt đầu Batch
 > RBAC-EXP-B2):** kiểm tra thủ công `projectRecord()` cho entity `person` với `principal.role=

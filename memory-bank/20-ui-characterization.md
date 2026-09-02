@@ -41,11 +41,11 @@ Kiểm tra trên server SQLite với `DATA_DIR` tạm (`/private/tmp/pr-g1a6-ui-
 
 ### Desktop
 
-- Đăng nhập nhanh **Quản lý phòng / Toàn quyền** và mở đủ 14 hash root:
+- Đăng nhập bằng form với demo `admin` (**Quản lý phòng / Toàn quyền**) và mở đủ 14 hash root:
   `dashboard`, `press`, `association`, `gov`, `other`, `people`, `events`, `awards`,
   `suppliers`, `interactions`, `monitor`, `reminders`, `reports`, `admin`.
   Tất cả render heading tương ứng, không có lỗi UI hiển thị.
-- Đăng nhập nhanh **Chuyên viên PR** và mở cùng danh sách. 12 module được phép render;
+- Đăng nhập bằng form với demo `chuyenvien` (**Chuyên viên PR**) và mở cùng danh sách. 12 module được phép render;
   `#reports` và `#admin` không có nav entry, direct hash đều resolve về `#dashboard`.
   Đây là hành vi current-state `D-403` (redirect/ẩn nav), **không** phải trang 403 đạt chuẩn.
 

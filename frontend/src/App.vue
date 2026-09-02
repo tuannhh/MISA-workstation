@@ -284,11 +284,6 @@ onBeforeUnmount(() => {
         <button class="btn primary login-submit" type="submit">Đăng nhập</button>
         <div class="login-err" id="loginErr" role="alert"></div>
       </form>
-      <div class="quick">
-        <div class="qt">Đăng nhập nhanh</div>
-        <button data-u="admin" data-p="admin123"><b>Quản lý phòng</b><span>Toàn quyền</span></button>
-        <button data-u="chuyenvien" data-p="123456"><b>Chuyên viên PR</b><span>Nhập liệu theo phân quyền</span></button>
-      </div>
       <div class="copyright">Copyright © 1994 - {{ new Date().getFullYear() }} MISA JSC</div>
     </div>
   </div>

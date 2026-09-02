@@ -77,3 +77,14 @@ test('UI-CHAR-005: đổi hash chỉ được giữ đúng một Vue strangler r
   assert.match(appVue, /const resolveUiFeatureRoute = \(key\) => \{ clearUiFeatureRoutes\(\); return resolvePeopleListRoute/,
     'reset phải chạy trước chuỗi resolver, không phụ thuộc thứ tự route cũ');
 });
+
+test('UI-LOGIN-001: màn hình không có lối tắt/bypass đăng nhập demo', () => {
+  assert.doesNotMatch(appVue, /Đăng nhập nhanh|class="quick"|data-u=|data-p=/,
+    'login Vue chỉ được nhận tài khoản/mật khẩu người dùng tự nhập');
+  assert.doesNotMatch(appJs, /querySelectorAll\('\.quick button'\)|doLogin\(b\.dataset\.u, b\.dataset\.p\)/,
+    'legacy app.js không được giữ handler tự điền/tự đăng nhập demo');
+  assert.doesNotMatch(style, /\.quick(?:\s|\.|\{)/,
+    'CSS của lối tắt cũ phải được xoá cùng UI');
+  assert.match(appVue, /<form id="loginForm">[\s\S]*?id="username"[\s\S]*?id="password"[\s\S]*?type="submit"/,
+    'login chuẩn vẫn yêu cầu đủ hai credential do người dùng nhập');
+});
