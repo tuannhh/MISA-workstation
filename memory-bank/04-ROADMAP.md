@@ -1291,6 +1291,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > Đây là contract-ready/fake-host evidence, **không** thay cho bridge AMIS hay device evidence: W3.VOICE.2
 > và W4 vẫn `UNVERIFIED` tới O3.
 
+> **Execution update — 2026-09-02 (W3.VOICE.2, phần không chờ O3):** native composition của các
+> slice Wave 3 có một entry Voice toàn cục, chỉ hiện khi `/api/me` xác nhận `interactions:create`.
+> Entry giữ safe-area qua W2.5 adapter, mở deep-link `#interactions?voice=1` để vào review/upload
+> trực tiếp; direct link không có quyền dừng ở `VOICE_FORBIDDEN`, còn mọi request propose/confirm
+> vẫn qua R149/R150 và PolicyEngine. Fake-native đã kiểm chứng Events → Voice ở 390px (nút 48px,
+> không overflow). **Không có microphone API, token, hay bridge message nào được suy đoán:** mic OS,
+> native lifecycle/Back và thiết bị thật tiếp tục là phần O3/W4 bị chặn ngoài.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

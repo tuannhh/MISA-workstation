@@ -66,6 +66,22 @@ test('UI-VOICE-003: nhiều candidate phải chọn đúng một và Native dùn
   assert.match(tokens, /\.mds-mobile-app\s*\{[\s\S]*--mds-btn-height:\s*var\(--mds-mobile-touch-target\)/);
 });
 
+test('UI-VOICE-004: entry toàn cục Native chỉ hiện sau permission và mở review Voice bằng deep-link có kiểm soát', () => {
+  const trigger = fs.readFileSync(path.join(root, 'frontend', 'src', 'features', 'voice', 'mobile', 'GlobalVoiceTrigger.vue'), 'utf8');
+  const legacyRouter = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+  assert.match(trigger, /fetch\('\/api\/me'/);
+  assert.match(trigger, /interactions\?\.includes\('create'\)/);
+  assert.match(trigger, /HostEvent\.VIEWPORT/);
+  assert.match(trigger, /mds-mobile-touch-target/);
+  assert.match(appVue, /\^interactions\(\?:\\\?voice=1\)\?\$/);
+  assert.match(appVue, /initialMode/);
+  assert.match(appVue, /GlobalVoiceTrigger/);
+  assert.match(appVue, /url\.hash = 'interactions\?voice=1'/);
+  assert.match(feature, /initialVoicePending/);
+  assert.match(feature, /VOICE_FORBIDDEN/);
+  assert.match(legacyRouter, /key\.split\(\/\[\/\?\]\//);
+});
+
 test('UI-EVENT-001: Event core chỉ gửi Public allowlist, không nhận tiền/file/owner', async () => {
   const eventRoot = path.join(root, 'frontend', 'src', 'features', 'events', 'domain'); const { EVENT_PUBLIC_FIELDS, toEventDraft, toEventPayload } = await import(pathToFileURL(path.join(eventRoot, 'event-write.mjs')).href); assert.equal(toEventDraft(null).name, ''); const payload = toEventPayload({ ...toEventDraft(), name: 'Hội nghị truyền thông', owner_id: 99, total_cost: 9000000, attachments: ['x'] });
   assert.equal(payload.name, 'Hội nghị truyền thông'); for (const forbidden of ['owner_id', 'total_cost', 'attachments', 'caretaker_ids']) assert.equal(forbidden in payload, false); assert.ok(EVENT_PUBLIC_FIELDS.includes('start_time')); assert.throws(() => toEventPayload({}), /Tên sự kiện/);

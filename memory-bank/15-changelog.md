@@ -3265,3 +3265,12 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Verify: `UI-VOICE-003`, `integration-voice-secure-command` SQLite 16/16, security 6/6,
   mapping 150/150, G0 verifier và Vite production build PASS. Đây không phải evidence AMIS host
   thật; O3/W4 về bridge, thiết bị và OS accessibility vẫn `UNVERIFIED`.
+
+## 2026-09-02 — W3.VOICE.2: global entry contract-ready
+
+- Native slice có entry Voice toàn cục khi và chỉ khi `/api/me` cho phép `interactions:create`.
+  Entry dùng safe-area từ host adapter và deep-link có kiểm soát `#interactions?voice=1`; direct
+  link không quyền fail-closed `VOICE_FORBIDDEN`.
+- Không tích hợp mic/browser API, không đoán token hay AMIS bridge schema. Runtime fake-native từ
+  Events sang Voice đạt nút 48px và không overflow. `unit-host-adapter`, UI characterization và
+  UI interactions đạt 41/41; Vite build PASS. O3/W4 device evidence vẫn còn mở.

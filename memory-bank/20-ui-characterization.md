@@ -87,3 +87,13 @@ Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/
 - Bằng chứng tự động: `UI-VOICE-003` và `integration-voice-secure-command` (SQLite 16/16).
   Đây chỉ xác nhận browser fake provider. Permission mic, host Back/lifecycle, safe-area thực tế và
   accessibility OS vẫn cần bridge contract O3 + thiết bị thật ở Wave 4.
+
+### W3.VOICE.2 — global entry contract-ready
+
+- Các native slice đang hoạt động có entry `Giọng nói` cố định, nhưng chỉ sau `GET /api/me` xác nhận
+  quyền `interactions:create`; lỗi mạng hoặc principal không rõ đều không render action.
+- Entry truyền safe-area từ host adapter W2.5 và mở `#interactions?voice=1`, đưa người dùng thẳng
+  vào review/upload. Nó **không** gọi microphone browser, không tự nhận identity từ host và không
+  thay thế R149/R150. Direct link không có quyền dừng với `VOICE_FORBIDDEN`.
+- Fake-native runtime: Events → Voice tại 390px, button 48px và không overflow. Host/device/mic
+  thật vẫn `UNVERIFIED` tới O3/W4.

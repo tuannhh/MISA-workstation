@@ -9,6 +9,7 @@ import PartnerDetailFeature from './features/partners/PartnerDetailFeature.vue';
 import SupplierDetailFeature from './features/suppliers/SupplierDetailFeature.vue';
 import InteractionsListFeature from './features/interactions/InteractionsListFeature.vue';
 import EventsListFeature from './features/events/EventsListFeature.vue';
+import GlobalVoiceTrigger from './features/voice/mobile/GlobalVoiceTrigger.vue';
 const AwardsListFeature = defineAsyncComponent(() => import('./features/awards/AwardsListFeature.vue'));
 const MonitoringDashboardFeature = defineAsyncComponent(() => import('./features/monitoring/MonitoringDashboardFeature.vue'));
 const ReportsOverviewFeature = defineAsyncComponent(() => import('./features/reports/ReportsOverviewFeature.vue'));
@@ -142,10 +143,12 @@ function resolveSupplierDetailRoute(key) {
 }
 
 function resolveInteractionsRoute(key) {
-  if (!isInteractionsPilotEnabled() || key !== 'interactions') { interactionsFeatureRoute.value = null; return false; }
+  const match = /^interactions(?:\?voice=1)?$/.exec(key);
+  if (!isInteractionsPilotEnabled() || !match) { interactionsFeatureRoute.value = null; return false; }
   const surface = requestedSurface('uiInteractionsSurface');
-  try { interactionsFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiInteractionsSurface'), hostUnavailable: false }; }
-  catch (error) { if (surface !== HostSurface.NATIVE) throw error; interactionsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; }
+  const initialMode = key.endsWith('?voice=1') ? 'voice' : 'read';
+  try { interactionsFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiInteractionsSurface'), hostUnavailable: false, initialMode }; }
+  catch (error) { if (surface !== HostSurface.NATIVE) throw error; interactionsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true, initialMode }; }
   return true;
 }
 function resolveEventsRoute(key) { const match = /^events(?:\/(\d+))?$/.exec(key); if (!isEventsPilotEnabled() || !match) { eventsFeatureRoute.value = null; return false; } const surface = requestedSurface('uiEventsSurface'); const eventId = match[1] ? Number(match[1]) : null; try { eventsFeatureRoute.value = { eventId, surface, adapter: selectHostAdapter(surface, 'uiEventsSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; eventsFeatureRoute.value = { eventId, surface, adapter: null, hostUnavailable: true }; } return true; }
@@ -197,6 +200,17 @@ const desktopReportsFeature = computed(() => reportsFeatureRoute.value?.surface 
 const nativeReportsFeature = computed(() => reportsFeatureRoute.value?.surface === HostSurface.NATIVE ? reportsFeatureRoute.value : null);
 const desktopAdminFeature = computed(() => adminFeatureRoute.value?.surface === HostSurface.DESKTOP ? adminFeatureRoute.value : null);
 const nativeAdminFeature = computed(() => adminFeatureRoute.value?.surface === HostSurface.NATIVE ? adminFeatureRoute.value : null);
+const activeNativeAdapter = computed(() => [nativePeopleFeature.value, nativePeopleListFeature.value, nativePartnerFeature.value, nativeSupplierFeature.value, nativeInteractionsFeature.value, nativeEventsFeature.value, nativeAwardsFeature.value, nativeMonitoringFeature.value, nativeReportsFeature.value, nativeAdminFeature.value].find((route) => route?.adapter)?.adapter || null);
+const showGlobalVoiceTrigger = computed(() => Boolean(activeNativeAdapter.value) && !nativeInteractionsFeature.value && isInteractionsPilotEnabled());
+function launchNativeVoice() {
+  if (!activeNativeAdapter.value) return;
+  if (!isLocalUiHarness) { location.hash = 'interactions?voice=1'; return; }
+  const url = new URL(location.href);
+  url.searchParams.set('uiInteractionsPilot', '1');
+  url.searchParams.set('uiInteractionsSurface', HostSurface.NATIVE);
+  url.hash = 'interactions?voice=1';
+  location.assign(url);
+}
 const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key) || resolveAwardsRoute(key) || resolveMonitoringRoute(key) || resolveReportsRoute(key) || resolveAdminRoute(key);
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
@@ -306,12 +320,13 @@ onBeforeUnmount(() => {
     :host-unavailable="nativeSupplierFeature.hostUnavailable"
     @back="leaveSupplierDetail"
   />
-  <InteractionsListFeature v-if="nativeInteractionsFeature" :surface="nativeInteractionsFeature.surface" :adapter="nativeInteractionsFeature.adapter" :host-unavailable="nativeInteractionsFeature.hostUnavailable" @back="leaveInteractions" />
+  <InteractionsListFeature v-if="nativeInteractionsFeature" :surface="nativeInteractionsFeature.surface" :adapter="nativeInteractionsFeature.adapter" :host-unavailable="nativeInteractionsFeature.hostUnavailable" :initial-mode="nativeInteractionsFeature.initialMode" @back="leaveInteractions" />
   <EventsListFeature v-if="nativeEventsFeature" :event-id="nativeEventsFeature.eventId" :surface="nativeEventsFeature.surface" :adapter="nativeEventsFeature.adapter" :host-unavailable="nativeEventsFeature.hostUnavailable" @back="leaveEvents" />
   <AwardsListFeature v-if="nativeAwardsFeature" :award-id="nativeAwardsFeature.awardId" :surface="nativeAwardsFeature.surface" :adapter="nativeAwardsFeature.adapter" :host-unavailable="nativeAwardsFeature.hostUnavailable" @back="leaveAwards" />
   <MonitoringDashboardFeature v-if="nativeMonitoringFeature" :surface="nativeMonitoringFeature.surface" :adapter="nativeMonitoringFeature.adapter" :host-unavailable="nativeMonitoringFeature.hostUnavailable" @back="leaveMonitoring" />
   <ReportsOverviewFeature v-if="nativeReportsFeature" :surface="nativeReportsFeature.surface" :adapter="nativeReportsFeature.adapter" :host-unavailable="nativeReportsFeature.hostUnavailable" @back="leaveReports" />
   <AdminUsersFeature v-if="nativeAdminFeature" :surface="nativeAdminFeature.surface" :adapter="nativeAdminFeature.adapter" :host-unavailable="nativeAdminFeature.hostUnavailable" @back="leaveAdmin" />
+  <GlobalVoiceTrigger v-if="showGlobalVoiceTrigger" :adapter="activeNativeAdapter" @launch="launchNativeVoice" />
 
   <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature || nativeEventsFeature || nativeAwardsFeature || nativeMonitoringFeature || nativeReportsFeature || nativeAdminFeature }">
     <header class="platform-header">
@@ -370,7 +385,7 @@ onBeforeUnmount(() => {
           :adapter="desktopSupplierFeature.adapter"
           @back="leaveSupplierDetail"
         />
-        <InteractionsListFeature v-if="desktopInteractionsFeature" :surface="desktopInteractionsFeature.surface" :adapter="desktopInteractionsFeature.adapter" @back="leaveInteractions" />
+        <InteractionsListFeature v-if="desktopInteractionsFeature" :surface="desktopInteractionsFeature.surface" :adapter="desktopInteractionsFeature.adapter" :initial-mode="desktopInteractionsFeature.initialMode" @back="leaveInteractions" />
         <EventsListFeature v-if="desktopEventsFeature" :event-id="desktopEventsFeature.eventId" :surface="desktopEventsFeature.surface" :adapter="desktopEventsFeature.adapter" @back="leaveEvents" />
         <AwardsListFeature v-if="desktopAwardsFeature" :award-id="desktopAwardsFeature.awardId" :surface="desktopAwardsFeature.surface" :adapter="desktopAwardsFeature.adapter" @back="leaveAwards" />
         <MonitoringDashboardFeature v-if="desktopMonitoringFeature" :surface="desktopMonitoringFeature.surface" :adapter="desktopMonitoringFeature.adapter" @back="leaveMonitoring" />
