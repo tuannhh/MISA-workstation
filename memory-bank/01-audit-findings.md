@@ -262,6 +262,21 @@ Phát hiện ngay trong chính vòng re-audit ACCEPTED F27: `fetchPersonSnapshot
 - **Regression evidence:** `UI-EVENT-001`, `UI-AWARD-002`, `UI-AWARD-003` gọi trực tiếp draft với
   `null`; các UI contract tests và production build đều chạy sau bản vá.
 
+### F31 — Đổi hash có thể giữ mini-app Vue cũ trên DOM · **P1 High / browser-production — FIXED (2026-09-02)**
+
+- **Bằng chứng:** từng native strangler slice giữ route của mình trong một `ref` riêng. Resolver
+  hash dùng chuỗi `||` và dừng ngay khi route mới khớp, nên những `ref` của màn hình trước đó nằm
+  sau resolver vừa khớp không được xoá. Fake-native runtime tái hiện bằng cách chuyển liên tiếp
+  `#events → #admin → #monitor → #reports → #interactions → #awards → #people → #person/1 →
+  #partner/1 → #suppliers/1`: trước bản vá, có lúc nhiều `.mds-mobile-app` cùng tồn tại; nội dung
+  và action của màn hình cũ có thể còn xuất hiện dù URL đã đổi.
+- **Resolution:** `frontend/src/App.vue` tập hợp toàn bộ route ref vào một danh sách bất biến và
+  `clearUiFeatureRoutes()` trước khi bất kỳ resolver nào claim hash mới. Thay đổi chỉ quản lý state
+  presentation; API, principal và PolicyEngine server-side không thay đổi.
+- **Regression evidence:** `UI-CHAR-005` khoá thứ tự reset bằng source contract. Runtime fake-native
+  390×844 sau bản vá xác nhận đủ 10 hash trên: mỗi lần `rootCount=1`, `visibleRoots=1`, không overflow
+  ngang. Đây là evidence browser/fake-host, không phải xác nhận AMIS WebView thật (O3/W4 vẫn mở).
+
 ## E. Điểm mạnh nên bảo toàn
 - Mô hình nghiệp vụ PR phong phú, liên hệ nhiều thực thể.
 - RBAC server-side + audit + per-user `sensitive_perms` (biểu cảm hơn role cứng).

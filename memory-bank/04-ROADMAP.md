@@ -1299,6 +1299,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > không overflow). **Không có microphone API, token, hay bridge message nào được suy đoán:** mic OS,
 > native lifecycle/Back và thiết bị thật tiếp tục là phần O3/W4 bị chặn ngoài.
 
+> **Execution update — 2026-09-02 (F31, native route lifecycle):** fake-native sweep phát hiện
+> resolver hash short-circuit có thể giữ mini-app Vue của route trước trên DOM. `App.vue` nay clear
+> mọi strangler route ref trước resolver mới; `UI-CHAR-005` khóa invariant. Runtime 390×844 chuyển
+> tuần tự 10 hash (Events/Admin/Monitoring/Reports/Interactions/Awards/People/Person/Partner/Supplier)
+> đều còn đúng một native root visible, không overflow ngang. Đây là sửa state UI browser/fake-host;
+> AMIS lifecycle/device evidence vẫn chỉ đóng sau O3/W4.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

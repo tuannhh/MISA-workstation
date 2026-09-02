@@ -97,3 +97,15 @@ Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/
   thay thế R149/R150. Direct link không có quyền dừng với `VOICE_FORBIDDEN`.
 - Fake-native runtime: Events → Voice tại 390px, button 48px và không overflow. Host/device/mic
   thật vẫn `UNVERIFIED` tới O3/W4.
+
+## 7. W3 native route lifecycle — 2026-09-02
+
+- F31 ghi nhận lỗi state presentation thật: mỗi strangler slice có `ref` route riêng, chuỗi resolver
+  hash short-circuit có thể không xoá slice cũ. Điều này có thể để nhiều `.mds-mobile-app` cùng nằm
+  trên DOM khi chuyển màn hình liên tiếp.
+- `App.vue` nay reset toàn bộ route ref trước khi resolver claim URL mới. `UI-CHAR-005` khóa contract
+  này; fake-native 390×844 chạy tuần tự Events, Admin, Monitoring, Reports, Interactions, Awards,
+  People, Person Detail, Partner Detail và Supplier Detail đều ghi nhận đúng một root visible và
+  không overflow ngang.
+- Kết quả chỉ xác nhận browser fake provider. Các kiểm thử lifecycle/Back/safe-area/accessibility
+  trong AMIS WebView thật vẫn là W4, bị chặn bởi bridge contract O3.

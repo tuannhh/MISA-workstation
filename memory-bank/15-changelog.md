@@ -3274,3 +3274,11 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Không tích hợp mic/browser API, không đoán token hay AMIS bridge schema. Runtime fake-native từ
   Events sang Voice đạt nút 48px và không overflow. `unit-host-adapter`, UI characterization và
   UI interactions đạt 41/41; Vite build PASS. O3/W4 device evidence vẫn còn mở.
+
+## 2026-09-02 — F31: reset native strangler route trước hash resolver
+
+- Sửa lỗi UI browser/fake-native: chuỗi resolver short-circuit có thể bỏ sót route ref của màn hình
+  cũ, khiến nhiều `.mds-mobile-app` đồng thời nằm trên DOM sau khi chuyển hash. `App.vue` reset toàn
+  bộ ref trước khi resolve route mới; không thay API, auth hoặc PolicyEngine.
+- `UI-CHAR-005` khóa contract; runtime 390×844 chuyển 10 route native liên tiếp xác nhận mỗi bước
+  chỉ có một root visible và không overflow ngang. AMIS WebView/device lifecycle vẫn chờ O3/W4.

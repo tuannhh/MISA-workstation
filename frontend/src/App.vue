@@ -38,6 +38,7 @@ const awardsFeatureRoute = ref(null);
 const monitoringFeatureRoute = ref(null);
 const reportsFeatureRoute = ref(null);
 const adminFeatureRoute = ref(null);
+const uiFeatureRouteRefs = Object.freeze([peopleFeatureRoute, peopleListFeatureRoute, partnerFeatureRoute, supplierFeatureRoute, interactionsFeatureRoute, eventsFeatureRoute, awardsFeatureRoute, monitoringFeatureRoute, reportsFeatureRoute, adminFeatureRoute]);
 const desktopAdapter = createFakeBrowserHostAdapter();
 const isLocalUiHarness = ['localhost', '127.0.0.1'].includes(location.hostname);
 const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : null;
@@ -211,7 +212,8 @@ function launchNativeVoice() {
   url.hash = 'interactions?voice=1';
   location.assign(url);
 }
-const resolveUiFeatureRoute = (key) => resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key) || resolveAwardsRoute(key) || resolveMonitoringRoute(key) || resolveReportsRoute(key) || resolveAdminRoute(key);
+function clearUiFeatureRoutes() { for (const routeRef of uiFeatureRouteRefs) routeRef.value = null; }
+const resolveUiFeatureRoute = (key) => { clearUiFeatureRoutes(); return resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key) || resolveAwardsRoute(key) || resolveMonitoringRoute(key) || resolveReportsRoute(key) || resolveAdminRoute(key); };
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [

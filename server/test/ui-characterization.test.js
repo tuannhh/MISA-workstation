@@ -68,3 +68,12 @@ test('UI-CHAR-004: compact hiện là desktop responsive, chưa phải native co
   assert.doesNotMatch(style, /mds-mobile-app|mobile-bottom-nav/,
     'không được diễn giải CSS responsive hiện tại thành native bottom navigation');
 });
+
+test('UI-CHAR-005: đổi hash chỉ được giữ đúng một Vue strangler route, không để mini-app cũ còn trên DOM', () => {
+  assert.match(appVue, /const uiFeatureRouteRefs = Object\.freeze\(\[peopleFeatureRoute,[\s\S]*adminFeatureRoute\]\)/,
+    'mọi route ref phải vào cùng tập reset');
+  assert.match(appVue, /function clearUiFeatureRoutes\(\) \{ for \(const routeRef of uiFeatureRouteRefs\) routeRef\.value = null; \}/,
+    'router phải clear mọi mini-app trước khi claim hash mới');
+  assert.match(appVue, /const resolveUiFeatureRoute = \(key\) => \{ clearUiFeatureRoutes\(\); return resolvePeopleListRoute/,
+    'reset phải chạy trước chuỗi resolver, không phụ thuộc thứ tự route cũ');
+});
