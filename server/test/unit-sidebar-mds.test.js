@@ -18,6 +18,7 @@ test('MDS-SIDEBAR-002: rail thu gọn nằm sát mép trái và hover mở overl
   assert.match(style, /\.app-body\.side-collapsed\s*\{[^}]*padding-left:\s*var\(--mds-layout-sidebar-sm-w\)/s);
   assert.match(style, /\.app-body\.side-collapsed\s*>\s*\.sidebar\s*\{[^}]*position:\s*absolute\s*!important;[^}]*inset:\s*0 auto 0 0\s*!important/s);
   assert.match(style, /\.app-body\.side-collapsed\s*>\s*\.sidebar:hover\s*\{[^}]*width:\s*var\(--mds-layout-sidebar-w\)/s);
+  assert.match(style, /\.app-body\.side-collapsed\s*>\s*\.sidebar:hover \+ \.main\s*\{[^}]*padding-left:\s*calc\(var\(--mds-layout-sidebar-w\) - var\(--mds-layout-sidebar-sm-w\)\)/s);
 });
 
 test('MDS-SIDEBAR-003: item có gutter bo góc ở cả rail và overlay, không có vạch sát mép', () => {

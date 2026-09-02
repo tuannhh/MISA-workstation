@@ -201,7 +201,7 @@ html[data-header-mode='light'] .header-divider { background: var(--mds-stroke-ne
 .side-toggle:hover { background: var(--mds-bg-neutral-hover, #f2f2f4); }
 /* Chế độ thu gọn: rail 64px, hover mở đè (flyout) không đẩy layout */
 .app-body.side-collapsed { padding-left: var(--mds-layout-sidebar-sm-w); }
-.app-body.side-collapsed > .sidebar { position: absolute !important; inset: 0 auto 0 0 !important; z-index: 40; width: var(--mds-layout-sidebar-sm-w) !important; min-width: 0; transition: width .2s ease; }
+.app-body.side-collapsed > .sidebar { position: absolute !important; inset: 0 auto 0 0 !important; z-index: 100; width: var(--mds-layout-sidebar-sm-w) !important; min-width: 0; transition: width .2s ease; }
 .app-body.side-collapsed > .sidebar .nav a { width: auto; align-self: stretch; justify-content: center; padding-inline: 0 !important; }
 .app-body.side-collapsed > .sidebar:not(:hover) .nav-label,
 .app-body.side-collapsed > .sidebar:not(:hover) .nav .group { display: none; }
@@ -215,6 +215,10 @@ html[data-header-mode='light'] .header-divider { background: var(--mds-stroke-ne
 .nav a.active { color: var(--mds-brand-600, #245fdf) !important; background: var(--mds-bg-brand-brand-light, #f0f6fe) !important; font-weight: 650; }
 .nav a m-icon.ic { display: inline-flex; flex: 0 0 20px; align-items: center; justify-content: center; }
 .main { min-width: 0; flex: 1; height: 100%; margin-left: 0 !important; overflow: hidden; }
+/* Khi rail mở tạm bằng hover, dành một gutter đọc tạm cho nội dung. Main vẫn
+   giữ nguyên vị trí/chiều rộng trong layout; chỉ phần trình bày tránh nằm
+   dưới flyout, rồi trả lại ngay khi chuột rời sidebar. */
+.app-body.side-collapsed > .sidebar:hover + .main { padding-left: calc(var(--mds-layout-sidebar-w) - var(--mds-layout-sidebar-sm-w)); transition: padding-left .2s ease; }
 .topbar { display: none !important; }
 .content { height: 100%; overflow-y: auto; padding: 16px !important; background: var(--mds-bg-page, #ecedef) !important; }
 

@@ -9,6 +9,9 @@
   Nút thu gọn cũng giữ gutter/bo góc, không còn vạch hoặc nền chạm mép.
 - Thêm `MDS-SIDEBAR-001..003` để khóa token, positioning và item geometry; browser localhost đã đo
   rail 64px, overlay 200px, main cố định tại x=64px và chụp xác nhận cả hai trạng thái.
+- Follow-up: khi flyout hover mở trên viewport hẹp, thêm gutter trình bày tạm cho `.main` (không đổi
+  kích thước/layout rail) để nội dung không bị cắt chữ dưới mép flyout; khi rời chuột layout trả về
+  ngay. Browser đã xác nhận heading/card không còn lộ phần chữ bị đè.
 
 ## 2026-09-02 — D14.3a: relationship score nhập tay, Voice/Gemini không được ghi (owner + Codex)
 

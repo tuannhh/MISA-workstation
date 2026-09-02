@@ -1429,7 +1429,8 @@ cần Security/Legal duyệt lại.
 
 > **Execution update — 2026-09-02 (MDS sidebar hover remediation):** Desktop shell đã sửa lỗi rail
 > thu gọn lệch mép và item hover bị co. Sidebar dùng token chuẩn 64/200px, active/hover nằm trong
-> gutter bo góc; hover mở overlay không đổi vị trí main. Có test tĩnh `MDS-SIDEBAR-001..003` và
+> gutter bo góc; hover mở overlay không đổi vị trí main, đồng thời có gutter trình bày tạm để chữ
+> không bị cắt dưới flyout ở viewport hẹp. Có test tĩnh `MDS-SIDEBAR-001..003` và
 > browser evidence trên localhost ở cả rail/overlay. Đây là remediation visual, không thay đổi route,
 > RBAC hay behavior nghiệp vụ.
 
