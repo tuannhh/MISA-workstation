@@ -27,6 +27,7 @@
 | [18-g1b-rbac-batch-contract.md](18-g1b-rbac-batch-contract.md) | Batch contracts G1B cho session, explicit action/permission và PolicyEngine |
 | [19-g1c-e2e-acceptance-framework.md](19-g1c-e2e-acceptance-framework.md) | G1C.1 — khung acceptance E2E theo 4 vai trò, chỉ định nghĩa trước Wave 1 |
 | [20-ui-characterization.md](20-ui-characterization.md) | G1A.6 — baseline UI desktop/compact, runtime evidence và ranh giới không suy diễn Native-Mobile pass |
+| [33-ui-release-audit-2026-09-02.md](33-ui-release-audit-2026-09-02.md) | Ma trận audit release-scope MDS sau W2.2; nêu rõ F6 còn thiếu và DevOps handoff |
 | [25-w2-host-adapter-contract.md](25-w2-host-adapter-contract.md) | W2.5 — contract host UI, fake Browser/Native và ranh giới O3 trước khi tích hợp AMIS WebView thật |
 | [31-o3-amis-bridge-acceptance.md](31-o3-amis-bridge-acceptance.md) | O3 — reference bridge/thiết bị cho DevOps + AMIS Mobile; ngoài repository |
 | [32-production-handoff.md](32-production-handoff.md) | Tổng hợp O3/O4/O5/W4 và O8: phần bàn giao DevOps/AMIS/Security-Legal, không phải backlog code project |
