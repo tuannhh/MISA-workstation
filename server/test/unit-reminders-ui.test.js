@@ -28,4 +28,7 @@ test('UI-REM-001: Reminder slice có API allowlist, feature flag và hai composi
   assert.match(desktop, /<section class="min-h-0 bg-\[var\(--mds-bg-page\)\]/);
   assert.match(mobile, /class="mds-mobile-app flex h-\[100dvh\]/);
   assert.match(mobile, /--mds-mobile-touch-target/);
+  assert.match(desktop, /exportIcs\(row\)/);
+  assert.match(mobile, /exportIcs\(row\)/);
+  assert.match(mobile, /Number\.isInteger\(Number\(row\?\.id\)\)/);
 });

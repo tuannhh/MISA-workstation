@@ -30,8 +30,9 @@ Chúng là P0 của backlog UI, không hạ mức độ chỉ vì desktop legacy
    từng domain/API allowlist và PolicyEngine test, không dựng generic money form.
 2. Monitoring vận hành sâu: scan, run history, highlights, competitor brief, settings, alerts,
    competitor và campaign CRUD/evaluation.
-3. Reminder: export `.ics` và AI card text/image. Export có endpoint server nhưng chưa có native
-   host download contract; AI card chưa có backend contract hiện hành nên không tạo UI giả.
+3. Reminder: export `.ics` đã có action Desktop/Native gọi endpoint R061 được server bảo vệ;
+   xác nhận trình tải tệp trong AMIS host thật vẫn là việc bàn giao DevOps. AI card text/image
+   được owner hoãn, không tạo UI giả.
 
 ## Kết quả kiểm tra hiện tại
 

@@ -3479,3 +3479,11 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Tách bốn góc nhìn legacy còn giá trị tác nghiệp của Báo cáo: nhân sự, đơn vị, giải thưởng và cảnh báo chăm sóc. Domain `reports-api.mjs` dùng chung gọi đúng projection đã được server `requirePerm('reports','view')` bảo vệ; Desktop dùng bảng MDS và Native dùng danh sách đọc được, top bar/safe area riêng.
 - Không thêm endpoint, không đổi chính sách tiền và không tự tổng hợp số tiền ở client. `UI-REPORT-002` kiểm tra URL, shape lỗi, cấm owner/created-by và khóa hai composition độc lập.
 - Verify: `node --test server/test/unit-interactions-ui.test.js` 38/38 PASS; Vite production build PASS.
+## 2026-09-02 — W2.2/F6: Reminder ICS action Desktop + Native (Codex)
+
+- Bổ sung action `.ics` trên cả hai composition của Reminder, chỉ điều hướng tới R061
+  `/api/reminders/:id/ics`; browser không tự tạo nội dung lịch và server vẫn yêu cầu
+  `reminders:view`.
+- `UI-REM-001` khóa cấu trúc action và kiểm tra `id` số dương trước khi tạo URL. Xác nhận trải
+  nghiệm download trong AMIS WebView thật là handoff DevOps; AI card được owner hoãn, không dựng
+  màn hình không có scope sản phẩm.
