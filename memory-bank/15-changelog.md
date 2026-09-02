@@ -3474,3 +3474,8 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Nút `Thêm sự kiện` thành CTA nổi 48px, giữ action chính dễ với tới; entry AI là icon asset chính thức
   MISA AVA có accessible label/tooltip. Empty state đưa action tạo mới hoặc mở AVA thay vì để trang
   trắng. `UI-EVENT-NATIVE-007/008` xác nhận shell, safe-area taskbar và native-only navigation.
+## 2026-09-02 — W2.2/F6: Reports Detail Desktop + Native Mobile strangler (Codex)
+
+- Tách bốn góc nhìn legacy còn giá trị tác nghiệp của Báo cáo: nhân sự, đơn vị, giải thưởng và cảnh báo chăm sóc. Domain `reports-api.mjs` dùng chung gọi đúng projection đã được server `requirePerm('reports','view')` bảo vệ; Desktop dùng bảng MDS và Native dùng danh sách đọc được, top bar/safe area riêng.
+- Không thêm endpoint, không đổi chính sách tiền và không tự tổng hợp số tiền ở client. `UI-REPORT-002` kiểm tra URL, shape lỗi, cấm owner/created-by và khóa hai composition độc lập.
+- Verify: `node --test server/test/unit-interactions-ui.test.js` 38/38 PASS; Vite production build PASS.
