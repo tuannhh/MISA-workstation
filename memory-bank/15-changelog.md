@@ -3324,3 +3324,12 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Roadmap chuyển O3 từ code blocker sang deployment handoff. Codebase vẫn không suy đoán token, session
   hoặc bridge API; native composition, server-side authorization và các kiểm thử project tiếp tục là
   trách nhiệm của project.
+
+## 2026-09-02 — W3.MONITORING.MENTIONS.REVIEW: review xử lý tin MDS
+
+- Bổ sung flow R111 Desktop/Native riêng sau danh sách Mentions: role có `monitoring:edit` mới được mở
+  form và PUT chỉ gửi sáu trường review đã allowlist. Server vẫn là authority cuối cho authorization,
+  validation và audit; lưu thành công luôn nạp lại dữ liệu từ server.
+- Native dùng `.mds-mobile-app`, `MMobileTopBar`, safe area và footer touch 48px; không dùng lại DOM
+  desktop responsive. `UI-MONITOR-004` kiểm payload, permission gate và hai composition; scan/delete
+  được giữ ngoài scope để không trộn mutation rủi ro vào slice review.

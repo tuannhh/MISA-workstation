@@ -150,3 +150,16 @@ Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/
   bộ lọc.
 - `UI-MONITOR-003` khóa contract API và hai composition. Browser fake-native vẫn chỉ là evidence cấu
   trúc; lifecycle, deep link, accessibility OS và WebView AMIS thật tiếp tục `UNVERIFIED` đến O3/W4.
+
+## 11. W3.MONITORING.MENTIONS.REVIEW — 2026-09-02
+
+- R111 tách khỏi danh sách đọc/lọc thành form review một bản ghi. Chỉ principal có
+  `monitoring:edit` từ `/api/me` mới thấy action; cả client gate lẫn `PUT /monitor/mentions/:id` trên
+  server đều cần pass, nên UI không phải authority của quyền.
+- Payload browser bị giới hạn sáu field nghiệp vụ `sentiment`, `status`, `next_action`, `assignee`,
+  `tags`, `note`; không nhận `owner_id`, thông tin người tạo, scan hoặc delete. Sau khi lưu, feature
+  tải lại projection từ server thay vì tự sửa dữ liệu local.
+- Desktop dùng form MDS có header/body/footer sticky; Native dùng page `.mds-mobile-app` riêng,
+  `MMobileTopBar`, một cột và footer 48px. `UI-MONITOR-004` khóa projection/payload/gate/composition.
+  Browser fake-native chỉ chứng minh kiến trúc; device lifecycle, deep link và accessibility OS là
+  handoff AMIS deployment/W4, không suy diễn là đã kiểm chứng trong repo.

@@ -1332,6 +1332,13 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > client; workflow review xử lý tin, host lifecycle/accessibility OS và WebView AMIS vẫn thuộc slice/
 > gate sau, không suy diễn PASS trước O3/W4.
 
+> **Execution update — 2026-09-02 (W3.MONITORING.MENTIONS.REVIEW):** tách R111 thành flow review
+> một tin riêng sau danh sách. Action chỉ hiện khi `/api/me` trả `monitoring:edit`; client PUT chỉ gửi
+> allowlist `sentiment/status/next_action/assignee/tags/note`, sau đó reload projection server. Desktop
+> MDS form và Native mini-app form là hai composition riêng với footer Lưu/Hủy sticky, không gộp scan
+> hoặc delete vào flow này. `UI-MONITOR-004` khóa contract. Bằng chứng WebView/device/OS là AMIS
+> deployment handoff/W4, không chặn source slice theo quyết định O3.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)
