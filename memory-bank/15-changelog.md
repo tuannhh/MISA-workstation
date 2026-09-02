@@ -3306,3 +3306,12 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
   validation hoặc Module-admin-only gate trên server.
 - Fake-native 390×844 tải sources API thật và mở form: root duy nhất, action 48px, không overflow.
   `UI-MONITOR-002` khóa API allowlist, gate và hai composition.
+
+## 2026-09-02 — W3.MONITORING.MENTIONS.READ: danh sách tin bài MDS
+
+- Thêm entry từ Monitoring Dashboard đến danh sách tin bài R110 với hai composition MDS tách biệt.
+  API client chỉ truy vấn phân trang/tìm kiếm/lọc theo `category`, `sentiment`, `status`; server tiếp
+  tục là authority cho `monitoring:view`, dữ liệu và lọc.
+- Giữ scan, bulk delete, delete và cập nhật xử lý ngoài slice read-only để tránh tạo action rủi ro
+  không có flow review/permission riêng. `UI-MONITOR-003` khóa API, MDS/native split và cấm các action
+  đó ở UI hiện tại.

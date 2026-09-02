@@ -1326,6 +1326,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > nguồn tin thật có list/form root duy nhất, touch 48px, không overflow. Mention/query/competitor/
 > campaign/scan/AI là slice kế tiếp, không gộp khi chưa có flow review riêng; O3/W4 vẫn mở.
 
+> **Execution update — 2026-09-02 (W3.MONITORING.MENTIONS.READ):** mở danh sách tin bài Desktop/
+> Native cho R110. Client dùng filter server-side `page/search/category/sentiment/status`, không có
+> mutation, scan hay bulk delete trong slice này. `UI-MONITOR-003` và runtime fake-native là evidence
+> client; workflow review xử lý tin, host lifecycle/accessibility OS và WebView AMIS vẫn thuộc slice/
+> gate sau, không suy diễn PASS trước O3/W4.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

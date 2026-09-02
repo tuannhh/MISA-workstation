@@ -8,3 +8,5 @@ export function monitoringDashboardViewModel(payload) {
 export function monitoringSourcesViewModel(rows = []) {
   return Object.freeze((Array.isArray(rows) ? rows : []).map((row) => Object.freeze({ id: Number(row?.id), name: String(row?.name || ''), type: String(row?.type || 'news'), url: String(row?.url || ''), enabled: Number(row?.enabled) !== 0, mode: String(row?.mode || '') })).filter((row) => Number.isInteger(row.id) && row.id > 0));
 }
+
+export function monitoringMentionsViewModel(rows = []) { return Object.freeze((Array.isArray(rows) ? rows : []).map((row) => Object.freeze({ id: Number(row?.id), title: String(row?.title || ''), link: String(row?.link || ''), sourceName: String(row?.source_name || ''), sourceType: String(row?.source_type || ''), publishedAt: String(row?.published_at || ''), category: String(row?.category || ''), sentiment: String(row?.sentiment || ''), status: String(row?.status || ''), assignee: String(row?.assignee || ''), summary: String(row?.ai_summary || '') })).filter((row) => Number.isInteger(row.id) && row.id > 0)); }

@@ -140,3 +140,13 @@ Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/
 - Runtime fake-native 390×844 với source thật từ API: list và form đều có một native root, button
   tối thiểu 48px, không overflow. `UI-MONITOR-002` khóa allowlist/gate/composition. Các surface
   mentions, query, competitor, campaign, scan và AI vẫn là slice riêng; AMIS device evidence chờ O3/W4.
+
+## 10. W3.MONITORING.MENTIONS.READ — 2026-09-02
+
+- Dashboard dẫn đến danh sách tin bài Desktop/Native qua R110. Browser chỉ truyền `page`, `search`,
+  `category`, `sentiment`, `status`; máy chủ vẫn áp `monitoring:view`, lọc và projection.
+- Đây là slice đọc/lọc có chủ đích: không gộp scan, xóa đơn/xóa hàng loạt hoặc cập nhật xử lý vào màn
+  danh sách. Các mutation sẽ đi sau bằng flow review/permission riêng thay vì đặt thao tác rủi ro cạnh
+  bộ lọc.
+- `UI-MONITOR-003` khóa contract API và hai composition. Browser fake-native vẫn chỉ là evidence cấu
+  trúc; lifecycle, deep link, accessibility OS và WebView AMIS thật tiếp tục `UNVERIFIED` đến O3/W4.
