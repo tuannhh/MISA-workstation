@@ -216,9 +216,10 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 
 ### Audit tổng thể 2026-09-02 — backlog repository sau khi tách DevOps
 
-> Rà từ roadmap, route catalog và composition thật trong `frontend/src/`. **Gate 0, Gate 1,
-> Wave 1 backend/security, W2.1/W2.5/W2.6, Gemini gateway/voice secure-command đều đã có evidence
-> đóng.** Không mở lại các batch đã đóng chỉ để audit hình thức. Các việc dưới đây là phần còn lại
+> Rà từ roadmap, route catalog và composition thật trong `frontend/src/`. **Gate 0, Gate 1 theo
+> exit gate đã chốt, Wave 1 backend/security, W2.1/W2.5/W2.6, Gemini gateway/voice secure-command
+> đều đã có evidence đóng.** Mapping hiện vẫn khai báo minh bạch một test-debt có định danh
+> `BR-AI-018` ở dưới; không coi đó là khoảng trống đã audit xong. Các việc dưới đây là phần còn lại
 > thực sự trong repository; DevOps/AMIS và Security/Legal được chuyển hẳn sang
 > [`32-production-handoff.md`](32-production-handoff.md), không chặn code strangler.
 
@@ -229,6 +230,7 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 | P1 | Hoàn chỉnh điều hướng native giữa những slice đã có và danh sách/entry point của các slice mới. | `App.vue` native router hiện nhận People, Person, Partner detail, Supplier detail, Interactions, Events, Awards, Monitoring, Reports, Admin, Reminders; không có native hash resolver cho dashboard/partner-list/supplier-list. | Không có navigation native nào rơi về legacy desktop; test route transition, Back, 403 và safe-area cho mỗi entry point. |
 | P1 | **W2.3:** chạy profile MySQL 50 người dùng tác nghiệp có think time, lưu latency/error/event-loop artifact. | Stress 50 request liên tục đã **FAIL** (2,53% lỗi, p95 12,73s) tại `perf-baseline/2026-09-02T06-48-41-905Z.json`; owner chỉ hoãn rewrite W2.4, không cho phép gọi F7 là PASS. | PASS/FAIL minh bạch. W2.4 chỉ bắt đầu nếu profile thực tế còn lỗi, MISA không chấp nhận budget, hoặc quy mô vượt 50. |
 | P2 | **W3.VOICE.0:** BA định nghĩa bảng quy tắc đề xuất thay đổi `relationship_score`. | D14.2/D14.4 đã bắt buộc review của người dùng và server-side re-check; chỉ mức đề xuất nghiệp vụ chưa có rule BA. | Quy tắc versioned + examples/boundary tests; AI vẫn chỉ đề xuất, xác nhận và PolicyEngine/transaction mới ghi. |
+| P2 | **BR-AI-018 / G1A.8 follow-up:** test integration cho `monitor.analyzePending()` đọc hàng đợi mentions, gọi Gemini giả và ghi lại sentiment có giới hạn lỗi. | `gate1-test-mapping.md` còn đúng 1 `TODO`, trỏ rõ `monitor.js#analyzePending()`; các test hiện có phủ `analyzeBatch()` và `runScan()`, chưa phủ vòng đọc/chunk/ghi của hàng đợi. | Test SQLite + MySQL với Gemini fake; xác nhận empty queue, chunk, lỗi một batch không làm hỏng batch sau và chỉ các mention hợp lệ bị update. Promote hàng mapping thành `green`; không sửa logic nếu characterization không phát hiện sai. |
 | P2 | Chốt audit UI cuối sau khi backlog F6 của release scope đã xong. | Các UI slice gần đây có test/build/local fake-native, nhưng không có một evidence matrix cuối bao phủ mọi flow mới × Desktop/Native × 4 role. | Rà ma trận thực tế, không dùng baseline `N-MISSING` Gate 0 để tự gọi PASS; chỉ review những slice mới/chưa audited, không audit lại backend đã CLOSED. |
 
 **Không thuộc backlog repository:** O3/O4/O5 và W4.1–W4.4/W4.VOICE thuộc DevOps/AMIS; O8 thuộc

@@ -7,6 +7,8 @@
 - Ghi rõ backlog repository còn lại: W2.2/F6 UI strangler theo flow còn legacy, W2.3 profile MySQL
   50 người có think time, BA rule cho `relationship_score`, rồi audit matrix Desktop/Native × 4 role
   theo release scope. Stress liên tục 50 VU vẫn là FAIL/baseline, không bị đổi thành PASS.
+- Đối chiếu verifier phát hiện 1 test-debt có tên rõ ràng còn treo: `BR-AI-018` cho job
+  `monitor.analyzePending()`; thêm vào roadmap thay vì để trạng thái Gate 1 lịch sử che mất.
 - Thêm `32-production-handoff.md`, chuyển O3/O4/O5, W4.1–W4.4/W4.VOICE sang DevOps/AMIS và O8 sang
   Security/Legal. Đây là note bàn giao cho môi trường MISA, không phải công việc code agent tự làm.
 - Sửa drift tài liệu theo verifier/source hiện tại: route catalog là 150/150 (không còn 148) và
