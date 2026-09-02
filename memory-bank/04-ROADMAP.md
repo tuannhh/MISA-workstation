@@ -1339,6 +1339,10 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > hoặc delete vào flow này. `UI-MONITOR-004` khóa contract. Bằng chứng WebView/device/OS là AMIS
 > deployment handoff/W4, không chặn source slice theo quyết định O3.
 
+> **Execution update — 2026-09-02 (W3.MONITORING.QUERIES):** bổ sung quản lý bộ từ khóa R117–R120
+> với Desktop MDS và Native mini-app riêng. Đây là cấu hình admin-only; UI không đưa hành động quét hoặc
+> Gemini vào form. `UI-MONITOR-005` kiểm allowlist và permission gate; server là authority cuối.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

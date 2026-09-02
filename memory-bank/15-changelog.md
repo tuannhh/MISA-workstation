@@ -3333,3 +3333,9 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Native dùng `.mds-mobile-app`, `MMobileTopBar`, safe area và footer touch 48px; không dùng lại DOM
   desktop responsive. `UI-MONITOR-004` kiểm payload, permission gate và hai composition; scan/delete
   được giữ ngoài scope để không trộn mutation rủi ro vào slice review.
+
+## 2026-09-02 — W3.MONITORING.QUERIES: cấu hình bộ từ khóa quét
+
+- Thêm list/form MDS tách riêng Desktop/Native cho R117–R120; payload browser chỉ có bảy field query
+  công khai. Form không thể kích hoạt scan hoặc Gemini; quyền module-admin-only vẫn được server áp.
+- `UI-MONITOR-005` xác nhận allowlist, route protected, MDS/native split và không có owner/creator.

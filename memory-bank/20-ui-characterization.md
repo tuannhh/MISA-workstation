@@ -163,3 +163,10 @@ Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/
   `MMobileTopBar`, một cột và footer 48px. `UI-MONITOR-004` khóa projection/payload/gate/composition.
   Browser fake-native chỉ chứng minh kiến trúc; device lifecycle, deep link và accessibility OS là
   handoff AMIS deployment/W4, không suy diễn là đã kiểm chứng trong repo.
+
+## 12. W3.MONITORING.QUERIES — 2026-09-02
+
+- CRUD bộ từ khóa R117–R120 có list/form Desktop và Native riêng. Người có quyền xem vẫn có danh sách
+  read-only; affordance ghi chỉ hiện theo `admin:edit`, còn server giữ module-admin-only gate.
+- Form chỉ cấu hình từ khóa và trạng thái; nó không gọi `/monitor/scan` hay Gemini. Payload không nhận
+  owner/creator và chỉ gồm bảy trường query. `UI-MONITOR-005` khóa API, gate và native split.
