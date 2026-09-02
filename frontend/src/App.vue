@@ -14,6 +14,7 @@ const AwardsListFeature = defineAsyncComponent(() => import('./features/awards/A
 const MonitoringDashboardFeature = defineAsyncComponent(() => import('./features/monitoring/MonitoringDashboardFeature.vue'));
 const ReportsOverviewFeature = defineAsyncComponent(() => import('./features/reports/ReportsOverviewFeature.vue'));
 const AdminUsersFeature = defineAsyncComponent(() => import('./features/admin/AdminUsersFeature.vue'));
+const RemindersFeature = defineAsyncComponent(() => import('./features/reminders/RemindersFeature.vue'));
 import {
   HostSurface,
   assertHostAdapter,
@@ -38,7 +39,8 @@ const awardsFeatureRoute = ref(null);
 const monitoringFeatureRoute = ref(null);
 const reportsFeatureRoute = ref(null);
 const adminFeatureRoute = ref(null);
-const uiFeatureRouteRefs = Object.freeze([peopleFeatureRoute, peopleListFeatureRoute, partnerFeatureRoute, supplierFeatureRoute, interactionsFeatureRoute, eventsFeatureRoute, awardsFeatureRoute, monitoringFeatureRoute, reportsFeatureRoute, adminFeatureRoute]);
+const remindersFeatureRoute = ref(null);
+const uiFeatureRouteRefs = Object.freeze([peopleFeatureRoute, peopleListFeatureRoute, partnerFeatureRoute, supplierFeatureRoute, interactionsFeatureRoute, eventsFeatureRoute, awardsFeatureRoute, monitoringFeatureRoute, reportsFeatureRoute, adminFeatureRoute, remindersFeatureRoute]);
 const desktopAdapter = createFakeBrowserHostAdapter();
 const isLocalUiHarness = ['localhost', '127.0.0.1'].includes(location.hostname);
 const localUiParams = isLocalUiHarness ? new URLSearchParams(location.search) : null;
@@ -63,6 +65,7 @@ function isAwardsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.award
 function isMonitoringPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.monitoringDashboardRead === true || localUiParams?.get('uiMonitoringPilot') === '1'; }
 function isReportsPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.reportsOverviewRead === true || localUiParams?.get('uiReportsPilot') === '1'; }
 function isAdminPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.adminUsersRead === true || localUiParams?.get('uiAdminPilot') === '1'; }
+function isRemindersPilotEnabled() { return window.__MISA_UI_FEATURE_FLAGS__?.remindersList === true || localUiParams?.get('uiRemindersPilot') === '1'; }
 
 function requestedSurface(queryParam = 'uiPeopleSurface') {
   if (localUiParams?.get(queryParam) === HostSurface.NATIVE) return HostSurface.NATIVE;
@@ -157,6 +160,7 @@ function resolveAwardsRoute(key) { const match = /^awards(?:\/(\d+))?$/.exec(key
 function resolveMonitoringRoute(key) { if (!isMonitoringPilotEnabled() || key !== 'monitor') { monitoringFeatureRoute.value = null; return false; } const surface = requestedSurface('uiMonitoringSurface'); try { monitoringFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiMonitoringSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; monitoringFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; } return true; }
 function resolveReportsRoute(key) { if (!isReportsPilotEnabled() || key !== 'reports') { reportsFeatureRoute.value = null; return false; } const surface = requestedSurface('uiReportsSurface'); try { reportsFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiReportsSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; reportsFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; } return true; }
 function resolveAdminRoute(key) { if (!isAdminPilotEnabled() || key !== 'admin') { adminFeatureRoute.value = null; return false; } const surface = requestedSurface('uiAdminSurface'); try { adminFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiAdminSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; adminFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; } return true; }
+function resolveRemindersRoute(key) { if (!isRemindersPilotEnabled() || key !== 'reminders') { remindersFeatureRoute.value = null; return false; } const surface = requestedSurface('uiRemindersSurface'); try { remindersFeatureRoute.value = { surface, adapter: selectHostAdapter(surface, 'uiRemindersSurface'), hostUnavailable: false }; } catch (error) { if (surface !== HostSurface.NATIVE) throw error; remindersFeatureRoute.value = { surface, adapter: null, hostUnavailable: true }; } return true; }
 
 function leavePeopleDetail() {
   peopleFeatureRoute.value = null;
@@ -177,6 +181,7 @@ function leaveAwards() { awardsFeatureRoute.value = null; location.hash = 'dashb
 function leaveMonitoring() { monitoringFeatureRoute.value = null; location.hash = 'dashboard'; }
 function leaveReports() { reportsFeatureRoute.value = null; location.hash = 'dashboard'; }
 function leaveAdmin() { adminFeatureRoute.value = null; location.hash = 'dashboard'; }
+function leaveReminders() { remindersFeatureRoute.value = null; location.hash = 'dashboard'; }
 
 function navigatePeopleDetail(personId) {
   location.hash = `person/${personId}`;
@@ -201,7 +206,9 @@ const desktopReportsFeature = computed(() => reportsFeatureRoute.value?.surface 
 const nativeReportsFeature = computed(() => reportsFeatureRoute.value?.surface === HostSurface.NATIVE ? reportsFeatureRoute.value : null);
 const desktopAdminFeature = computed(() => adminFeatureRoute.value?.surface === HostSurface.DESKTOP ? adminFeatureRoute.value : null);
 const nativeAdminFeature = computed(() => adminFeatureRoute.value?.surface === HostSurface.NATIVE ? adminFeatureRoute.value : null);
-const activeNativeAdapter = computed(() => [nativePeopleFeature.value, nativePeopleListFeature.value, nativePartnerFeature.value, nativeSupplierFeature.value, nativeInteractionsFeature.value, nativeEventsFeature.value, nativeAwardsFeature.value, nativeMonitoringFeature.value, nativeReportsFeature.value, nativeAdminFeature.value].find((route) => route?.adapter)?.adapter || null);
+const desktopRemindersFeature = computed(() => remindersFeatureRoute.value?.surface === HostSurface.DESKTOP ? remindersFeatureRoute.value : null);
+const nativeRemindersFeature = computed(() => remindersFeatureRoute.value?.surface === HostSurface.NATIVE ? remindersFeatureRoute.value : null);
+const activeNativeAdapter = computed(() => [nativePeopleFeature.value, nativePeopleListFeature.value, nativePartnerFeature.value, nativeSupplierFeature.value, nativeInteractionsFeature.value, nativeEventsFeature.value, nativeAwardsFeature.value, nativeMonitoringFeature.value, nativeReportsFeature.value, nativeAdminFeature.value, nativeRemindersFeature.value].find((route) => route?.adapter)?.adapter || null);
 const showGlobalVoiceTrigger = computed(() => Boolean(activeNativeAdapter.value) && !nativeInteractionsFeature.value && isInteractionsPilotEnabled());
 function launchNativeVoice() {
   if (!activeNativeAdapter.value) return;
@@ -213,7 +220,7 @@ function launchNativeVoice() {
   location.assign(url);
 }
 function clearUiFeatureRoutes() { for (const routeRef of uiFeatureRouteRefs) routeRef.value = null; }
-const resolveUiFeatureRoute = (key) => { clearUiFeatureRoutes(); return resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key) || resolveAwardsRoute(key) || resolveMonitoringRoute(key) || resolveReportsRoute(key) || resolveAdminRoute(key); };
+const resolveUiFeatureRoute = (key) => { clearUiFeatureRoutes(); return resolvePeopleListRoute(key) || resolvePeopleDetailRoute(key) || resolvePartnerDetailRoute(key) || resolveSupplierDetailRoute(key) || resolveInteractionsRoute(key) || resolveEventsRoute(key) || resolveAwardsRoute(key) || resolveMonitoringRoute(key) || resolveReportsRoute(key) || resolveAdminRoute(key) || resolveRemindersRoute(key); };
 
 // 10 theme chính thức của MDS (khớp file token trong assets/tokens/themes)
 const THEMES = [
@@ -328,9 +335,10 @@ onBeforeUnmount(() => {
   <MonitoringDashboardFeature v-if="nativeMonitoringFeature" :surface="nativeMonitoringFeature.surface" :adapter="nativeMonitoringFeature.adapter" :host-unavailable="nativeMonitoringFeature.hostUnavailable" @back="leaveMonitoring" />
   <ReportsOverviewFeature v-if="nativeReportsFeature" :surface="nativeReportsFeature.surface" :adapter="nativeReportsFeature.adapter" :host-unavailable="nativeReportsFeature.hostUnavailable" @back="leaveReports" />
   <AdminUsersFeature v-if="nativeAdminFeature" :surface="nativeAdminFeature.surface" :adapter="nativeAdminFeature.adapter" :host-unavailable="nativeAdminFeature.hostUnavailable" @back="leaveAdmin" />
+  <RemindersFeature v-if="nativeRemindersFeature" :surface="nativeRemindersFeature.surface" :adapter="nativeRemindersFeature.adapter" :host-unavailable="nativeRemindersFeature.hostUnavailable" @back="leaveReminders" />
   <GlobalVoiceTrigger v-if="showGlobalVoiceTrigger" :adapter="activeNativeAdapter" @launch="launchNativeVoice" />
 
-  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature || nativeEventsFeature || nativeAwardsFeature || nativeMonitoringFeature || nativeReportsFeature || nativeAdminFeature }">
+  <div id="app" class="hidden mds-app" :class="{ hidden: nativePeopleFeature || nativePeopleListFeature || nativePartnerFeature || nativeSupplierFeature || nativeInteractionsFeature || nativeEventsFeature || nativeAwardsFeature || nativeMonitoringFeature || nativeReportsFeature || nativeAdminFeature || nativeRemindersFeature }">
     <header class="platform-header">
       <button class="header-action" type="button" title="Mở điều hướng" aria-label="Mở điều hướng" @click="sideOpen = !sideOpen"><MIcon name="grid-dots" :size="20" /></button>
       <img class="app-logo-img" :src="headerMode === 'light' ? '/assets/misa-logo.png' : '/assets/misa-logo-white.png'" alt="MISA" />
@@ -356,7 +364,7 @@ onBeforeUnmount(() => {
         </button>
       </aside>
       <main class="main">
-        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature && !desktopInteractionsFeature && !desktopEventsFeature && !desktopAwardsFeature && !desktopMonitoringFeature && !desktopReportsFeature && !desktopAdminFeature" class="content" id="view"></div>
+        <div v-show="!desktopPeopleFeature && !desktopPeopleListFeature && !desktopPartnerFeature && !desktopSupplierFeature && !desktopInteractionsFeature && !desktopEventsFeature && !desktopAwardsFeature && !desktopMonitoringFeature && !desktopReportsFeature && !desktopAdminFeature && !desktopRemindersFeature" class="content" id="view"></div>
         <PeopleListFeature
           v-if="desktopPeopleListFeature"
           :surface="desktopPeopleListFeature.surface"
@@ -393,6 +401,7 @@ onBeforeUnmount(() => {
         <MonitoringDashboardFeature v-if="desktopMonitoringFeature" :surface="desktopMonitoringFeature.surface" :adapter="desktopMonitoringFeature.adapter" @back="leaveMonitoring" />
         <ReportsOverviewFeature v-if="desktopReportsFeature" :surface="desktopReportsFeature.surface" :adapter="desktopReportsFeature.adapter" @back="leaveReports" />
         <AdminUsersFeature v-if="desktopAdminFeature" :surface="desktopAdminFeature.surface" :adapter="desktopAdminFeature.adapter" @back="leaveAdmin" />
+        <RemindersFeature v-if="desktopRemindersFeature" :surface="desktopRemindersFeature.surface" :adapter="desktopRemindersFeature.adapter" @back="leaveReminders" />
       </main>
     </div>
   </div>

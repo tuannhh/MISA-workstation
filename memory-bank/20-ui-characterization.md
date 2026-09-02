@@ -109,3 +109,15 @@ Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/
   không overflow ngang.
 - Kết quả chỉ xác nhận browser fake provider. Các kiểm thử lifecycle/Back/safe-area/accessibility
   trong AMIS WebView thật vẫn là W4, bị chặn bởi bridge contract O3.
+
+## 8. W3.REMINDERS — Desktop/Native strangler pilot — 2026-09-02
+
+- `#reminders` có Desktop MDS và Native composition riêng sau feature flag `remindersList` (local
+  harness: `uiRemindersPilot=1`). Slice dùng R038-R042: xem tất cả/sắp tới, tạo, sửa và xóa; không
+  đưa notification inbox, ICS hoặc AI thiệp vào một UI surface chưa có contract riêng.
+- Domain payload chỉ allowlist tiêu đề/loại/ngày/lặp/báo trước/đối tượng/ghi chú. Generic form không
+  nhận `subject_id`; tạo mới là `subject_type=general`, còn PUT giữ linkage entity có sẵn tại server.
+  Action client chỉ là affordance từ `/api/me`; server tiếp tục PolicyEngine/permission authority.
+- Runtime fake-native 390×844: route list và form create đều có đúng một `.mds-mobile-app`, topbar,
+  buttons 48px, không overflow ngang. `UI-REM-001` khóa payload/permission/flag/composition. AMIS
+  lifecycle, keyboard, safe-area thiết bị và accessibility OS vẫn `UNVERIFIED` tới O3/W4.

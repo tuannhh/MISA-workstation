@@ -70,7 +70,7 @@ test('UI-CHAR-004: compact hiện là desktop responsive, chưa phải native co
 });
 
 test('UI-CHAR-005: đổi hash chỉ được giữ đúng một Vue strangler route, không để mini-app cũ còn trên DOM', () => {
-  assert.match(appVue, /const uiFeatureRouteRefs = Object\.freeze\(\[peopleFeatureRoute,[\s\S]*adminFeatureRoute\]\)/,
+  assert.match(appVue, /const uiFeatureRouteRefs = Object\.freeze\(\[peopleFeatureRoute,[\s\S]*adminFeatureRoute, remindersFeatureRoute\]\)/,
     'mọi route ref phải vào cùng tập reset');
   assert.match(appVue, /function clearUiFeatureRoutes\(\) \{ for \(const routeRef of uiFeatureRouteRefs\) routeRef\.value = null; \}/,
     'router phải clear mọi mini-app trước khi claim hash mới');

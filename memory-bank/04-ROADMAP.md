@@ -1306,6 +1306,14 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > đều còn đúng một native root visible, không overflow ngang. Đây là sửa state UI browser/fake-host;
 > AMIS lifecycle/device evidence vẫn chỉ đóng sau O3/W4.
 
+> **Execution update — 2026-09-02 (W3.REMINDERS):** UI legacy `#reminders` được thay theo strangler
+> bằng list/form Desktop MDS và Native composition riêng, feature-flagged `remindersList`
+> (`uiRemindersPilot=1` chỉ trên local harness). Slice chỉ dùng R038-R042 (list/upcoming/create/edit/
+> delete), giữ payload allowlist và không nhận `subject_id` từ browser; client gate chỉ là affordance,
+> server vẫn là authority. Fake-native 390×844 kiểm chứng list + form create có một root, topbar và
+> action 48px, không overflow. Notification/ICS/AI card và AMIS host/device lifecycle là slice/gate
+> riêng, chưa suy diễn PASS trước O3/W4.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

@@ -3282,3 +3282,12 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
   bộ ref trước khi resolve route mới; không thay API, auth hoặc PolicyEngine.
 - `UI-CHAR-005` khóa contract; runtime 390×844 chuyển 10 route native liên tiếp xác nhận mỗi bước
   chỉ có một root visible và không overflow ngang. AMIS WebView/device lifecycle vẫn chờ O3/W4.
+
+## 2026-09-02 — W3.REMINDERS: Desktop MDS + Native composition
+
+- Thay legacy `#reminders` bằng strangler slice feature-flagged `remindersList` (`uiRemindersPilot=1`
+  ở harness). Dùng R038-R042 cho list/upcoming/create/edit/delete; notification inbox, ICS và AI
+  thiệp giữ ngoài scope vì chưa có contract UI tương ứng.
+- Generic payload chỉ có field ngày nhắc công khai, không nhận `subject_id` từ client; action hiển thị
+  theo permission `/api/me`, còn API/PolicyEngine là authority cuối. `UI-REM-001` và fake-native
+  390×844 xác nhận list/form có Native MDS riêng, root duy nhất, touch action 48px, không overflow.
