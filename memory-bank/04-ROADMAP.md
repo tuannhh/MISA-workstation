@@ -1426,4 +1426,11 @@ cần Security/Legal duyệt lại.
 | D15 WebView host | ảnh hưởng W2.5/W3-native/W4.1-4.3 | native = web-in-WebView + composition Native-Mobile riêng (C0.7) — KHÔNG giảm severity F5, chỉ giảm khối lượng |
 
 ## Điều kiện release đầy đủ MDS/native (không đổi tinh thần)
+
+> **Execution update — 2026-09-02 (MDS sidebar hover remediation):** Desktop shell đã sửa lỗi rail
+> thu gọn lệch mép và item hover bị co. Sidebar dùng token chuẩn 64/200px, active/hover nằm trong
+> gutter bo góc; hover mở overlay không đổi vị trí main. Có test tĩnh `MDS-SIDEBAR-001..003` và
+> browser evidence trên localhost ở cả rail/overlay. Đây là remediation visual, không thay đổi route,
+> RBAC hay behavior nghiệp vụ.
+
 Không tuyên bố "100% MDS/native" khi: matrix 4-vai-trò còn `UNVERIFIED` cho route release, HOẶC bridge AMIS Mobile thật chưa qua contract+device test trong WebView host (W4.1), HOẶC W2.3 chưa PASS. Release bật AI/voice: O8 hiện provisional đủ cho dữ liệu test; dữ liệu thật cần Security/Legal duyệt lại. Build `AI_DISABLED` release web-in-host pilot riêng — gọi đúng tên "web-in-host, AI tắt".

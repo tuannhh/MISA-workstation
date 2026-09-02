@@ -1,5 +1,15 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-02 — MDS sidebar hover remediation
+
+- Sửa lỗi sidebar Desktop khi thu gọn: CSS `position: relative !important` trước đây thắng trạng thái
+  absolute, làm rail lệch khỏi mép trái; đồng thời nav kế thừa padding cũ khiến item chỉ rộng 27px.
+- Rail nay dùng trực tiếp token MDS `--mds-layout-sidebar-sm-w`/`--mds-layout-sidebar-w` (64/200px),
+  nằm sát mép trái, item bo góc trong gutter và hover mở overlay 200px mà không đẩy vùng nội dung.
+  Nút thu gọn cũng giữ gutter/bo góc, không còn vạch hoặc nền chạm mép.
+- Thêm `MDS-SIDEBAR-001..003` để khóa token, positioning và item geometry; browser localhost đã đo
+  rail 64px, overlay 200px, main cố định tại x=64px và chụp xác nhận cả hai trạng thái.
+
 ## 2026-09-02 — D14.3a: relationship score nhập tay, Voice/Gemini không được ghi (owner + Codex)
 
 - Theo quyết định owner, bỏ `suggested_score_delta` khỏi schema/prompt/payload/response Voice và bỏ
