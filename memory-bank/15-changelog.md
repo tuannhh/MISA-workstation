@@ -3487,3 +3487,8 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - `UI-REM-001` khóa cấu trúc action và kiểm tra `id` số dương trước khi tạo URL. Xác nhận trải
   nghiệm download trong AMIS WebView thật là handoff DevOps; AI card được owner hoãn, không dựng
   màn hình không có scope sản phẩm.
+## 2026-09-02 — W2.2/F6: Monitoring operations Desktop + Native (Codex)
+
+- Tách màn vận hành giám sát thành vertical slice riêng cho runs/scan, competitors, campaigns/results/evaluation và settings; dùng `monitoring-operations.mjs` làm domain projection/payload allowlist và tái sử dụng `monitoring-api.mjs` cho các endpoint đã có.
+- Desktop dùng MDS card/table; Native dùng mini-app `.mds-mobile-app`, top bar, safe-area và touch target 48px, không dùng DOM desktop responsive. Deep-link `monitor/operations` nạp `/api/me` và query list trước khi render quyền; nút scan chỉ gửi ID query đang enabled.
+- Thêm contract tests `UI-MONITOR-006/007/008`; build Vite PASS, unit UI PASS và browser local native route xác nhận trực quan. Không tự đóng các mục DevOps/AMIS host/device; AI highlights/brief/card giữ deferred theo quyết định owner.

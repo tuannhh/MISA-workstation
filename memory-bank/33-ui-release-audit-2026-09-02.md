@@ -53,3 +53,13 @@ mục đó.
 Chưa có "audit UI cuối PASS" vì còn ba nhóm F6 ở trên. Báo cáo này thay baseline cũ bằng một
 ma trận release-scope có bằng chứng và là điểm kiểm soát để tiếp tục strangler, không phải giấy
 chứng nhận hoàn thành sớm.
+## Execution update sau baseline
+
+Sau baseline, đã bổ sung `W2.2/F6 Monitoring operations` với Desktop MDS và Native mini-app riêng:
+`runs/scan`, `competitors`, `campaigns/results/evaluation` và `settings`. Contract tests
+`UI-MONITOR-006/007/008` kiểm projection an toàn, payload allowlist, route/method và permission
+affordance; browser local native route đã xác nhận top bar, tab và touch action. Run scan chỉ gửi
+ID query đang bật và deep-link operations nạp lại `/api/me` trước khi render affordance. Vì vậy mục
+monitoring vận hành sâu trong baseline đã chuyển sang **local slice evidence**; AI highlights/brief/card
+vẫn deferred theo owner. Các mục DevOps/AMIS (O3, WebView/device, host download/permission/lifecycle)
+giữ nguyên trạng thái handoff, không được suy diễn PASS từ fake-native.
