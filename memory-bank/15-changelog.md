@@ -3315,3 +3315,12 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Giữ scan, bulk delete, delete và cập nhật xử lý ngoài slice read-only để tránh tạo action rủi ro
   không có flow review/permission riêng. `UI-MONITOR-003` khóa API, MDS/native split và cấm các action
   đó ở UI hiện tại.
+
+## 2026-09-02 — O3: làm rõ boundary AMIS deployment
+
+- Owner xác nhận AMIS Mobile là mini-app host: người dùng chạm icon trong AMIS Mobile thì host mở thẳng
+  Native-Mobile composition của ứng dụng. Provider/bridge, device runtime và production evidence do
+  DevOps/AMIS cấu hình khi deploy; source production không quay lại repository này để agent kiểm thử.
+- Roadmap chuyển O3 từ code blocker sang deployment handoff. Codebase vẫn không suy đoán token, session
+  hoặc bridge API; native composition, server-side authorization và các kiểm thử project tiếp tục là
+  trách nhiệm của project.

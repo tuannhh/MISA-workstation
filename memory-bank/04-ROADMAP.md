@@ -1155,7 +1155,7 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 | W3.VOICE.0 | **D14.2 đã chốt (human-in-the-loop, owner 2026-08-24).** Còn 1 việc BA: định nghĩa quy tắc AI **đề xuất** mức đổi `relationship_score` (không chặn thiết kế vì đã có bước xác nhận) | BA | doc / — / — |
 | W3.VOICE.1 | Route AI voice mở rộng: giữ "trích-xuất-chờ-duyệt", thành **hành động đa bước chờ-xác-nhận-1-lần** (AI chuẩn bị: match entity + soạn bản ghi + đề xuất đổi điểm → người dùng xác nhận rồi mới ghi). Rào chắn: confidence thấp/nhiều khớp → **bắt người dùng chọn**; log mọi lần ghi | W3.VOICE.SECURE-COMMAND | code+test / **CLOSED — backend/API-only, Codex ACCEPTED (2026-08-31)** / R150 `POST /ai/interaction-voice-confirm`, xem execution update |
 | W3.VOICE.SECURE-COMMAND | **Mới (Codex round-3 re-audit R3-08, D14.4):** proposal opaque/có định danh/gắn 1 principal/hết hạn + snapshot revision; xác nhận chỉ gửi `proposal_id`+chỉnh sửa+idempotency key (không gửi lại toàn payload); server đọc lại bản ghi + check optimistic concurrency + chạy lại PolicyEngine trước khi ghi 1 lần; chống replay/tampering/TOCTOU | W1.AI-POLICY | code+test / **CLOSED — backend/API-only, Codex ACCEPTED (2026-08-31)** / R149 `POST /ai/interaction-voice-propose` + bảng `voice_proposals`, xem execution update |
-| W3.VOICE.2 | "Gọi từ mọi màn hình" — trigger toàn cục (nút nổi/mic) ở tầng **web app trong WebView host** (D15); có thể cần bridge host cấp quyền mic OS — **gắn O3 (bridge contract, DevOps)** | O3(DevOps), W2.5 | code+device-test / WebView-host / `UNVERIFIED` tới bridge contract |
+| W3.VOICE.2 | "Gọi từ mọi màn hình" — trigger toàn cục (nút nổi/mic) ở tầng **web app trong WebView host** (D15). UI/deep-link thuộc project; mic OS và host capability được DevOps/AMIS thiết lập khi deploy, không có provider bridge trong repo. | W2.5 | code+test / Native composition project |
 
 > **Execution update — 2026-08-31 (W3.VOICE.SECURE-COMMAND + W3.VOICE.1, backend/API-only, XONG —
 > chờ Codex audit):** owner giao `/goal` "làm việc Wave 2/3/4 mà Claude được giao, để lại việc của
@@ -1335,17 +1335,22 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)
-**Ước lượng:** 3-6 tuần (giảm nhờ D15 — web-in-WebView, không build native riêng). **CHẶN bởi: security gate (G1B rỗng) + SLO gate (W2.3 PASS) + bridge contract AMIS Mobile (DevOps+AMIS).**
+**Ước lượng:** 3-6 tuần (giảm nhờ D15 — web-in-WebView, không build native riêng). O3 là **handoff
+deployment ngoài repository**: DevOps/AMIS tự cấu hình host/bridge khi đưa bản build vào môi trường MISA;
+không phải blocker cho code/UI strangler của project.
 
 | # | Task | Evidence Contract |
 |---|---|---|
-| W4.1 | **Runtime-ready:** tích hợp bridge AMIS Mobile thật qua contract test + device test **trong WebView host**: session/principal (**cơ chế cụ thể — bearer token/cookie/one-time-code/SDK assertion — `UNVERIFIED` tới khi DevOps+AMIS chốt bridge contract, KHÔNG giả định "host bơm token" là fact đã xác nhận**, sửa theo Codex C0.7), Back, safe-area, lifecycle, file/camera/mic qua bridge, notification/deep-link. **Bridge security contract bắt buộc trước khi tích hợp thật** (`02-decisions.md` §F): origin allowlist, versioned message schema, token audience/TTL/chống replay, không lưu token ở query string/`localStorage`, timeout fail-closed. Acceptance/handoff cụ thể: [`31-o3-amis-bridge-acceptance.md`](31-o3-amis-bridge-acceptance.md). **Không phải native codebase riêng — là web app + 1 composition Native-Mobile riêng trong WebView** (không phải desktop responsive) | code+device-test / WebView-host / `UNVERIFIED` tới khi có bridge contract (DevOps+AMIS) |
+| W4.1 | **Deployment handoff (DevOps/AMIS, ngoài repo):** AMIS Mobile host/launcher/WebView tự mở icon ứng dụng vào Native-Mobile composition đã build. Host session/principal, Back, safe-area, lifecycle, file/camera/mic, notification/deep-link và device evidence do môi trường MISA cấu hình sau bàn giao; project không viết hay suy đoán provider/bridge API. Reference: [`31-o3-amis-bridge-acceptance.md`](31-o3-amis-bridge-acceptance.md). | handoff / DevOps+AMIS / không chặn code project |
 | W4.2 | QA ma trận MDS trong WebView host: 375/393/412/768/1024, portrait/landscape/split, iOS Dynamic Type/Zoom, Android Font/Display, keyboard/Back/gesture | device-test / WebView-host / — |
 | W4.3 | Permission denied/revoked/unavailable (qua bridge); restore draft; deep-link 403; gesture fallback; accessibility OS | device-test / WebView-host / fail-closed |
 | W4.VOICE | Voice Assistant runtime trong WebView host: mic OS permission qua bridge, gọi từ mọi màn hình, **AI chuẩn bị hành động + người dùng xác nhận** (D14.2) rồi mới ghi, log audit đầy đủ | device-test / WebView-host / cần W3.VOICE |
 | W4.4 | Canary + rollback + observability + audit; health/liveness/readiness; graceful shutdown; **backup/restore drill ở scale production** (do DevOps hạ tầng MISA) | deploy / native+browser / — |
 
-**Exit gate W4 (= release gate):** ma trận scope 4-vai-trò không còn `UNVERIFIED` cho route release; runtime evidence trong WebView host trên thiết bị thật; security gate rỗng; W2.3 PASS; scorecard ≥8,5, không trục critical <8,0. **Release bật AI/voice: O8 hiện PROVISIONAL (đủ cho dữ liệu test) — khi có dữ liệu thật cần Security/Legal duyệt lại.** Build `AI_DISABLED` release web-in-host pilot được, gọi đúng tên "web-in-host, AI tắt".
+**Exit gate code W4:** native composition, server-side authorization, security gate, W2.3 và project
+test/build đạt. Handoff device/WebView host thuộc DevOps/AMIS sau deployment, không phải bằng chứng mà
+repository này tự tạo lại. **Release bật AI/voice:** O8 hiện PROVISIONAL cho dữ liệu test; dữ liệu thật
+cần Security/Legal duyệt lại.
 
 ---
 

@@ -1,6 +1,8 @@
 # 25 — W2.5 Host-adapter contract
 
-> **Status:** CONTRACT-READY — 2026-09-01. Production AMIS provider vẫn **UNVERIFIED** cho tới khi DevOps/MISA AMIS chốt O3. Đây không phải bằng chứng Native runtime trên thiết bị thật. Handoff/acceptance cụ thể: [`31-o3-amis-bridge-acceptance.md`](31-o3-amis-bridge-acceptance.md).
+> **Status:** CONTRACT-READY — 2026-09-02. Fake adapter là boundary development/test; provider AMIS
+> production được DevOps/AMIS thiết lập cùng deployment và nằm ngoài repository này. Handoff reference:
+> [`31-o3-amis-bridge-acceptance.md`](31-o3-amis-bridge-acceptance.md).
 
 ## 1. Mục đích và ranh giới
 
@@ -33,7 +35,7 @@ Deep link chỉ là tín hiệu `{ path }`: consumer phải resolve session → 
 |---|---|---|---|
 | Desktop browser | `fake-browser` | Không phụ thuộc role | PASS contract test; chưa là page UI mới |
 | Native WebView test | `fake-native` | Không phụ thuộc role | PASS contract test; chưa là host AMIS thật |
-| Native WebView AMIS | Chờ O3 | Tất cả role | **UNVERIFIED / không release** |
+| Native WebView AMIS | DevOps/AMIS khi deploy | Tất cả role | External deployment handoff; không phải code gate của repo |
 
 ## 4. Evidence và cách chạy
 

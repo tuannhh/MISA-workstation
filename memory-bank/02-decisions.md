@@ -120,6 +120,10 @@
 > **CẬP NHẬT 2026-08-24 — owner đã quyết TẤT CẢ O1-O8** (khác hẳn tình trạng round 2 khi chưa cái nào được duyệt): O6 APPROVED; O2/O7 SUPERSEDED bởi D13; **O3/O4/O5 DEFERRED-TO-DEVOPS** (owner giao DevOps, không còn là owner-submission); **O8 PROVISIONAL** (owner cho phép gửi Gemini tạm với dữ liệu test); O1 mặc định `private`. **Không còn owner-action treo.** Xem chi tiết từng dòng bảng dưới + D13/D14/D15 ở §D/§E/§F.
 >
 > **CẬP NHẬT 2026-08-25 — Codex `G0-CLOSE-CONTRACT` (C0.1), owner APPROVED 4 mặc định:** O1 chuyển từ "mặc định chưa hỏi lại" sang **APPROVED chính thức** (với ngữ nghĩa rõ hơn — audience default, không phải hạ classification tier, xem dòng O1 dưới); D13 self-claim **CHỐT: không self-claim** (D13.4c); N1 **CHỐT: dùng action tường minh** (`ack`/`notify`/`run`, không dùng `view` cho side-effect); N2 **CHỐT: `dashboard:view` tường minh, cấp cho mọi role được phép xem**. Evidence chung cho cả 4: `PR-WORKSTATION-CODEX-G0-CLOSE-CONTRACT.md`, Approver Owner, Date 2026-08-25, quote "tôi duyệt 4 mặc định C0.1 như bạn đề xuất nhé".
+>
+> **CẬP NHẬT 2026-09-02 — owner làm rõ O3:** khi DevOps đưa build vào môi trường MISA, AMIS Mobile
+> tự thiết lập host/bridge và mở icon ứng dụng thẳng đến Native-Mobile UI. O3 là handoff deployment của
+> DevOps/AMIS, **không phải blocker hoặc provider/device-test phải làm trong repository này**.
 
 | # | Quyết định | Khuyến nghị mặc định | Ai quyết | Status | Approver/Recipient | Date | Evidence |
 |---|---|---|---|---|---|---|---|

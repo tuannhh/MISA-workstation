@@ -1,10 +1,14 @@
-# 31 — O3 AMIS Mobile bridge: contract & acceptance checklist
+# 31 — O3 AMIS Mobile: deployment handoff reference
 
-> **Status:** BLOCKED EXTERNALLY / contract request ready — 2026-09-02. Recipient: DevOps MISA + team AMIS Mobile. Đây là điều kiện đầu vào của W4.1, không phải provider production đã được triển khai.
+> **Status:** OWNER-CLARIFIED / outside this repository — 2026-09-02. Khi DevOps triển khai vào môi
+> trường MISA, AMIS Mobile tự chịu trách nhiệm host/launcher/WebView và cấu hình bridge production.
+> Project này **không** viết provider production, không tự chặn roadmap vì thiếu device-test AMIS, và
+> không suy đoán token/bridge API. Tài liệu là handoff reference cho DevOps, không phải exit gate code.
 
 ## 1. Mục tiêu và nguyên tắc không suy đoán
 
-PR Workstation chạy như web app trong AMIS Mobile WebView. `frontend/src/platform/host-adapter.mjs` đã định nghĩa seam UI; bridge O3 phải cung cấp một provider production cho seam đó và một cơ chế principal được server xác minh.
+PR Workstation chạy như web app trong AMIS Mobile WebView. Người dùng mở AMIS Mobile, chạm icon của
+ứng dụng và host điều hướng thẳng vào Native-Mobile composition của PR Workstation. `frontend/src/platform/host-adapter.mjs` chỉ là seam/fake-host phục vụ development; DevOps/AMIS tự cung cấp bridge production khi deploy.
 
 - Không chọn sẵn bearer token, cookie, one-time-code hay SDK assertion. DevOps/AMIS chọn **một** cơ chế, ghi thành contract versioned và cung cấp test environment.
 - Không truyền token qua query string, `localStorage`, log WebView hay error telemetry. UI không nhận `principal` trực tiếp từ bridge; server mới xác thực token/assertion và dựng `req.principal`.
@@ -55,8 +59,9 @@ Provider production phải qua `assertHostAdapter()` và chỉ triển khai các
 | Voice | global entry → audio/mic → R149 proposal → user chọn/confirm R150 | Không ghi trước confirm; no token/audio/PII trong log; revoke/stale/timeout có recovery |
 | Release ops | canary, rollback, readiness, telemetry, audit, backup/restore drill | DevOps ký evidence W4.4 trước release production |
 
-## 6. Exit / handoff
+## 6. Handoff boundary
 
-O3 chỉ chuyển từ `BLOCKED EXTERNALLY` sang `READY FOR W4.1` khi DevOps/AMIS gửi đủ các quyết định ở §2, staging bridge/provider, và test contract tự động. O3 chỉ `CLOSED` sau toàn bộ matrix §5 có artifact device thật và Security/Legal duyệt lại O8 trước khi gửi dữ liệu thật/voice ra Gemini.
-
-Cho đến lúc đó, build chỉ có thể gọi đúng tên: **web-in-host contract-ready/fake-native tested**; không được gọi là AMIS Mobile production-ready.
+Code handoff hoàn tất khi bản deploy chứa Native-Mobile composition riêng, server-side session/RBAC và
+build/test của project xanh. Sau đó DevOps/AMIS chịu trách nhiệm cấu hình host, bridge, device matrix và
+release evidence trong môi trường MISA — production artifact không được đưa ngược ra repository này để
+agent tự kiểm thử. O8/Security-Legal cho dữ liệu thật vẫn là governance release riêng.
