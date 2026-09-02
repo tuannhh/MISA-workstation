@@ -77,16 +77,16 @@ export function partnerDetailViewModel(payload) {
   // Confidential và chỉ xuất hiện nếu server projection đã đưa vào response; panel không render
   // hoặc suy diễn chúng, kể cả khi data legacy chứa giá trị.
   const sponsorships = Array.isArray(payload?.sponsorships) ? payload.sponsorships.map((record) => Object.freeze({
-    id: Number(record.id), ownerId: Number.isInteger(Number(record.owner_id)) ? Number(record.owner_id) : null, title: text(record.title, 'Khoản tài trợ'), subtitle: [record.type, formatDate(record.event_date), record.status].filter(Boolean).join(' · ') || 'Chưa cập nhật',
+    id: Number(record.id), ownerId: Number.isInteger(Number(record.owner_id)) ? Number(record.owner_id) : null, title: text(record.title, 'Khoản tài trợ'), subtitle: [record.type, formatDate(record.event_date), record.status].filter(Boolean).join(' · ') || 'Chưa cập nhật', type: record.type || '', event_date: record.event_date || '', status: record.status || '', note: record.note || '', ...(Object.prototype.hasOwnProperty.call(record, 'amount') ? { amount: record.amount } : {}),
   })) : [];
   const gifts = Array.isArray(payload?.gifts) ? payload.gifts.map((record) => Object.freeze({
-    id: Number(record.id), ownerId: Number.isInteger(Number(record.responsible_user_id)) ? Number(record.responsible_user_id) : null, title: [record.gift_type, record.occasion].filter(Boolean).join(' · ') || 'Quà tặng', subtitle: [record.giver, formatDate(record.event_date)].filter(Boolean).join(' · ') || 'Chưa cập nhật',
+    id: Number(record.id), ownerId: Number.isInteger(Number(record.responsible_user_id)) ? Number(record.responsible_user_id) : null, title: [record.gift_type, record.occasion].filter(Boolean).join(' · ') || 'Quà tặng', subtitle: [record.giver, formatDate(record.event_date)].filter(Boolean).join(' · ') || 'Chưa cập nhật', gift_type: record.gift_type || '', giver: record.giver || '', event_date: record.event_date || '', occasion: record.occasion || '', note: record.note || '', ...(Object.prototype.hasOwnProperty.call(record, 'value') ? { value: record.value } : {}),
   })) : [];
   const associationFees = Array.isArray(payload?.fees) ? payload.fees.map((record) => Object.freeze({
-    id: Number(record.id), ownerId: Number.isInteger(Number(record.owner_id)) ? Number(record.owner_id) : null, title: `Hội phí ${text(record.year, 'chưa xác định')}`, subtitle: [record.status, formatDate(record.due_date)].filter(Boolean).join(' · ') || 'Chưa cập nhật',
+    id: Number(record.id), ownerId: Number.isInteger(Number(record.owner_id)) ? Number(record.owner_id) : null, title: `Hội phí ${text(record.year, 'chưa xác định')}`, subtitle: [record.status, formatDate(record.due_date)].filter(Boolean).join(' · ') || 'Chưa cập nhật', year: record.year || '', due_date: record.due_date || '', paid_date: record.paid_date || '', status: record.status || '', staff: record.staff || '', note: record.note || '', ...(Object.prototype.hasOwnProperty.call(record, 'amount') ? { amount: record.amount } : {}),
   })) : [];
   const benefitUsages = Array.isArray(payload?.benefitUsages) ? payload.benefitUsages.map((record) => Object.freeze({
-    id: Number(record.id), ownerId: Number.isInteger(Number(record.owner_id)) ? Number(record.owner_id) : null, title: text(record.title, 'Quyền lợi hợp đồng'), subtitle: formatDate(record.used_date) || 'Chưa cập nhật ngày sử dụng',
+    id: Number(record.id), ownerId: Number.isInteger(Number(record.owner_id)) ? Number(record.owner_id) : null, title: text(record.title, 'Quyền lợi hợp đồng'), subtitle: formatDate(record.used_date) || 'Chưa cập nhật ngày sử dụng', used_date: record.used_date || '', note: record.note || '',
   })) : [];
   return Object.freeze({
     id: Number(record.id), name: text(record.name), type, typeLabel: PARTNER_TYPE_META[type].label,

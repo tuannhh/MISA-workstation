@@ -133,5 +133,19 @@ export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api'
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
     },
+    async saveFinancial(partnerId, entity, input, recordId = null) {
+      const partner = Number(partnerId); const record = Number(recordId); const updating = Number.isInteger(record) && record > 0;
+      const endpoints = { sponsorship: updating ? `/sponsorships/${record}` : `/partners/${partner}/sponsorships`, gift: updating ? `/gifts/${record}` : `/partners/${partner}/gifts`, association_fee: updating ? `/partners/${partner}/fees/${record}` : `/partners/${partner}/fees`, benefit_usage: updating ? `/benefit-usages/${record}` : `/partners/${partner}/benefit-usages` };
+      if (!Number.isInteger(partner) || partner < 1 || !endpoints[entity]) throw new TypeError('Khoản cơ quan không hợp lệ.');
+      const response = await fetchFn(`${basePath}${endpoints[entity]}`, { method: updating ? 'PUT' : 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      const payload = await response.json().catch(() => null); if (!response.ok) throw parseError(response.status, payload);
+      if (!updating && !Number.isInteger(Number(payload?.id))) throw new PartnerApiError({ status: 502, code: 'PARTNER_FINANCIAL_CREATE_INVALID_RESPONSE', message: 'Máy chủ chưa trả mã khoản hợp lệ.' });
+      return Object.freeze({ id: updating ? record : Number(payload.id) });
+    },
+    async deleteFinancialForPartner(partnerId, entity, recordId) {
+      const partner = Number(partnerId); const record = Number(recordId); const endpoints = { sponsorship: `/sponsorships/${record}`, gift: `/gifts/${record}`, association_fee: `/partners/${partner}/fees/${record}`, benefit_usage: `/benefit-usages/${record}` };
+      if (!Number.isInteger(partner) || partner < 1 || !Number.isInteger(record) || record < 1 || !endpoints[entity]) throw new TypeError('Khoản cơ quan không hợp lệ.');
+      const response = await fetchFn(`${basePath}${endpoints[entity]}`, { method: 'DELETE', credentials: 'same-origin' }); const payload = await response.json().catch(() => null); if (!response.ok) throw parseError(response.status, payload); return Object.freeze({ ok: true });
+    },
   });
 }
