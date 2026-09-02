@@ -1,6 +1,6 @@
 # 12 — Kiến trúc giao diện (frontend)
 
-> Nguồn: `frontend/src/App.vue`, `frontend/src/main.js`, `frontend/vite.config.mjs`, `public/app.js` (2.889 dòng), `public/index.html`. Điều chưa xác minh được ghi `UNVERIFIED` — không suy đoán.
+> Nguồn: `frontend/src/App.vue`, `frontend/src/main.js`, `frontend/vite.config.mjs`, `public/app.js` (2.908 dòng tại audit 2026-09-02), `public/index.html`. Điều chưa xác minh được ghi `UNVERIFIED` — không suy đoán.
 
 ## A. 2 lớp frontend cùng tồn tại và cách chúng ghép lại
 

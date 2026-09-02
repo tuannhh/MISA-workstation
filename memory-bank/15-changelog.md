@@ -1,5 +1,17 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-02 — Audit roadmap tổng thể và tách production handoff (Codex)
+
+- Rà lại roadmap, route catalog và Vue strangler thực tế; không mở lại các Gate 0/1, Wave 1
+  backend/security, Gemini gateway hay Voice secure-command đã có evidence đóng.
+- Ghi rõ backlog repository còn lại: W2.2/F6 UI strangler theo flow còn legacy, W2.3 profile MySQL
+  50 người có think time, BA rule cho `relationship_score`, rồi audit matrix Desktop/Native × 4 role
+  theo release scope. Stress liên tục 50 VU vẫn là FAIL/baseline, không bị đổi thành PASS.
+- Thêm `32-production-handoff.md`, chuyển O3/O4/O5, W4.1–W4.4/W4.VOICE sang DevOps/AMIS và O8 sang
+  Security/Legal. Đây là note bàn giao cho môi trường MISA, không phải công việc code agent tự làm.
+- Sửa drift tài liệu theo verifier/source hiện tại: route catalog là 150/150 (không còn 148) và
+  `public/app.js` là 2.908 dòng tại thời điểm audit.
+
 ## 2026-09-02 — Đồng bộ demo login với bốn role D13 (Codex)
 
 - Bỏ hoàn toàn UI/handler “Đăng nhập nhanh”; mọi phiên demo đi qua form login và endpoint thật, không còn client-side credential bypass.
