@@ -114,3 +114,20 @@ test('D13-016: classification() phủ đủ toàn bộ field tiền/mật còn t
     assert.equal(policy.classification(entity, field), expected, `${entity}.${field} phải là ${expected}`);
   }
 });
+
+test('D13-017/F9: attachment policy chỉ nhận kind sự kiện đã đăng ký và tự gán tier/ceiling', () => {
+  assert.deepEqual(policy.attachmentPolicyFor('event', 'Hóa đơn'), {
+    kind: 'Hóa đơn', classificationTier: 'Confidential', visibilityCeiling: 'private',
+  });
+  assert.deepEqual(policy.attachmentPolicyFor('event', 'doc'), {
+    kind: 'Khác', classificationTier: 'Confidential', visibilityCeiling: 'private',
+  });
+  assert.equal(policy.attachmentPolicyFor('event', 'client-tu-dat-tier'), null);
+  assert.equal(policy.attachmentPolicyFor('person', 'id_doc').classificationTier, 'Restricted');
+});
+
+test('D13-018/F9: chỉ file Public + public visibility mới public-readable; legacy thiếu tier fail closed', () => {
+  assert.equal(policy.canReadAttachment({ principal: viewer, entity: 'person', kind: 'portrait', classificationTier: 'Public', audienceVisibility: 'public' }), true);
+  assert.equal(policy.canReadAttachment({ principal: viewer, entity: 'person', kind: 'portrait', classificationTier: 'Confidential', audienceVisibility: 'public' }), false);
+  assert.equal(policy.canReadAttachment({ principal: viewer, entity: 'event', kind: 'Khác', audienceVisibility: 'public' }), false);
+});

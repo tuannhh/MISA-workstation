@@ -233,28 +233,34 @@ test('R094 unauthenticated: không cookie trả 401', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// R095 — POST /api/events/:id/files (upload ≤10 file, kind từ query string CHARACTERIZATION F9: chỉ cắt 40 ký tự, không whitelist)
+// R095 — POST /api/events/:id/files (upload ≤10 file; kind được allowlist + phân loại trên server, F9)
 // ---------------------------------------------------------------------------
-test('R095 happy: upload 1 file trả 200, kind mặc định "doc" khi không truyền query', async () => {
+test('R095 happy F9: upload không gửi kind chuẩn hoá về Khác và persist tier/visibility do server quyết định', async () => {
   const id = await createEvent();
   const res = await uploadFiles(`/api/events/${id}/files`, [{ name: 'anh.png' }]);
   assert.equal(res.status, 200);
   const atts = (await (await call('GET', `/api/events/${id}`)).json()).attachments;
   assert.equal(atts.length, 1);
-  assert.equal(atts[0].kind, 'doc');
+  assert.equal(atts[0].kind, 'Khác');
+  const { db } = require('../db');
+  const stored = db.prepare('SELECT kind, classification_tier, audience_visibility FROM attachments WHERE id=?').get(atts[0].id);
+  assert.equal(stored.kind, 'Khác');
+  assert.equal(stored.classification_tier, 'Confidential');
+  assert.equal(stored.audience_visibility, 'private');
 });
-test('R095 happy CHARACTERIZATION (F9): kind lấy trực tiếp từ query string, không whitelist — giá trị tuỳ ý bị cắt còn 40 ký tự vẫn được lưu', async () => {
+test('R095 invalid F9: kind không thuộc allowlist trả 400 trước Multer, không tạo attachment', async () => {
   const id = await createEvent();
-  const weirdKind = 'x'.repeat(60);
-  const res = await uploadFiles(`/api/events/${id}/files?kind=${weirdKind}`, [{ name: 'anh.png' }]);
-  assert.equal(res.status, 200);
-  const atts = (await (await call('GET', `/api/events/${id}`)).json()).attachments;
-  assert.equal(atts[0].kind, weirdKind.slice(0, 40));
+  const { db } = require('../db');
+  const before = db.prepare("SELECT COUNT(*) c FROM attachments WHERE owner_type='event' AND owner_id=?").get(id).c;
+  const res = await uploadFiles(`/api/events/${id}/files?kind=${'x'.repeat(60)}`, [{ name: 'anh.png' }]);
+  assert.equal(res.status, 400);
+  const after = db.prepare("SELECT COUNT(*) c FROM attachments WHERE owner_type='event' AND owner_id=?").get(id).c;
+  assert.equal(after, before);
 });
-test('R095 happy CHARACTERIZATION: không gửi file nào vẫn trả 200 (route không kiểm files.length, giống R086 suppliers)', async () => {
+test('R095 invalid: không gửi file trả 400', async () => {
   const id = await createEvent();
   const res = await uploadFiles(`/api/events/${id}/files`, []);
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 400);
 });
 test('R095 unauthenticated: không cookie trả 401', async () => {
   assert.equal((await uploadFiles('/api/events/1/files', [{ name: 'x.png' }], { auth: false })).status, 401);

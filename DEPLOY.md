@@ -19,7 +19,7 @@
 |---|---|---|
 | `DATA_DIR` | `/data` | trỏ DB + uploads vào volume |
 | `SESSION_SECRET` | (chuỗi ngẫu nhiên dài) | bảo mật phiên đăng nhập |
-| `GEMINI_API_KEY` | `AQ.Ab8RN6…` | bật AI giọng nói + tạo thiệp |
+| `GEMINI_API_KEY` | inject từ Secret Manager/biến môi trường, không ghi giá trị vào tài liệu | bật AI giọng nói + tạo thiệp |
 | `SMTP_HOST` | `smtp-relay.brevo.com` | email Brevo |
 | `SMTP_PORT` | `587` | |
 | `SMTP_USER` | (SMTP login Brevo) | dạng `xxxx@smtp-brevo.com` |

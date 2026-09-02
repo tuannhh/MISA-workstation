@@ -31,7 +31,7 @@ Response `GET /people/:id`: `record` (masked) + `maskedFields` (mảng tên fiel
 
 ## C. Bookings (`B_COLS`, `routes.js:584-585`)
 
-`subject_type` (`org`\|`person`) + `subject_id` xác định đối tượng được đặt bài; server tự suy `org_id`/`org_name` qua `resolveOrg()` (`routes.js:587-597`) — **client không cần tự tính org khi subject là person**, server tự JOIN từ `people.org_id`. `amount` là **org_fee**. `award_id` (có trong `B_COLS`, `routes.js:584-585`) liên kết 1 booking với 1 giải thưởng — dùng để tính `mediaCost` trong báo cáo giải thưởng (mục F). **Sửa lại (Codex round-3 re-audit, R3-02D):** `event_id` **KHÔNG có trong `B_COLS`** — client gửi `event_id` bị `pick()` âm thầm loại bỏ, không lưu được. Đây là mismatch schema/API thật, đăng ký ở [`01-audit-findings.md`](01-audit-findings.md) F12 — không tự sửa code ở đây, chờ owner xác nhận ý định trước khi thêm cột/allowlist.
+`subject_type` (`org`\|`person`) + `subject_id` xác định đối tượng được đặt bài; server tự suy `org_id`/`org_name` qua `resolveOrg()` — **client không cần tự tính org khi subject là person**, server tự JOIN từ `people.org_id`. `amount` là **org_fee**. `award_id` liên kết booking với giải thưởng; `event_id` cũng là field ghi được qua POST/PUT và persist nguyên giá trị (F12 fixed 2026-09-02). Contract này **chỉ** lưu liên kết; không tự tạo quy tắc tổng hợp chi phí sự kiện mới.
 
 Response `GET /bookings`: `rows` (mask `amount` field-by-field) + `total_amount` — **field tổng hợp cấp response, không phải cấp row**: nếu thiếu `org_fee`, giá trị là `'●●● (đã ẩn)'` (chuỗi), không phải số 0 hay `null` — client phải xử lý kiểu union `number | string` khi hiển thị (`routes.js:607-609`).
 
@@ -70,7 +70,7 @@ Response `GET /suppliers/:id`: `record` + `quotes` (mask `unit_price`) + `files`
 
 `EC_COLS` (event_costs, 1 bảng cho 3 category): `category` (`sponsor`\|`organization`\|`media`) quyết định field nào có ý nghĩa — `sponsor_tier`/`sponsor_benefits` chỉ dùng khi `category=sponsor`; `press_org`/`journalist_name`/`article_link` chỉ dùng khi `category=media`; `amount` (**org_fee**) và `supplier_id` (liên kết nhà cung cấp thực hiện) dùng chung mọi category.
 
-Response `GET /events/:id`: `costs` (object 3 mảng theo category) + `totals` (`{sponsor, organization, media, grand}` — tổng theo từng category và tổng toàn bộ; nếu thiếu `org_fee`, **cả 4 giá trị object `totals` bị gán thẳng chuỗi `'●●● (đã ẩn)'`**, không phải mask từng field — `routes.js:1094`) + `attachments` (kind tự do từ query string khi upload, xem F9 ở `01-audit-findings.md`) + `daysToStart` (số ngày tới `start_time`, âm nếu đã qua).
+Response `GET /events/:id`: `costs` (object 3 mảng theo category) + `totals` (`{sponsor, organization, media, grand}` — tổng theo từng category và tổng toàn bộ; nếu thiếu `org_fee`, **cả 4 giá trị object `totals` bị gán thẳng chuỗi `'●●● (đã ẩn)'`**, không phải mask từng field) + `attachments` (kind chỉ từ allowlist server, tier=`Confidential`, visibility=`private`; F9 fixed) + `daysToStart` (số ngày tới `start_time`, âm nếu đã qua).
 
 ## I. Reminders / Notifications (`D_COLS`, `routes.js:483`)
 

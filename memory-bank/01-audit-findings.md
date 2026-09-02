@@ -4,7 +4,7 @@
 
 ## A. Nhóm P0 / High — phải xử lý trước khi mở rộng
 
-### F1 — Money policy bypass (read + write + file) · **High / A / browser-production**
+### F1 — Money policy bypass (read + write + file) · **High / A / browser-production — ĐÃ FIX (W1.POLICY/W1.FILE)**
 Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật chung** + write-guard gắn thiếu.
 - Registry nhóm-mật chỉ đăng ký 3 trường tiền: `organization.membership_fee`, `sponsorship.amount`, `gift.value` — `server/rbac.js:66-73`.
 - Tiền supplier/booking/event **không** trong registry, che ad-hoc bằng `maskMoney()` — `server/routes.js:52-56`, dùng ở `:982-992` (supplier quote/transaction).
@@ -18,6 +18,7 @@ Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật c
 - **Fix hội tụ:** 1 `DATA_POLICY_REGISTRY` + 1 `PolicyEngine` ở tầng service, **fail-closed 403** (không silent-strip); SQL helper chỉ nhận dữ liệu đã authorize. Xem 03-data-classification.md.
 - **CẬP NHẬT sau inventory G0.3 (`07-route-catalog.md`):** blast radius rộng hơn 2 ví dụ ban đầu. Write-bypass xác nhận ở **10 nhóm route**: `POST/PUT /partners` (membership_fee), sponsorships, fees, gifts, `POST /budgets` (raw SQL, ngoài helper `buildInsert/buildUpdate`), `POST/PUT /awards` (cost), award_participations (budget), supplier_transactions (value), supplier_quotes (unit_price), event_costs (amount). Củng cố quyết định D1 — vá per-route chắc chắn sót, cần PolicyEngine 1 choke-point.
 - Read-bypass xác nhận nguồn gốc **duy nhất**: `GET /files/:id` (`routes.js:467-478`) — phục vụ nội dung mọi loại attachment, chỉ gate `kind==='id_doc'`.
+- **Resolution:** legacy mask/strip rải rác đã được thay bằng `PolicyEngine` + `policy-service` tại read/write choke point; 24/24 entity đã route-wire, aggregate che theo projection, và download file xét entity/owner/tier thay vì chỉ `kind`. Test mapping hiện là 150/150 route; F9 bổ sung cột tier server-derived cho attachment ở bản vá 2026-09-02.
 
 ### F2 — Session store = MemoryStore trên Cloud Run · **High / B / browser-production — MỘT PHẦN CLOSED (W1.7, 2026-08-30)**
 - `server/app.js:17-22` (sửa lại 2026-08-25, trước ở `index.js:19-24` khi chưa tách `createApp()`) không khai báo `store` → MemoryStore; cookie thiếu `secure`; không regenerate session sau login (session fixation) — `server/auth.js`.
@@ -31,9 +32,9 @@ Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật c
 - **Enforcement:** monitor, grounding link, tạo/sửa source và `/ai/award-extract` đều dùng seam/validate; URL bị chặn trả `400`, không ghi source/mention và không gọi Gemini.
 - **Evidence:** `server/test/unit-safe-fetch.test.js` BR-SSRF-021..027 (scheme, private IPv4/IPv6, DNS rebinding, redirect); `unit-ssrf-security.test.js` BR-SSRF-010/011; HTTP integration R122/R139. `OUTBOUND_ALLOWED_HOSTS` là allowlist triển khai tùy chọn; khi được set, host và subdomain ngoài danh sách fail-closed.
 
-### F4 — AI data governance · **High / A / browser-production — OWNER-BLOCKED**
+### F4 — AI data governance · **High / A / browser-production — TECHNICAL CONTROLS CLOSED; O8 LEGAL EXTERNAL**
 - Audio tương tác (giọng nói nội bộ) + dữ liệu Excel/partner có thể ra Gemini; monitoring chỉ gửi tiêu đề/link công khai (rủi ro thấp).
-- Không phải bug code tự vá được — cần chính sách data-tier + consent voice do **Security/Legal MISA** duyệt. Dựng cơ chế enforce + kill-switch `AI_DISABLED`. Xem 03 §C.
+- Đã có registry/gateway egress, `AI_DISABLED`, deny-list, audit không payload, consent voice, redaction, upload allowlist và live synthetic contract 8/8 (F32). **Còn O8:** Security/Legal MISA phải duyệt chính sách cho dữ liệu thật; code không thể tự cấp thẩm quyền đó.
 
 ### F5 — Mobile native chưa tồn tại · **P0 structural / — / AMIS-native-host (đã cam kết)**
 - Hiện chỉ responsive web (media query ẩn sidebar ở 320px). Không có `.mds-mobile-app`, bottom nav, safe-area, native composition.
@@ -57,9 +58,10 @@ Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật c
 - Fix: aiGateway mỏng (timeout/retry/kill-switch/usage) + capability-map `supportsSamplingParams` để strip params theo model; giữ pin 3.5 tới khi golden eval thắng.
 - **W1.9 (2026-08-30) đã sửa:** `call()` có `AbortController` timeout (`GEMINI_TIMEOUT_MS`, mặc định 30s); retry tối đa 3 lần cho 429/5xx (backoff `GEMINI_RETRY_BASE_DELAY_MS * attempt`, KHÔNG retry lỗi 4xx khác/timeout); `supportsSamplingParams(model)`/`buildGenerationConfig()` strip temperature/top_p/top_k cho model ngoài allowlist (`gemini-3.5-flash` hiện tại) — fail-safe mặc định false khi đổi model (W2.6) mà quên cập nhật allowlist. **Chưa làm (không thuộc batch này):** circuit breaker, usage/cost tracking, kill-switch `AI_DISABLED` + data-egress enforcement (thuộc `W1.AI-POLICY`, F4).
 
-### F9 — Attachment thiếu cột phân loại · **Medium / A / browser-production**
-- `server/db.js:85-96` schema attachment chỉ có `owner_type/owner_id/kind/filename/mime`, không có `sensitive_group`. Event lấy `kind` từ query string (`:1129-1133`) — không được dùng làm quyết định security.
-- Fix: thêm cột classification server-derived + migration backfill (xem roadmap F1/Wave 1 và cảnh báo thứ-tự §C dưới).
+### F9 — Attachment thiếu cột phân loại · **Medium / A / browser-production — ĐÃ FIX 2026-09-02**
+- `attachments.classification_tier` được thêm bằng migration idempotent và backfill lại mỗi boot: `person/portrait=Public`, `person/id_doc=Restricted`, còn lại `Confidential`; client không gửi/đặt tier.
+- `policy-engine.js#attachmentPolicyFor()` là registry server-owned. Event chỉ nhận allowlist nhãn tài liệu, alias legacy `doc`/`Tài liệu` chuẩn hoá thành `Khác`; kind lạ trả `400 INVALID_ATTACHMENT_KIND` **trước Multer**, không tạo file/row mồ côi. Upload award/supplier/agreement/work-log/person cũng persist tier + `private` ceiling rõ ràng.
+- Evidence: D13-017/018 và R095 chạy xanh cả SQLite/MySQL; migration/backfill được xác nhận bằng HTTP + DB assertion.
 
 ## C. Rủi ro thứ-tự-thực-thi (Tier A — vì dữ liệu prod đã sống)
 
@@ -68,16 +70,14 @@ Wave 1 thêm classification attachment + bật download/write gate fail-closed. 
 
 ## D. Việc lẻ dễ rơi
 
-### F10 — Chuỗi giống credential trong `DEPLOY.md` · **P1 / — / all**
-Brief Codex §4.4-P1: kiểm tra lịch sử Git; nếu là key thật → **rotate** (không chỉ xóa HEAD). Đưa vào Gate 0.
+### F10 — Chuỗi giống credential trong `DEPLOY.md` · **P1 / — / all — CLOSED (placeholder removed)**
+Chuỗi minh hoạ đã bị thay bằng chỉ dẫn Secret Manager/biến môi trường; lịch sử không chứng minh đó từng là credential sống. Nếu MISA xác minh ngược lại, phải rotate tại provider — không thể suy ra hay làm thay từ repo.
 
-### F11 — RBAC drift 2-role vs banner 5-tài-khoản · **Low / — / browser-production**
-`server/rbac.js:12-15` chỉ có `super_admin`+`pr_staff`; seed 2 user (`server/db.js:665-666`); nhưng banner login (`server/index.js:13-18` — sửa lại 2026-08-25, trước ở `:50-55` khi chưa tách `server/app.js`) quảng cáo 5 tài khoản không tồn tại. Dọn banner + README + đồng bộ 1:1 sau khi owner chốt role model.
+### F11 — RBAC drift 2-role vs banner 5-tài-khoản · **Low / — / browser-production — ĐÃ FIX (D13/W1.RBAC)**
+Mô hình runtime đã hội tụ về `viewer`/`executor`/`admin`/`super_admin`, seed/login docs và ma trận quyền được kiểm bằng PolicyEngine + 150 route mapping; không còn banner demo 5 tài khoản trái với runtime.
 
-### F12 — Schema/API mismatch: `event_id` không tồn tại trong allowlist ghi của booking · **Medium / B / browser-production** (Codex round-3 re-audit, R3-02D)
-`server/routes.js:584-585` khai `B_COLS` cho phép ghi `award_id` nhưng **không có `event_id`** — trong khi `10-api-contract.md` (bản trước) và ý định nghiệp vụ (booking liên kết được với 1 sự kiện, dùng tính `mediaCost` theo sự kiện tương tự `award_id`) ngụ ý cả 2 field cùng được hỗ trợ. `pick(req.body, B_COLS)` (`routes.js:22-26`) âm thầm loại `event_id` client gửi lên — không lỗi, không log (cùng cơ chế silent-drop ở `16-coding-rules.md` §13). Client tưởng đã liên kết booking với sự kiện nhưng dữ liệu không được lưu.
-- **Không tự sửa code ở Gate 0** (đúng nguyên tắc "không đổi nghiệp vụ khi đang audit tài liệu") — chỉ đăng ký finding, chờ owner xác nhận ý định: (a) thêm `event_id` vào `B_COLS` + migration liên kết nếu đây là tính năng còn thiếu, hay (b) bỏ hẳn ý tưởng liên kết booking↔event nếu chưa từng dùng thật.
-- Đưa vào Wave 1 (cùng nhóm sửa contract chính xác, không phải P0 bảo mật).
+### F12 — Schema/API mismatch: `event_id` không tồn tại trong allowlist ghi của booking · **Medium / B / browser-production — ĐÃ FIX 2026-09-02**
+`event_id` đã có trong `B_COLS`; POST và PUT persist đúng cột migration sẵn có. Test R047/R048 xác nhận DB round-trip ở cả SQLite/MySQL. Bản vá chỉ khôi phục contract lưu liên kết; **không tự suy diễn** quy tắc aggregate/cost theo event mới, vì đó là nghiệp vụ riêng chưa được owner định nghĩa.
 
 ### F13 — Bộ nhắc việc/thông báo KHÔNG chạy được trên MySQL · **High / B / browser-production (sẽ chặn production tương lai) — ĐÃ FIX** (G1A.3 commit 4, phát hiện qua characterization; sửa ngay trong G1A.3 commit 5 theo yêu cầu owner; câu chữ "production" sửa lại theo Codex audit A4)
 `server/scheduler.js:28` (cũ) dùng `WHERE ... AND (recipient_user_id IS ? OR recipient_user_id=?)` — cú pháp `IS ?` chỉ hợp lệ với driver SQLite (`node:sqlite` chấp nhận `IS` như so sánh tổng quát có xử lý NULL); MySQL chỉ cho `IS` đi với từ khoá `NULL/TRUE/FALSE/UNKNOWN`, không cho placeholder tham số → mọi lần gọi thực sự chạm nhánh này ném `ER_PARSE_ERROR` ("You have an error in your SQL syntax ... near '1 OR recipient_user_id=1)'").

@@ -74,6 +74,12 @@ test('R047 happy: tạo booking hợp lệ trả 200 + id, tự resolve org theo
   const row = (await res.json()).rows.find((r) => r.id === id);
   assert.ok(row);
 });
+test('R047 F12: event_id được lưu thật thay vì bị pick() âm thầm loại bỏ', async () => {
+  const eventId = 4242;
+  const id = await createBooking({ event_id: eventId });
+  const { db } = require('../db');
+  assert.equal(db.prepare('SELECT event_id FROM bookings WHERE id=?').get(id).event_id, eventId);
+});
 test('R047 invalid: thiếu title (NOT NULL) trả 400', async () => {
   const res = await call('POST', '/api/bookings', { body: { subject_type: 'person', subject_id: 1, amount: 100 } });
   assert.equal(res.status, 400);
@@ -91,6 +97,13 @@ test('R048 happy: cập nhật booking trả 200 và thay đổi được ghi nh
   assert.equal(res.status, 200);
   const row = (await (await call('GET', '/api/bookings?subject_type=person&subject_id=1')).json()).rows.find((r) => r.id === id);
   assert.equal(row.title, 'Đã sửa');
+});
+test('R048 F12: cập nhật event_id được lưu thật', async () => {
+  const id = await createBooking({ event_id: 100 });
+  const res = await call('PUT', `/api/bookings/${id}`, { body: { event_id: 200 } });
+  assert.equal(res.status, 200);
+  const { db } = require('../db');
+  assert.equal(db.prepare('SELECT event_id FROM bookings WHERE id=?').get(id).event_id, 200);
 });
 test('R048 not-found CHARACTERIZATION: id không tồn tại vẫn trả 200 {ok:true} (UPDATE 0 dòng không lỗi)', async () => {
   const res = await call('PUT', '/api/bookings/9999999', { body: { subject_type: 'person', subject_id: 1, title: 'x' } });

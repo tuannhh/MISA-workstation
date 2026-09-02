@@ -54,10 +54,37 @@ function canReadField({ principal, entity, field, record, isPublic, parentOwnerI
   return isPublic !== false;
 }
 
-// D13.3b: attachments are not scalar `person` fields, so they get their own ceiling table instead
-// of FIELD_TIER. id_doc's ceiling is hard `private` — no role, including Admin, can raise it.
-const ATTACHMENT_VISIBILITY_CEILING = Object.freeze({ id_doc: 'private', portrait: 'public' });
-function attachmentVisibilityCeiling(kind) { return ATTACHMENT_VISIBILITY_CEILING[kind] || 'private'; }
+// D13.3b/F9: attachment classification and its visibility ceiling are one server-owned
+// registry. A client can choose only a recognized event-document label; it never chooses a tier.
+const EVENT_DOCUMENT_KINDS = Object.freeze([
+  'Hợp đồng', 'Biên bản nghiệm thu', 'Hóa đơn', 'Agenda', 'Checklist',
+  'Danh sách phóng viên', 'Dự toán', 'Kế hoạch truyền thông', 'Bài diễn giả',
+  'Tổng quan sự kiện', 'Hợp đồng diễn giả', 'Khác',
+]);
+const EVENT_DOCUMENT_KIND_ALIASES = Object.freeze({ doc: 'Khác', 'Tài liệu': 'Khác' });
+const ATTACHMENT_POLICY = Object.freeze({
+  person: Object.freeze({
+    portrait: Object.freeze({ classificationTier: 'Public', visibilityCeiling: 'public' }),
+    id_doc: Object.freeze({ classificationTier: 'Restricted', visibilityCeiling: 'private' }),
+  }),
+  award: Object.freeze({ award_doc: Object.freeze({ classificationTier: 'Confidential', visibilityCeiling: 'private' }) }),
+  supplier: Object.freeze({ quote: Object.freeze({ classificationTier: 'Confidential', visibilityCeiling: 'private' }) }),
+  agreement: Object.freeze({ file: Object.freeze({ classificationTier: 'Confidential', visibilityCeiling: 'private' }) }),
+  work_log: Object.freeze({ file: Object.freeze({ classificationTier: 'Confidential', visibilityCeiling: 'private' }) }),
+});
+function attachmentPolicyFor(ownerType, requestedKind) {
+  let kind = String(requestedKind || '').trim();
+  if (ownerType === 'event') {
+    kind = EVENT_DOCUMENT_KIND_ALIASES[kind] || kind || 'Khác';
+    if (!EVENT_DOCUMENT_KINDS.includes(kind)) return null;
+    return { kind, classificationTier: 'Confidential', visibilityCeiling: 'private' };
+  }
+  const spec = ATTACHMENT_POLICY[ownerType]?.[kind];
+  return spec ? { kind, ...spec } : null;
+}
+function attachmentVisibilityCeiling(kind, ownerType) {
+  return attachmentPolicyFor(ownerType, kind)?.visibilityCeiling || (kind === 'portrait' ? 'public' : 'private');
+}
 function canSetAttachmentVisibility(kind, visibility) {
   if (visibility === 'private') return true;
   return attachmentVisibilityCeiling(kind) === 'public';
@@ -66,16 +93,19 @@ function canSetAttachmentVisibility(kind, visibility) {
 // agreement/work_log...) hoac Inherited phai theo dung luat owner cua entity do, giong
 // canReadField — khong con "khong instrument thi phuc vu luon" nhu truoc. Entity Global (person/
 // supplier) khong co owner bypass, giu dung hanh vi cu: chi Admin/Super Admin xem duoc private.
-function canReadAttachment({ principal, entity, kind, audienceVisibility, record, parentOwnerId }) {
+function canReadAttachment({ principal, entity, kind, classificationTier, audienceVisibility, record, parentOwnerId }) {
   if (!principal) return false;
   if (isPrivileged(principal)) return true;
-  if (kind === 'id_doc') return false;
+  // Missing/malformed historical data fails closed as Confidential. `id_doc` remains
+  // Restricted independently while the backfill is deployed.
+  const tier = classificationTier || (kind === 'id_doc' ? 'Restricted' : 'Confidential');
+  if (tier === 'Restricted') return false;
   if (principal.role === 'executor' && isDirectEntity(entity) && ownerValue(entity, record) === principal.id) return true;
   if (principal.role === 'executor' && isInheritedEntity(entity) && parentOwnerId === principal.id) return true;
-  return audienceVisibility === 'public';
+  return tier === 'Public' && audienceVisibility === 'public';
 }
 
 module.exports = {
   TIER, FIELD_TIER, classification, isPrivileged, isDirectEntity, isInheritedEntity, canWrite, canReadField, ownerValue,
-  attachmentVisibilityCeiling, canSetAttachmentVisibility, canReadAttachment,
+  EVENT_DOCUMENT_KINDS, attachmentPolicyFor, attachmentVisibilityCeiling, canSetAttachmentVisibility, canReadAttachment,
 };

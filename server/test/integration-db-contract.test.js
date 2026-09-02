@@ -26,7 +26,7 @@ const REQUIRED_COLUMNS = {
   users: ['id', 'username', 'password_hash', 'full_name', 'role', 'sensitive_perms', 'email', 'notify_opt_in'],
   organizations: ['id', 'name', 'org_type', 'membership_fee'],
   people: ['id', 'org_id', 'full_name', 'phone_other', 'assoc_events', 'assoc_awards'],
-  attachments: ['id', 'owner_type', 'owner_id', 'kind', 'audience_visibility'],
+  attachments: ['id', 'owner_type', 'owner_id', 'kind', 'classification_tier', 'audience_visibility'],
   bookings: ['id', 'title', 'amount', 'award_id', 'event_id', 'owner_id'],
   gifts: ['id', 'owner_type', 'owner_id', 'responsible_user_id'],
   awards: ['id', 'name', 'owner_id'],

@@ -1,5 +1,11 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-02 — Hardening F9 attachment classification + F12 booking event link (Codex)
+
+- **F9 closed:** thêm `attachments.classification_tier` cùng backfill idempotent (portrait=`Public`, id_doc=`Restricted`, còn lại=`Confidential`); registry `attachmentPolicyFor()` là nguồn server-side duy nhất cho tier/ceiling. Event chỉ nhận allowlist kind, chuẩn hoá alias legacy `doc`/`Tài liệu` thành `Khác`, và reject kind lạ **trước Multer** để không tạo row/tệp mồ côi. Mọi đường upload hiện persist tier + `private` ceiling rõ ràng.
+- **F12 closed:** thêm `event_id` vào booking write allowlist; POST/PUT nay persist đúng field đã có migration. Đây chỉ là sửa contract lưu liên kết, không thêm phép tính/aggregate chi phí sự kiện không được owner định nghĩa.
+- Bổ sung D13-017/018, R095 và R047/R048 regression; DB contract yêu cầu `attachments.classification_tier`. Test tập trung PASS: SQLite 90/90, MySQL 90/90. `DEPLOY.md` bỏ chuỗi giống credential, chỉ dẫn inject `GEMINI_API_KEY` từ Secret Manager/biến môi trường.
+
 ## 2026-09-01 — W3 Event Detail read pilot (Codex)
 
 - Mở rộng strangler Event List từ `#events` sang `#events/:id`, giữ feature flag `eventsListRead`.

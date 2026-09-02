@@ -82,16 +82,18 @@ Nhân sự thuộc cơ quan — entity chứa nhiều nhất trường mật.
 Index: `idx_p_org(org_id)` (`db.js:191`, chỉ SQLite).
 Nhóm mật tra `rbac.js:66-73` (`SENSITIVE_GROUPS`); giấy tờ tuỳ thân (`iddoc`) không phải cột mà là `attachments.kind='id_doc'`.
 
-### attachments (`db.js:86-96`)
-Bảng đa owner (person/agreement/work_log/award/supplier/event) — **không có cột phân loại nhạy cảm** (F9, xem [`01-audit-findings.md`](01-audit-findings.md)).
+### attachments (`db.js:86-97`)
+Bảng đa owner (person/agreement/work_log/award/supplier/event). **F9 fixed:** `classification_tier` được server-derived + migration backfill; client không có input tier.
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | id | INTEGER PK AUTOINCREMENT | |
 | owner_type | TEXT NOT NULL DEFAULT `'person'` | `person`\|`agreement`\|`work_log`\|`award`\|`supplier`\|`event` (giá trị suy từ route ghi, không có CHECK constraint DB) |
 | owner_id | INTEGER NOT NULL | không có FK thật (đa bảng đích, SQLite không hỗ trợ FK polymorphic) |
-| kind | TEXT NOT NULL | `portrait`\|`id_doc`\|`file`\|`award_doc`\|`quote`\|tự do theo query string cho event (`routes.js:1130`, F9) |
+| kind | TEXT NOT NULL | `portrait`\|`id_doc`\|`file`\|`award_doc`\|`quote`\|event allowlist; kind lạ bị từ chối trước Multer |
 | filename | TEXT NOT NULL | tên lưu đĩa (random, `uploads.js:10-13`) |
 | original_name, mime | TEXT | |
+| classification_tier | TEXT NOT NULL DEFAULT `Confidential` | server-derived: portrait=`Public`, id_doc=`Restricted`, còn lại=`Confidential`; migration backfill idempotent |
+| audience_visibility | TEXT NOT NULL DEFAULT `private` | trần do attachment policy quyết định, không được public hoá file Confidential/Restricted |
 | is_primary | INTEGER NOT NULL DEFAULT 0 | chỉ có ý nghĩa với `kind='portrait'` |
 | created_at | TEXT NOT NULL DEFAULT datetime('now') | |
 

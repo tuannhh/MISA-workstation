@@ -1381,7 +1381,7 @@ cần Security/Legal duyệt lại.
 | F3 SSRF | G1B.4 → W1.8 | **CLOSED 2026-08-27** |
 | F4/O8 AI governance | G0.8 + O8(provisional) → W1.AI-POLICY (gateway) → W3.VOICE (D14) → W4.VOICE | O8 tạm cho phép; gateway siết được sau bằng config |
 | F5 mobile native | G0.4 (matrix, Section B/C do Codex dựng — C0.3) → W2.5 (contract-ready) → slice Wave 3 → W4.1-4.3 (runtime) | **D15: web-in-WebView + composition Native-Mobile RIÊNG BIỆT (không phải desktop responsive) — giảm khối lượng (không codebase native song song), KHÔNG giảm severity P0 (Codex C0.7)** |
-| F12 event_id/API mismatch | Đăng ký ở `01-audit-findings.md`; chờ owner xác nhận ý định trước khi thêm vào Wave nào | mới (Codex round-3 re-audit R3-02D) |
+| F12 event_id/API mismatch | **CLOSED 2026-09-02:** `event_id` vào booking write allowlist, POST/PUT round-trip ở hai driver | chỉ khôi phục persist contract, không suy diễn aggregate nghiệp vụ event |
 | F13 reminders/notif hỏng trên MySQL (`scheduler.js` `IS ?`) | **ĐÃ FIX ở G1A.3 commit 5** (owner yêu cầu sửa ngay, không đợi Wave) — không còn trong backlog Wave | phát hiện G1A.3 commit 4 (characterization), sửa commit 5, xem `01-audit-findings.md` §D |
 | F14 grandTotal báo cáo tổng hợp nối chuỗi trên MySQL (`routes.js` SUM() string) | **ĐÃ FIX ở G1A.3 batch reports-awards commit `119f81a`** (owner duyệt fix ngay, cùng cơ chế F13) — không còn trong backlog Wave | phát hiện batch reports-awards (characterization R052), xem `01-audit-findings.md` §D |
 | F15 FK `award_participations.award_id` không thực thi trên MySQL | **ĐÃ SỬA — Claude 2026-08-30** | phát hiện batch reports-awards (characterization R067), P2. Root cause: MySQL âm thầm bỏ qua `REFERENCES` inline cột (chỉ SQLite honor); `mysql-sync.js`'s `translate()` nay tách thành `CONSTRAINT...FOREIGN KEY` out-of-line, xác nhận đủ 24/24 FK thật qua `information_schema`. Xem execution update + `01-audit-findings.md` §D |
@@ -1390,7 +1390,7 @@ cần Security/Legal duyệt lại.
 | F6 app.js monolith | W2.1-2.2 → slice Wave 3 | |
 | F7 Atomics | G1.8 (baseline) → W2.3 (acceptance, ngưỡng DevOps) → W2.4 nếu fail | |
 | F8 Gemini | G1A.7 → W1.9 → W2.6 (eval, $200) | |
-| F9 attachment | **Nuốt vào W1.FILE** (per-file visibility D13.3) — R1 dual-write BỎ (dữ liệu bỏ được) | |
+| F9 attachment | **CLOSED 2026-09-02:** server-derived `classification_tier` + idempotent backfill + event kind allowlist trước Multer | D13.3 file visibility tiếp tục là policy chung |
 | F10 secret | G0.7 — đã đóng | |
 | F11 role drift | **Nuốt vào W1.RBAC** (thay cả hệ vai trò, không "dọn banner") | |
 | D13 RBAC v2 | **W1.RBAC.0/W1.RBAC.1/W1.RBAC.2/W1.POLICY/W1.OWN/W1.ADMIN/W1.FILE** (khối lớn nhất) | security-complete hoá theo C0.2 (2026-08-25): tách classification_tier/audience_visibility/authorization/egress, ma trận ownership đủ nhóm resource |

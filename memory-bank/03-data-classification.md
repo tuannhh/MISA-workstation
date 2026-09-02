@@ -28,7 +28,7 @@
 
 - `suppliers.service_fee_pct` (`db.js:266`), `suppliers.deposit_pct` (`db.js:268`): điều khoản % thương mại → **`classification_tier = Confidential`** (APPROVED, cùng nhóm `org_fee`).
 - **Derived/projection** kế thừa tier `Confidential` từ nguồn (registry mô tả cả field dẫn xuất): `bookings.total_amount`, `events.total_cost`, `events.totals.*`, report `spend/budget/grandTotal/fee totals`, award `partBudget/mediaCost/totalCost`. **Áp dụng nghiêm ở tầng truy vấn** (không chỉ mask response) — xem `02-decisions.md` D13.4b về rò rỉ qua aggregate.
-- **Tài liệu tiền:** `supplier_quotes kind=quote` → `Confidential`. Agreement / work-log / award doc / event doc → **`Confidential` (APPROVED, mặc định an toàn)** — server phân loại theo loại tài liệu (D3/D13.3b), `audience_visibility` mặc định `private`, hạ xuống Public chỉ khi Admin xét lại từng loại tài liệu cụ thể (không được vượt trần qua UI thường nếu tier vẫn Confidential).
+- **Tài liệu tiền:** `supplier_quotes kind=quote` → `Confidential`. Agreement / work-log / award doc / event doc → **`Confidential` (APPROVED, mặc định an toàn)** — `policy-engine.js#attachmentPolicyFor()` là registry thực thi: event allowlist nhãn tài liệu, legacy `doc`/`Tài liệu` chuẩn hoá thành `Khác`; client không gửi tier. `audience_visibility` mặc định/ceiling `private`, không được hạ xuống Public qua UI thường khi tier vẫn Confidential. Person `portrait=Public`, `id_doc=Restricted` là hai ngoại lệ server-derived.
 - **Không cho client tự đặt classification** (D3, RETAINED).
 
 ## C. Nhóm mật cá nhân (person) — đã tồn tại trong `server/rbac.js:66-73`, giờ = `classification_tier` seed cho D13.2a

@@ -368,8 +368,9 @@ function govFileUpload(entity) {
   return (req, res) => {
     const files = req.files || [];
     if (!files.length) return res.status(400).json({ error: 'Không có file nào.' });
-    const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary) VALUES (?,?,'file',?,?,?,0)`);
-    for (const f of files) ins.run(entity, req.params.id, f.filename, f.originalname, f.mimetype);
+    const attachment = policy.attachmentPolicyFor(entity, 'file');
+    const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, classification_tier, audience_visibility, is_primary) VALUES (?,?,?,?,?,?,?, ?,0)`);
+    for (const f of files) ins.run(entity, req.params.id, attachment.kind, f.filename, f.originalname, f.mimetype, attachment.classificationTier, 'private');
     logEdit(req, 'EDIT', entity, req.params.id, `Tải lên ${files.length} tệp`);
     res.json({ ok: true });
   };
@@ -560,12 +561,12 @@ router.get('/people/:id', (req, res) => {
   // có policy configuration nghĩa là không có field nào, và các collection liên quan (interactions/
   // gifts/caretakers) còn private tới khi có policy slice riêng cho entity đó (interaction/gift).
   const record = policyService.projectRecord({ principal: req.principal, entity: 'person', module: 'partners', record: row });
-  const allAtts = db.prepare(`SELECT id, original_name, mime, kind, audience_visibility, is_primary FROM attachments
+  const allAtts = db.prepare(`SELECT id, original_name, mime, kind, classification_tier, audience_visibility, is_primary FROM attachments
     WHERE owner_type='person' AND owner_id=? ORDER BY kind, is_primary DESC, id`).all(row.id);
   const portraits = allAtts.filter((a) => a.kind === 'portrait'
-    && policy.canReadAttachment({ principal: req.principal, kind: a.kind, audienceVisibility: a.audience_visibility }));
+    && policy.canReadAttachment({ principal: req.principal, kind: a.kind, classificationTier: a.classification_tier, audienceVisibility: a.audience_visibility }));
   const idDocs = allAtts.filter((a) => a.kind === 'id_doc'
-    && policy.canReadAttachment({ principal: req.principal, kind: a.kind, audienceVisibility: a.audience_visibility }));
+    && policy.canReadAttachment({ principal: req.principal, kind: a.kind, classificationTier: a.classification_tier, audienceVisibility: a.audience_visibility }));
   const idDocCount = allAtts.filter((a) => a.kind === 'id_doc').length;
   res.json({ record, maskedFields: [], portraits, idDocs, idDocCount, interactions: [], gifts: [], caretakers: [], sensitiveVisible: policy.isPrivileged(req.principal) });
 });
@@ -623,6 +624,7 @@ function personEditGate(req, res, next) {
 }
 router.post('/people/:id/attachments', personEditGate, upload.array('files', 5), (req, res) => {
   const kind = req.query.kind === 'id_doc' ? 'id_doc' : 'portrait';
+  const attachment = policy.attachmentPolicyFor('person', kind);
   // Giấy tờ tùy thân là dữ liệu mật: chỉ người đủ quyền được tải lên
   if (kind === 'id_doc' && !policy.isPrivileged(req.principal)) {
     (req.files || []).forEach((f) => { try { fs.unlinkSync(f.path); } catch {} });
@@ -645,15 +647,15 @@ router.post('/people/:id/attachments', personEditGate, upload.array('files', 5),
     return res.status(400).json({ error: `Không thể đặt visibility 'public' cho loại tài liệu này.` });
   }
   const visibility = requestedVisibility;
-  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, audience_visibility, is_primary)
-    VALUES ('person', ?, ?, ?, ?, ?, ?, ?)`);
+  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, classification_tier, audience_visibility, is_primary)
+    VALUES ('person', ?, ?, ?, ?, ?, ?, ?, ?)`);
   const hasPrimary = db.prepare(`SELECT COUNT(*) c FROM attachments WHERE owner_type='person' AND owner_id=? AND kind='portrait' AND is_primary=1`).get(req.params.id).c;
   let madePrimary = hasPrimary > 0;
   const created = [];
   for (const f of files) {
     const primary = kind === 'portrait' && !madePrimary ? 1 : 0;
     if (primary) madePrimary = true;
-    const r = ins.run(req.params.id, kind, f.filename, f.originalname, f.mimetype, visibility, primary);
+    const r = ins.run(req.params.id, kind, f.filename, f.originalname, f.mimetype, attachment.classificationTier, visibility, primary);
     created.push(r.lastInsertRowid);
   }
   logEdit(req, 'EDIT', 'person', req.params.id, `Tải lên ${files.length} ${kind === 'id_doc' ? 'giấy tờ' : 'ảnh'}`);
@@ -713,7 +715,7 @@ router.get('/files/:id', (req, res) => {
   // id_doc (giấy tờ tùy thân) luôn mật, chỉ tồn tại thật trên owner_type='person'.
   if (att.kind === 'id_doc') {
     const allowed = map.entity === 'person'
-      && policy.canReadAttachment({ principal: req.principal, entity: map.entity, kind: att.kind, audienceVisibility: att.audience_visibility });
+      && policy.canReadAttachment({ principal: req.principal, entity: map.entity, kind: att.kind, classificationTier: att.classification_tier, audienceVisibility: att.audience_visibility });
     if (!allowed) return sendError(req, res, 403, 'FORBIDDEN_SENSITIVE_GROUP', 'Không đủ quyền xem giấy tờ tùy thân');
     logEdit(req, 'VIEW_SENSITIVE', 'person', att.owner_id, `Tải/giấy tờ tùy thân: ${att.original_name || att.filename}`);
   } else {
@@ -723,7 +725,7 @@ router.get('/files/:id', (req, res) => {
       return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
     }
     const record = db.prepare(`SELECT * FROM ${map.table} WHERE id=?`).get(att.owner_id);
-    if (!policy.canReadAttachment({ principal: req.principal, entity: map.entity, kind: att.kind, audienceVisibility: att.audience_visibility, record })) {
+    if (!policy.canReadAttachment({ principal: req.principal, entity: map.entity, kind: att.kind, classificationTier: att.classification_tier, audienceVisibility: att.audience_visibility, record })) {
       return sendError(req, res, 403, 'FORBIDDEN_MODULE', 'Bạn không có quyền xem file này.');
     }
   }
@@ -866,7 +868,7 @@ router.post('/interactions', (req, res) => {
 //  BOOKINGS (Booking bài viết — đặt báo/phóng viên)
 // =====================================================================
 const B_COLS = ['subject_type', 'subject_id', 'subject_name', 'org_id', 'org_name', 'content_type',
-  'title', 'amount', 'article_link', 'booked_date', 'publish_date', 'status', 'note', 'award_id'];
+  'title', 'amount', 'article_link', 'booked_date', 'publish_date', 'status', 'note', 'award_id', 'event_id'];
 
 function resolveOrg(data) {
   // Với phóng viên: gom theo cơ quan của họ để báo cáo theo đơn vị báo chí
@@ -1322,9 +1324,10 @@ router.delete('/awards/:id/participations/:pid', (req, res) => {
 router.post('/awards/:id/files', requireFileWrite('award', 'awards', 'awards'), upload.array('files', 8), (req, res) => {
   const files = req.files || [];
   if (!files.length) return res.status(400).json({ error: 'Không có file nào.' });
-  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary)
-    VALUES ('award', ?, 'award_doc', ?, ?, ?, 0)`);
-  for (const f of files) ins.run(req.params.id, f.filename, f.originalname, f.mimetype);
+  const attachment = policy.attachmentPolicyFor('award', 'award_doc');
+  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, classification_tier, audience_visibility, is_primary)
+    VALUES ('award', ?, ?, ?, ?, ?, ?, 'private', 0)`);
+  for (const f of files) ins.run(req.params.id, attachment.kind, f.filename, f.originalname, f.mimetype, attachment.classificationTier);
   logEdit(req, 'EDIT', 'award', req.params.id, `Tải lên ${files.length} tài liệu`);
   res.json({ ok: true });
 });
@@ -1512,8 +1515,9 @@ router.delete('/suppliers/:id/quotes/:qid', (req, res) => {
 });
 router.post('/suppliers/:id/files', requirePerm('suppliers', 'edit'), upload.array('files', 5), (req, res) => {
   const files = req.files || [];
-  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary) VALUES ('supplier', ?, 'quote', ?, ?, ?, 0)`);
-  for (const f of files) ins.run(req.params.id, f.filename, f.originalname, f.mimetype);
+  const attachment = policy.attachmentPolicyFor('supplier', 'quote');
+  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, classification_tier, audience_visibility, is_primary) VALUES ('supplier', ?, ?, ?, ?, ?, ?, 'private', 0)`);
+  for (const f of files) ins.run(req.params.id, attachment.kind, f.filename, f.originalname, f.mimetype, attachment.classificationTier);
   res.json({ ok: true });
 });
 
@@ -1643,10 +1647,18 @@ router.delete('/events/:id/costs/:cid', (req, res) => {
 });
 // D13 (W1.FILE P2): event la entity Direct -- gate theo owner_id giong PUT /events/:id.
 // F24 remediation: authorization that da chay trong requireFileWrite() truoc upload.array().
-router.post('/events/:id/files', requireFileWrite('event', 'events', 'events'), upload.array('files', 10), (req, res) => {
-  const kind = (req.query.kind || 'doc').slice(0, 40);
-  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, is_primary) VALUES ('event', ?, ?, ?, ?, ?, 0)`);
-  for (const f of (req.files || [])) ins.run(req.params.id, kind, f.filename, f.originalname, f.mimetype);
+function requireEventAttachmentPolicy(req, res, next) {
+  const attachment = policy.attachmentPolicyFor('event', req.query.kind);
+  if (!attachment) return sendError(req, res, 400, 'INVALID_ATTACHMENT_KIND', 'Loại tài liệu sự kiện không hợp lệ.');
+  req.attachmentPolicy = attachment;
+  next();
+}
+router.post('/events/:id/files', requireFileWrite('event', 'events', 'events'), requireEventAttachmentPolicy, upload.array('files', 10), (req, res) => {
+  const files = req.files || [];
+  if (!files.length) return res.status(400).json({ error: 'Không có file nào.' });
+  const attachment = req.attachmentPolicy;
+  const ins = db.prepare(`INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, classification_tier, audience_visibility, is_primary) VALUES ('event', ?, ?, ?, ?, ?, ?, 'private', 0)`);
+  for (const f of files) ins.run(req.params.id, attachment.kind, f.filename, f.originalname, f.mimetype, attachment.classificationTier);
   res.json({ ok: true });
 });
 // D13 (W1.POLICY.2 write-side): tuong tu fees/:fid/remind -- gate theo 'reminders','create'.

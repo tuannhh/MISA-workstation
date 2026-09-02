@@ -91,6 +91,7 @@ function init() {
     filename TEXT NOT NULL,    -- tên file lưu trên đĩa
     original_name TEXT,
     mime TEXT,
+    classification_tier TEXT NOT NULL DEFAULT 'Confidential', -- server-derived D13/F9; never client-controlled
     audience_visibility TEXT NOT NULL DEFAULT 'private', -- D13: public/private, server enforces ceiling
     is_primary INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -642,6 +643,14 @@ function migrate() {
   // RBAC v2 foundation. Existing files start private; no route reads this value until the
   // PolicyEngine + backfill gate is complete, so this additive migration cannot expose data.
   add("ALTER TABLE attachments ADD COLUMN audience_visibility VARCHAR(20) NOT NULL DEFAULT 'private'");
+  add("ALTER TABLE attachments ADD COLUMN classification_tier VARCHAR(20) NOT NULL DEFAULT 'Confidential'");
+  // F9: re-run the deterministic backfill at every boot. It is idempotent and prevents a partial
+  // historical migration or a forged row from weakening future file authorization.
+  db.exec(`UPDATE attachments SET classification_tier=CASE
+    WHEN owner_type='person' AND kind='portrait' THEN 'Public'
+    WHEN owner_type='person' AND kind='id_doc' THEN 'Restricted'
+    ELSE 'Confidential'
+  END`);
   // D13 ownership foundation. Gifts đã dùng owner_id cho người/cơ quan nhận quà nên dùng tên
   // responsible_user_id cho nhân viên phụ trách (owner policy), tránh đổi nghĩa dữ liệu legacy.
   for (const table of ['bookings', 'interactions', 'awards', 'events', 'sponsorships', 'agreements', 'work_logs', 'association_fees', 'supplier_quotes', 'supplier_transactions', 'supplier_contacts', 'award_participations', 'benefit_usages']) {
