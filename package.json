@@ -24,6 +24,7 @@
     "test:verify-g0-selftest": "node --test scripts/verify-g0.selftest.mjs"
     ,"rbac:preflight": "node scripts/rbac-preflight.mjs"
     ,"perf:baseline": "DB_CLIENT=mysql ALLOW_TEST_DB_CREATE=1 node scripts/perf-baseline.mjs",
+    "perf:think-time-50": "DB_CLIENT=mysql ALLOW_TEST_DB_CREATE=1 PERF_PROFILE=think-time-50 node scripts/perf-baseline.mjs",
     "test:gemini:live": "node scripts/gemini-live-contract.mjs"
   },
   "dependencies": {

@@ -23,6 +23,11 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 
+// BR-AI-018 mock Gemini ở đúng boundary module trong test bên dưới. Giá trị giả này chỉ giúp
+// cfg.hasKey() cho phép job đi vào hàng đợi; không có request ra mạng vì mọi lệnh genJSON đều
+// được t.mock.method() thay thế trong từng case.
+process.env.GEMINI_API_KEY = 'test-gemini-key-integration-jobs';
+
 const isMysql = String(process.env.DB_CLIENT || 'mysql').toLowerCase() === 'mysql';
 const dbHarness = require('../test-support/db-harness');
 const { createResourceStack } = require('../test-support/resource-stack');
@@ -30,6 +35,7 @@ const { createResourceStack } = require('../test-support/resource-stack');
 let db;
 let scheduler;
 let monitor;
+let gemini;
 const resources = createResourceStack();
 
 before(async () => {
@@ -46,6 +52,7 @@ before(async () => {
   resources.acquire(dbMod.closeDb);
   scheduler = require('../scheduler');
   monitor = require('../monitor');
+  gemini = require('../gemini');
 });
 
 after(async () => {
@@ -57,6 +64,28 @@ function insertDate(overrides = {}) {
   const data = { title: `Nhắc job ${Date.now()}_${Math.random()}`, event_date: todayGMT7(), recurring: 0, lead_days: 0, notify_repeat_every: 0, notify_repeat_count: 1, ...overrides };
   const keys = Object.keys(data);
   return db.prepare(`INSERT INTO important_dates (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`).run(...keys.map((k) => data[k])).lastInsertRowid;
+}
+
+function insertPendingMention(overrides = {}) {
+  const nonce = `${Date.now()}_${Math.random()}`;
+  const data = {
+    query_id: null,
+    source_id: null,
+    source_type: 'news',
+    source_name: 'Báo test job AI',
+    category: 'brand',
+    title: `Mention pending ${nonce}`,
+    link: `https://job-ai-test.example/${nonce}`,
+    content: 'Nội dung bài báo để job phân tích sắc thái.',
+    sentiment: null,
+    published_at: '2026-08-30',
+    status: 'Mới',
+    ...overrides,
+  };
+  const keys = Object.keys(data);
+  const r = db.prepare(`INSERT INTO mentions (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`)
+    .run(...keys.map((key) => data[key]));
+  return Number(r.lastInsertRowid);
 }
 
 // ---------------------------------------------------------------------------
@@ -136,4 +165,75 @@ test('JOB-MONITOR-SCAN happy: applySchedule() gọi lặp lại (bật rồi b�
   }
   assert.equal(created, 3, 'mỗi lần applySchedule() với autoscan=1 phải tạo đúng 1 timer mới');
   assert.equal(cleared, 2, 'lần đầu chưa có timer cũ (module timer=null lúc test bắt đầu) nên không clear; 2 lần gọi sau đó phải clearInterval() timer CŨ trước khi tạo timer mới -> không leak');
+});
+
+// ---------------------------------------------------------------------------
+// BR-AI-018 — monitor.analyzePending(): job AI thật ở tầng DB queue
+// ---------------------------------------------------------------------------
+test('BR-AI-018 happy: analyzePending() trả 0 khi queue rỗng và không gọi Gemini', async (t) => {
+  db.prepare('DELETE FROM mentions').run();
+  let calls = 0;
+  t.mock.method(gemini, 'genJSON', async () => { calls += 1; return []; });
+
+  assert.equal(await monitor.analyzePending(), 0);
+  assert.equal(calls, 0, 'queue rỗng phải short-circuit trước boundary Gemini');
+});
+
+test('BR-AI-018 happy: job chia queue >8 theo lô, map index trong từng lô và chỉ ghi đúng mention được Gemini trả về', async (t) => {
+  db.prepare('DELETE FROM mentions').run();
+  // DESC theo id khiến 9 là lô đầu, 1 là lô sau. Lưu mảng ID theo thứ tự đọc thật để assertion
+  // không phụ thuộc vào giả định về auto-increment giữa SQLite/MySQL.
+  for (let i = 0; i < 10; i += 1) insertPendingMention({ title: `Queue ${i}`, content: `Nội dung ${i}` });
+  const ordered = db.prepare('SELECT id FROM mentions WHERE sentiment IS NULL ORDER BY id DESC').all().map((r) => Number(r.id));
+  const calls = [];
+  t.mock.method(gemini, 'genJSON', async () => {
+    calls.push(true);
+    if (calls.length === 1) return [
+      { i: 0, sentiment: 'positive', score: 2, summary: 'Lô đầu, score bị chặn biên', tags: ['misa'] },
+      { i: 7, sentiment: 'negative', score: -2, summary: 'Cuối lô đầu', tags: ['cảnh báo'] },
+      { i: 1, sentiment: 'unsupported', score: 0, summary: 'Không được ghi', tags: ['sai'] },
+    ];
+    return [{ i: 1, sentiment: 'neutral', summary: 'Lô sau, score mặc định', tags: [] }];
+  });
+
+  assert.equal(await monitor.analyzePending(), 3);
+  assert.equal(calls.length, 2, '10 rows phải chia 8 + 2, không dồn thành một prompt lớn');
+
+  const rows = db.prepare('SELECT id, sentiment, sentiment_score, ai_summary, tags, sentiment_by FROM mentions ORDER BY id').all();
+  const byId = new Map(rows.map((row) => [Number(row.id), row]));
+  const first = byId.get(ordered[0]);
+  const lastOfFirstChunk = byId.get(ordered[7]);
+  const secondOfLastChunk = byId.get(ordered[9]);
+  assert.deepEqual(
+    { sentiment: first.sentiment, score: Number(first.sentiment_score), summary: first.ai_summary, tags: JSON.parse(first.tags), by: first.sentiment_by },
+    { sentiment: 'positive', score: 1, summary: 'Lô đầu, score bị chặn biên', tags: ['misa'], by: 'ai' },
+  );
+  assert.equal(lastOfFirstChunk.sentiment, 'negative');
+  assert.equal(Number(lastOfFirstChunk.sentiment_score), -1);
+  assert.deepEqual(
+    { sentiment: secondOfLastChunk.sentiment, score: Number(secondOfLastChunk.sentiment_score), summary: secondOfLastChunk.ai_summary, tags: JSON.parse(secondOfLastChunk.tags), by: secondOfLastChunk.sentiment_by },
+    { sentiment: 'neutral', score: 0, summary: 'Lô sau, score mặc định', tags: [], by: 'ai' },
+  );
+  assert.equal(rows.filter((row) => row.sentiment === null).length, 7, 'index Gemini không trả hoặc output sai schema phải giữ nguyên pending, không bị gán bừa');
+});
+
+test('BR-AI-018 resilience: Gemini lỗi một lô thì job bỏ lô đó nhưng tiếp tục xử lý lô sau, không ghi dở dang', async (t) => {
+  db.prepare('DELETE FROM mentions').run();
+  for (let i = 0; i < 16; i += 1) insertPendingMention({ title: `Retry queue ${i}` });
+  const ordered = db.prepare('SELECT id FROM mentions WHERE sentiment IS NULL ORDER BY id DESC').all().map((r) => Number(r.id));
+  let call = 0;
+  t.mock.method(gemini, 'genJSON', async () => {
+    call += 1;
+    if (call === 1) throw new Error('Gemini batch failed intentionally');
+    return [{ i: 0, sentiment: 'negative', score: -0.4, summary: 'Lô sau vẫn chạy', tags: ['retry'] }];
+  });
+
+  assert.equal(await monitor.analyzePending(), 1);
+  assert.equal(call, 2, 'lỗi ở lô đầu không được abort toàn bộ queue');
+  assert.equal(db.prepare('SELECT sentiment FROM mentions WHERE id=?').get(ordered[0]).sentiment, null, 'lô lỗi không được ghi một phần');
+  const processed = db.prepare('SELECT sentiment, ai_summary, sentiment_by FROM mentions WHERE id=?').get(ordered[8]);
+  assert.equal(processed.sentiment, 'negative');
+  assert.equal(processed.ai_summary, 'Lô sau vẫn chạy');
+  assert.equal(processed.sentiment_by, 'ai');
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM mentions WHERE sentiment IS NULL').get().c, 15);
 });

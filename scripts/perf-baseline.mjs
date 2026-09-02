@@ -37,64 +37,86 @@ if (process.env.ALLOW_TEST_DB_CREATE !== '1') {
   fail('cần ALLOW_TEST_DB_CREATE=1 để tạo database MySQL tạm — khớp chốt fail-closed hiện có ở server/test-support/db-harness.js.');
 }
 
-const CONCURRENCY_LEVELS = String(process.env.PERF_LEVELS || '1,5,10,20,50')
+const PROFILE_MODE = process.env.PERF_PROFILE || 'continuous';
+if (!['continuous', 'think-time-50'].includes(PROFILE_MODE)) {
+  fail('PERF_PROFILE chỉ nhận continuous hoặc think-time-50.');
+}
+const CONCURRENCY_LEVELS = String(process.env.PERF_LEVELS || (PROFILE_MODE === 'think-time-50' ? '50' : '1,5,10,20,50'))
   .split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
-const WARMUP_MS = Number(process.env.PERF_WARMUP_MS || 3000);
-const SUSTAIN_MS = Number(process.env.PERF_SUSTAIN_MS || 8000);
+if (PROFILE_MODE === 'think-time-50' && (CONCURRENCY_LEVELS.length !== 1 || CONCURRENCY_LEVELS[0] !== 50)) {
+  fail('think-time-50 phải chạy đúng 50 virtual users (không nhận PERF_LEVELS khác).');
+}
+const WARMUP_MS = Number(process.env.PERF_WARMUP_MS || (PROFILE_MODE === 'think-time-50' ? 15000 : 3000));
+const SUSTAIN_MS = Number(process.env.PERF_SUSTAIN_MS || (PROFILE_MODE === 'think-time-50' ? 60000 : 8000));
+// Nhịp thao tác PR thực tế không phải click liên tục: đọc danh sách/báo cáo, rà dữ liệu rồi mới
+// chuyển trang hoặc lưu form. 5–15s là profile tác nghiệp; tải dồn 1.5–5s vẫn lưu artifact như
+// burst diagnostic nếu cần, nhưng không được đánh tráo với usage profile này.
+const THINK_TIME_MIN_MS = Number(process.env.PERF_THINK_TIME_MIN_MS || 5000);
+const THINK_TIME_MAX_MS = Number(process.env.PERF_THINK_TIME_MAX_MS || 15000);
+if (PROFILE_MODE === 'think-time-50' && (!Number.isFinite(THINK_TIME_MIN_MS) || !Number.isFinite(THINK_TIME_MAX_MS) || THINK_TIME_MIN_MS < 0 || THINK_TIME_MAX_MS < THINK_TIME_MIN_MS)) {
+  fail('think-time-50 yêu cầu 0 <= PERF_THINK_TIME_MIN_MS <= PERF_THINK_TIME_MAX_MS.');
+}
 const SEED_ORGS = Number(process.env.PERF_SEED_ORGS || 50);
 const SEED_PEOPLE_PER_ORG = Number(process.env.PERF_SEED_PEOPLE_PER_ORG || 4);
 const SEED_INTERACTIONS = Number(process.env.PERF_SEED_INTERACTIONS || 500);
 
 // Mix read/write/report/file theo đúng yêu cầu roadmap — tỉ trọng mô phỏng tải thật (đọc danh sách
 // nhiều nhất, ghi/report/file ít hơn), không phải benchmark riêng lẻ từng loại.
-function buildWorkload({ baseUrl, cookie, peopleIds, attachmentId }) {
-  const headers = { cookie, 'content-type': 'application/json' };
+function buildWorkload({ baseUrl, sessions, peopleIds, attachmentId }) {
+  const headersFor = (session) => ({ cookie: session.cookie, 'content-type': 'application/json' });
   const categories = [
     {
       name: 'read', weight: 55,
-      run: async () => {
+      run: async (session) => {
         const page = 1 + Math.floor(Math.random() * 10);
-        const res = await fetch(`${baseUrl}/api/people?page=${page}&pageSize=20`, { headers });
-        return res.ok;
+        const res = await fetch(`${baseUrl}/api/people?page=${page}&pageSize=20`, { headers: headersFor(session) });
+        return res.status;
       },
     },
     {
-      name: 'write', weight: 15,
-      run: async () => {
+      name: 'write', weight: 15, roles: ['executor', 'admin', 'super_admin'],
+      run: async (session) => {
         const personId = peopleIds[Math.floor(Math.random() * peopleIds.length)];
         const res = await fetch(`${baseUrl}/api/interactions`, {
-          method: 'POST', headers,
+          method: 'POST', headers: headersFor(session),
           body: JSON.stringify({ partner_type: 'person', partner_id: personId, date: '2026-08-30', channel: 'email', summary: 'perf-baseline write' }),
         });
-        return res.ok;
+        return res.status;
       },
     },
     {
-      name: 'report', weight: 20,
-      run: async () => {
-        const res = await fetch(`${baseUrl}/api/reports`, { headers });
-        return res.ok;
+      name: 'report', weight: 20, roles: ['viewer', 'admin', 'super_admin'],
+      run: async (session) => {
+        const res = await fetch(`${baseUrl}/api/reports`, { headers: headersFor(session) });
+        return res.status;
       },
     },
     {
       name: 'file', weight: 10,
-      run: async () => {
-        const res = await fetch(`${baseUrl}/api/files/${attachmentId}`, { headers });
-        return res.ok;
+      run: async (session) => {
+        const res = await fetch(`${baseUrl}/api/files/${attachmentId}`, { headers: headersFor(session) });
+        return res.status;
       },
     },
   ];
   const total = categories.reduce((s, c) => s + c.weight, 0);
-  return { categories, total };
+  return { categories, total, sessions };
 }
 
-function pickCategory(workload) {
-  let r = Math.random() * workload.total;
-  for (const c of workload.categories) {
+function pickCategory(workload, session) {
+  const categories = workload.categories.filter((category) => !category.roles || category.roles.includes(session.role));
+  const total = categories.reduce((sum, category) => sum + category.weight, 0);
+  let r = Math.random() * total;
+  for (const c of categories) {
     r -= c.weight;
     if (r <= 0) return c;
   }
   return workload.categories[workload.categories.length - 1];
+}
+
+function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function nextThinkTimeMs() {
+  return THINK_TIME_MIN_MS + Math.floor(Math.random() * (THINK_TIME_MAX_MS - THINK_TIME_MIN_MS + 1));
 }
 
 function percentile(sortedMs, p) {
@@ -103,20 +125,26 @@ function percentile(sortedMs, p) {
   return Math.round(sortedMs[idx] * 100) / 100;
 }
 
-async function runPhase(workload, concurrency, durationMs, { record }) {
+async function runPhase(workload, concurrency, durationMs, { record, thinkTime = false }) {
   const endAt = performance.now() + durationMs;
-  const workers = Array.from({ length: concurrency }, async () => {
+  const workers = Array.from({ length: concurrency }, async (_, userIndex) => {
+    const session = workload.sessions[userIndex % workload.sessions.length];
+    // Không có lý do nghiệp vụ để 50 người cùng nhấn nút đúng millisecond bắt đầu benchmark.
+    // Stagger đầu phiên giúp mô phỏng người đã mở mini-app ở những thời điểm khác nhau.
+    if (thinkTime) await delay(nextThinkTimeMs());
     while (performance.now() < endAt) {
-      const category = pickCategory(workload);
+      const category = pickCategory(workload, session);
       const t0 = performance.now();
-      let ok = false;
+      let outcome = { ok: false, status: 'network-error' };
       try {
-        ok = await category.run();
-      } catch {
-        ok = false;
+        const status = await category.run(session);
+        outcome = { ok: status >= 200 && status < 300, status };
+      } catch (error) {
+        outcome = { ok: false, status: `network:${error?.name || 'Error'}` };
       }
       const elapsed = performance.now() - t0;
-      if (record) record(category.name, elapsed, ok);
+      if (record) record(category.name, elapsed, outcome);
+      if (thinkTime && performance.now() < endAt) await delay(nextThinkTimeMs());
     }
   });
   await Promise.all(workers);
@@ -154,9 +182,12 @@ function seedData(db, { orgs, peoplePerOrg, interactions }) {
   const filename = `perf-baseline-${Date.now()}.txt`;
   fs.writeFileSync(path.join(UPLOAD_DIR, filename), 'perf baseline dummy file content\n'.repeat(200));
   const insAttachment = db.prepare(
-    "INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime) VALUES ('person',?,?,?,?,?)"
+    // Profile có viewer/executor nên fixture phải tái hiện đúng file portrait Public mà route
+    // production persist qua attachmentPolicyFor(). Không set 2 cột này thì DB default historical
+    // là Confidential/private, tạo 403 giả và làm sai error rate của benchmark.
+    "INSERT INTO attachments (owner_type, owner_id, kind, filename, original_name, mime, classification_tier, audience_visibility) VALUES ('person',?,?,?,?,?,?,?)"
   );
-  const attResult = insAttachment.run(peopleIds[0], 'portrait', filename, filename, 'text/plain');
+  const attResult = insAttachment.run(peopleIds[0], 'portrait', filename, filename, 'text/plain', 'Public', 'public');
 
   return {
     cardinality: { organizations: orgIds.length, people: peopleIds.length, interactions, attachments: 1 },
@@ -171,6 +202,25 @@ function gitSha() {
   } catch {
     return 'UNVERIFIED (git rev-parse thất bại)';
   }
+}
+
+async function createProfileSessions(fixtures, baseUrl) {
+  // 50 phiên độc lập, không dùng chung cookie: gần với đội PR gồm người xem, chuyên viên và
+  // quản trị. Vai trò chỉ giới hạn endpoint được chọn ở buildWorkload(), nên 403 permission
+  // không bị tính sai thành lỗi hiệu năng.
+  const roles = [
+    ...Array(5).fill('super_admin'),
+    ...Array(5).fill('admin'),
+    ...Array(30).fill('executor'),
+    ...Array(10).fill('viewer'),
+  ];
+  const sessions = [];
+  for (const [index, role] of roles.entries()) {
+    const user = fixtures.createUser(role, { username: `perf_${role}_${Date.now()}_${index}` });
+    const { cookie } = await fixtures.login(baseUrl, user);
+    sessions.push({ role, cookie });
+  }
+  return sessions;
 }
 
 async function main() {
@@ -202,13 +252,15 @@ async function main() {
     });
     console.log(`Cardinality: ${JSON.stringify(cardinality)}`);
 
-    const user = fixtures.createPrivilegedUser({ username: `perf_baseline_${Date.now()}` });
     const started = await startTestApp(createApp());
     resources.acquire(started.close);
     const { baseUrl } = started;
-    const { cookie } = await fixtures.login(baseUrl, user);
+    const sessions = PROFILE_MODE === 'think-time-50'
+      ? await createProfileSessions(fixtures, baseUrl)
+      : [await fixtures.login(baseUrl, fixtures.createPrivilegedUser({ username: `perf_baseline_${Date.now()}` })).then(({ cookie }) => ({ role: 'super_admin', cookie }))];
 
-    const workload = buildWorkload({ baseUrl, cookie, peopleIds, attachmentId });
+    const workload = buildWorkload({ baseUrl, sessions, peopleIds, attachmentId });
+    console.log(`Profile: ${PROFILE_MODE}; sessions=${sessions.length}`);
 
     const histogram = monitorEventLoopDelay({ resolution: 10 });
     histogram.enable();
@@ -218,17 +270,21 @@ async function main() {
       console.log(`\n== concurrency=${concurrency} ==`);
       histogram.reset();
       console.log(`  warm-up ${WARMUP_MS}ms...`);
-      await runPhase(workload, concurrency, WARMUP_MS, { record: null });
+      await runPhase(workload, concurrency, WARMUP_MS, { record: null, thinkTime: PROFILE_MODE === 'think-time-50' });
 
       histogram.reset();
       const latenciesByCategory = new Map(workload.categories.map((c) => [c.name, []]));
+      const statusByCategory = new Map(workload.categories.map((c) => [c.name, new Map()]));
       let okCount = 0;
       let errCount = 0;
       const sustainStart = performance.now();
       await runPhase(workload, concurrency, SUSTAIN_MS, {
-        record: (name, elapsedMs, ok) => {
+        thinkTime: PROFILE_MODE === 'think-time-50',
+        record: (name, elapsedMs, outcome) => {
           latenciesByCategory.get(name).push(elapsedMs);
-          if (ok) okCount += 1; else errCount += 1;
+          const statuses = statusByCategory.get(name);
+          statuses.set(String(outcome.status), (statuses.get(String(outcome.status)) || 0) + 1);
+          if (outcome.ok) okCount += 1; else errCount += 1;
         },
       });
       const sustainElapsedMs = performance.now() - sustainStart;
@@ -238,7 +294,13 @@ async function main() {
       const byCategory = {};
       for (const [name, arr] of latenciesByCategory) {
         const sorted = [...arr].sort((a, b) => a - b);
-        byCategory[name] = { count: sorted.length, p50Ms: percentile(sorted, 50), p95Ms: percentile(sorted, 95), p99Ms: percentile(sorted, 99) };
+        byCategory[name] = {
+          count: sorted.length,
+          p50Ms: percentile(sorted, 50),
+          p95Ms: percentile(sorted, 95),
+          p99Ms: percentile(sorted, 99),
+          statuses: Object.fromEntries(statusByCategory.get(name).entries()),
+        };
       }
 
       const levelResult = {
@@ -267,6 +329,14 @@ async function main() {
       engine: {
         dbClient: 'mysql',
         note: 'server/mysql-sync.js: mọi query MySQL đi qua Atomics.wait trên main thread (F7) — không phải async driver thường.',
+      },
+      profile: {
+        mode: PROFILE_MODE,
+        virtualUsers: PROFILE_MODE === 'think-time-50' ? 50 : null,
+        sessions: sessions.reduce((counts, session) => ({ ...counts, [session.role]: (counts[session.role] || 0) + 1 }), {}),
+        thinkTime: PROFILE_MODE === 'think-time-50'
+          ? { distribution: 'uniform', minMs: THINK_TIME_MIN_MS, maxMs: THINK_TIME_MAX_MS, staggerInitialRequest: true, afterEveryRequest: true }
+          : null,
       },
       pool: {
         note: 'server/mysql-worker.js:25 dùng mysql.createConnection() — ĐÚNG 1 connection duy nhất trong worker thread, KHÔNG phải connection pool. Mọi query serialize qua đúng 1 connection này, cộng thêm Atomics.wait chặn main thread khi chờ kết quả.',

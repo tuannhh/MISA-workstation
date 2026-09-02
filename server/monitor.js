@@ -155,10 +155,18 @@ async function analyzePending(limit = 30) {
     let res = [];
     try { res = await analyzeBatch(chunk); } catch (e) { console.error('[monitor] AI batch lỗi:', e.message); continue; }
     for (const r of res) {
+      // genJSON() đã validate SENT_SCHEMA tại Gemini boundary. Kiểm thêm lần nữa tại DB write
+      // boundary để một refactor/provider adapter hoặc lỗi partial không biến output bất thường
+      // thành dữ liệu nghiệp vụ (job nền không có người dùng đứng chờ để phát hiện ngay).
+      if (!r || !Number.isInteger(r.i) || !['positive', 'neutral', 'negative'].includes(r.sentiment)) continue;
       const row = chunk[r.i];
       if (!row) continue;
-      const score = typeof r.score === 'number' ? Math.max(-1, Math.min(1, r.score)) : (r.sentiment === 'positive' ? 0.6 : r.sentiment === 'negative' ? -0.6 : 0);
-      upd.run(r.sentiment, score, r.summary || null, JSON.stringify(r.tags || []), row.id);
+      const score = typeof r.score === 'number' && Number.isFinite(r.score)
+        ? Math.max(-1, Math.min(1, r.score))
+        : (r.sentiment === 'positive' ? 0.6 : r.sentiment === 'negative' ? -0.6 : 0);
+      const summary = typeof r.summary === 'string' ? r.summary : null;
+      const tags = Array.isArray(r.tags) ? r.tags.filter((tag) => typeof tag === 'string') : [];
+      upd.run(r.sentiment, score, summary, JSON.stringify(tags), row.id);
       done++;
     }
   }
