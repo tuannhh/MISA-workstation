@@ -40,9 +40,40 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
-// Ghi âm: giữ trong RAM (không lưu đĩa), chuyển thẳng cho Gemini.
+const AUDIO_MIMES = new Set(['audio/webm', 'audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/aiff', 'audio/x-aiff']);
+const AUDIO_EXTENSIONS = new Set(['.webm', '.wav', '.mp3', '.m4a', '.mp4', '.ogg', '.aif', '.aiff']);
+function audioFileFilter(req, file, cb) {
+  const mime = String(file.mimetype || '').toLowerCase();
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (AUDIO_MIMES.has(mime) && AUDIO_EXTENSIONS.has(ext)) return cb(null, true);
+  const err = new Error('Chỉ chấp nhận tệp ghi âm WebM, WAV, MP3, M4A, OGG hoặc AIFF.');
+  err.code = 'UPLOAD_REJECTED';
+  return cb(err);
+}
+function hasAudioSignature(file) {
+  const bytes = file?.buffer;
+  if (!bytes || bytes.length < 4) return false;
+  const head = bytes.subarray(0, 12);
+  return head.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])) // WebM/EBML
+    || (head.subarray(0, 4).equals(Buffer.from('RIFF')) && head.subarray(8, 12).equals(Buffer.from('WAVE')))
+    || head.subarray(0, 4).equals(Buffer.from('OggS'))
+    || head.subarray(0, 3).equals(Buffer.from('ID3'))
+    || (head[0] === 0xff && (head[1] & 0xe0) === 0xe0) // MP3 frame
+    || (head.subarray(0, 4).equals(Buffer.from('FORM')) && (head.subarray(8, 12).equals(Buffer.from('AIFF')) || head.subarray(8, 12).equals(Buffer.from('AIFC'))))
+    || (head.subarray(4, 8).equals(Buffer.from('ftyp'))); // M4A/MP4
+}
+function validateAudioFile(file) {
+  if (!file || !hasAudioSignature(file)) {
+    const err = new Error('Tệp ghi âm không đúng định dạng âm thanh hợp lệ.');
+    err.code = 'UPLOAD_REJECTED';
+    throw err;
+  }
+}
+
+// Ghi âm: giữ trong RAM (không lưu đĩa), chỉ chuyển cho Gemini sau type + magic-byte validation.
 const uploadAudio = multer({
   storage: multer.memoryStorage(),
+  fileFilter: audioFileFilter,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
 });
 
@@ -68,4 +99,4 @@ const uploadAiDocument = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
 });
 
-module.exports = { upload, uploadAudio, uploadAiDocument, UPLOAD_DIR, fileFilter, aiDocumentFileFilter };
+module.exports = { upload, uploadAudio, uploadAiDocument, UPLOAD_DIR, fileFilter, audioFileFilter, validateAudioFile, aiDocumentFileFilter };

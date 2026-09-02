@@ -3339,3 +3339,22 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Thêm list/form MDS tách riêng Desktop/Native cho R117–R120; payload browser chỉ có bảy field query
   công khai. Form không thể kích hoạt scan hoặc Gemini; quyền module-admin-only vẫn được server áp.
 - `UI-MONITOR-005` xác nhận allowlist, route protected, MDS/native split và không có owner/creator.
+
+## 2026-09-02 — F32: Gemini production-contract hardening + live verification
+
+- **Ingress/data minimisation:** Award/Event upload chỉ nhận Excel/CSV qua worker/signature; parse xong
+  mới redact PII và wrap untrusted. PDF/ảnh/binary không còn egress raw sang Gemini. Award/Event text,
+  URL content và monitor batch cũng được phân tách rõ source-data khỏi instruction.
+- **Voice:** yêu cầu consent trước egress, MIME+extension+magic-byte audio, không tự điền ngày hiện tại
+  khi speech không nói rõ; confirm bắt buộc ngày/kênh/kết quả/nội dung hợp lệ và vẫn đi qua transaction
+  + PolicyEngine đã có của D14.4. Desktop/Native MDS có checkbox consent; legacy UI có xác nhận rõ.
+- **Output trust boundary:** `genJSON()` validate/prune schema cục bộ, chặn type/enum/range/length sai;
+  `maxOutputTokens` có config; grounding chỉ trả HTTPS URL không credential. Thêm enum cho Award
+  organizer type và Event mode; ngày invalid thành blank cần review.
+- **Live evidence:** thêm `npm run test:gemini:live`, chỉ dùng dữ liệu/audio tổng hợp, không log key,
+  prompt hay response. Lần diagnostic phát hiện event mode drift; sau hardening, run production gateway
+  `gemini-3.5-flash` + image model pass 8/8: structured award/event, grounding, text, image và 3 voice
+  repeat. Metadata artifact gitignored, không chứa nội dung/credential.
+- **Regression:** `test:security` 6/6; SQLite 924 total/916 pass/8 skip; MySQL 926 total/925 pass/1
+  skip; `verify-g0`, mapping 150/150 và Vite build PASS. Test mới khóa audio giả/thiếu consent,
+  prompt injection/redaction CSV, local schema output và date semantics.

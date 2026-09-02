@@ -2112,10 +2112,10 @@ function awardExtractModal() {
   const modal = el(`<div class="modal-bg"><div class="modal" style="max-width:600px">
     <div class="mhead"><h3>✨ AI bóc tách giải thưởng</h3><button class="x">&times;</button></div>
     <div class="mbody">
-      <div class="muted-sm" style="margin-bottom:8px">Dán nội dung thông báo, hoặc nhập URL, hoặc tải file (ảnh/PDF) — AI sẽ bóc tách thành các trường để bạn duyệt.</div>
+      <div class="muted-sm" style="margin-bottom:8px">Dán nội dung thông báo đã rà soát, nhập URL, hoặc tải bảng tính Excel/CSV. AI chỉ tạo bản nháp để bạn duyệt.</div>
       <div class="field full"><label>Dán nội dung thông báo</label><textarea id="exText" style="min-height:120px" placeholder="Dán thể lệ/thông báo giải thưởng…"></textarea></div>
       <div class="field full"><label>hoặc URL trang giải thưởng</label><input id="exUrl" placeholder="https://…" /></div>
-      <div class="field full"><label>hoặc tải file (ảnh/PDF)</label><input id="exFile" type="file" accept="image/*,application/pdf" /></div>
+      <div class="field full"><label>hoặc tải bảng tính (Excel/CSV)</label><input id="exFile" type="file" accept=".xlsx,.xls,.xlsb,.csv" /><div class="muted-sm">PDF/ảnh chưa được gửi trực tiếp tới AI. Hãy dán phần nội dung đã được rà soát.</div></div>
     </div>
     <div class="mfoot"><button class="btn" data-close>Hủy</button><button class="btn primary" id="exGo">Bóc tách</button></div>
   </div></div>`);
@@ -2650,7 +2650,8 @@ function voiceCapture(after) {
       rec.onstop = async () => {
         status.textContent = '⏳ Đang nghe & phân tích…'; mic.disabled = true;
         const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
-        const fd = new FormData(); fd.append('audio', blob, 'voice.webm');
+        if (!window.confirm('Bạn xác nhận đã được phép gửi bản ghi âm này tới dịch vụ AI để tạo bản nháp tương tác?')) { status.textContent = 'Đã hủy gửi bản ghi âm.'; mic.disabled = false; return; }
+        const fd = new FormData(); fd.append('audio', blob, 'voice.webm'); fd.append('aiConsent', 'true');
         try {
           const res = await fetch('/api/ai/interaction-voice', { method: 'POST', body: fd });
           const d = await res.json();

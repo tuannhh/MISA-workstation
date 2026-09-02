@@ -112,10 +112,11 @@ function useQueue(...responses) {
 function restoreFetch() { if (origFetch) { global.fetch = origFetch; origFetch = null; } }
 
 async function propose(cookie, aiResponse) {
-  useQueue(geminiJsonResponse(aiResponse));
+  useQueue(geminiJsonResponse({ date: '2026-09-02', channel: 'Gặp mặt', result: 'Tích cực', suggested_score_delta: 0, ...aiResponse }));
   try {
     const fd = new FormData();
-    fd.append('audio', new Blob(['fake-audio'], { type: 'audio/webm' }), 'rec.webm');
+    fd.append('audio', new Blob([Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x42, 0x86, 0x81, 0x01])], { type: 'audio/webm' }), 'rec.webm');
+    fd.append('aiConsent', 'true');
     const res = await realFetch(`${baseUrl}/api/ai/interaction-voice-propose`, { method: 'POST', headers: { cookie }, body: fd });
     return { res, body: await res.json() };
   } finally { restoreFetch(); }

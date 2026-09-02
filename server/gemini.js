@@ -1,6 +1,13 @@
 'use strict';
 const cfg = require('./config');
 
+class GeminiContractError extends Error {
+  constructor(message = 'AI trả về dữ liệu không đúng cấu trúc mong đợi.') {
+    super(message);
+    this.name = 'GeminiContractError';
+  }
+}
+
 function ensureKey() {
   if (!cfg.GEMINI_API_KEY) throw new Error('Chưa cấu hình GEMINI_API_KEY (đặt vào data/gemini.key).');
 }
@@ -15,6 +22,48 @@ function buildGenerationConfig(model, config = {}) {
   if (supportsSamplingParams(model)) return config;
   const { temperature, topP, topK, top_p, top_k, ...rest } = config;
   return rest;
+}
+
+// Gemini responseSchema giúp model tạo JSON đúng ngay từ đầu, nhưng nó là ràng buộc của provider
+// chứ không phải validation ở trust-boundary của ứng dụng. Chỉ dữ liệu được kiểm tra + pruned tại
+// đây mới được phép đi tiếp sang route/UI/DB. Bộ schema trong dự án hiện chỉ dùng object/array,
+// primitive, enum và các giới hạn số/chữ; hỗ trợ đúng tập đó để tránh thêm một dependency nặng.
+function validateStructuredOutput(value, schema, path = '$') {
+  if (!schema || typeof schema !== 'object') return value;
+  const type = schema.type;
+  if (type === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new GeminiContractError(`${path} phải là object.`);
+    const properties = schema.properties || {};
+    for (const key of schema.required || []) {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) throw new GeminiContractError(`${path}.${key} là bắt buộc.`);
+    }
+    const clean = {};
+    for (const [key, childSchema] of Object.entries(properties)) {
+      if (Object.prototype.hasOwnProperty.call(value, key)) clean[key] = validateStructuredOutput(value[key], childSchema, `${path}.${key}`);
+    }
+    return clean;
+  }
+  if (type === 'array') {
+    if (!Array.isArray(value)) throw new GeminiContractError(`${path} phải là mảng.`);
+    if (value.length > 100) throw new GeminiContractError(`${path} vượt quá số phần tử cho phép.`);
+    return value.map((item, index) => validateStructuredOutput(item, schema.items || {}, `${path}[${index}]`));
+  }
+  if (type === 'string') {
+    if (typeof value !== 'string') throw new GeminiContractError(`${path} phải là chuỗi.`);
+    if (value.length > (schema.maxLength || 20000)) throw new GeminiContractError(`${path} quá dài.`);
+    if (schema.minLength && value.trim().length < schema.minLength) throw new GeminiContractError(`${path} không được để trống.`);
+    if (schema.pattern && !(new RegExp(schema.pattern).test(value))) throw new GeminiContractError(`${path} không đúng định dạng.`);
+  } else if (type === 'integer') {
+    if (!Number.isInteger(value)) throw new GeminiContractError(`${path} phải là số nguyên.`);
+  } else if (type === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new GeminiContractError(`${path} phải là số.`);
+  }
+  if (typeof value === 'number') {
+    if (schema.minimum != null && value < schema.minimum) throw new GeminiContractError(`${path} nhỏ hơn mức cho phép.`);
+    if (schema.maximum != null && value > schema.maximum) throw new GeminiContractError(`${path} lớn hơn mức cho phép.`);
+  }
+  if (Array.isArray(schema.enum) && !schema.enum.includes(value)) throw new GeminiContractError(`${path} không thuộc tập giá trị cho phép.`);
+  return value;
 }
 
 // F8 (W1.9): retry CHỈ áp dụng lỗi transient thật (429 rate-limit, 5xx phía Gemini) — KHÔNG retry
@@ -59,11 +108,25 @@ function textOf(data) {
   return parts.map((p) => p.text || '').join('').trim();
 }
 
+function safeGroundingChunk(web) {
+  if (!web || typeof web.uri !== 'string') return null;
+  try {
+    const url = new URL(web.uri);
+    // Kết quả Gemini là input không tin cậy. Chỉ trả về HTTPS URL hợp lệ để UI không biến output
+    // model thành javascript:/data: link; safeFetch vẫn kiểm tra DNS/IP trước khi server tự mở URL.
+    if (url.protocol !== 'https:' || url.username || url.password) return null;
+    // Preserve the provider URI verbatim after validation. Normalising with URL#toString()
+    // changes a harmless URL such as https://example.com into https://example.com/, which makes
+    // audit trails and source matching needlessly unstable.
+    return { uri: web.uri, title: String(web.title || '').slice(0, 500) };
+  } catch { return null; }
+}
+
 // Sinh văn bản thường
 async function genText(prompt, { temperature = 0.7 } = {}) {
   const data = await call(cfg.GEMINI_TEXT_MODEL, {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: buildGenerationConfig(cfg.GEMINI_TEXT_MODEL, { temperature }),
+    generationConfig: buildGenerationConfig(cfg.GEMINI_TEXT_MODEL, { temperature, maxOutputTokens: cfg.GEMINI_MAX_OUTPUT_TOKENS }),
   });
   return textOf(data);
 }
@@ -72,10 +135,10 @@ async function genText(prompt, { temperature = 0.7 } = {}) {
 async function genJSON(parts, schema, { temperature = 0.2 } = {}) {
   const data = await call(cfg.GEMINI_TEXT_MODEL, {
     contents: [{ parts }],
-    generationConfig: buildGenerationConfig(cfg.GEMINI_TEXT_MODEL, { temperature, responseMimeType: 'application/json', responseSchema: schema }),
+    generationConfig: buildGenerationConfig(cfg.GEMINI_TEXT_MODEL, { temperature, maxOutputTokens: cfg.GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: 'application/json', responseSchema: schema }),
   });
   const raw = textOf(data);
-  try { return JSON.parse(raw); }
+  try { return validateStructuredOutput(JSON.parse(raw), schema); }
   catch { throw new Error('AI trả về dữ liệu không hợp lệ.'); }
 }
 
@@ -84,11 +147,11 @@ async function groundedSearch(prompt, { temperature = 0.3 } = {}) {
   const data = await call(cfg.GEMINI_TEXT_MODEL, {
     contents: [{ parts: [{ text: prompt }] }],
     tools: [{ google_search: {} }],
-    generationConfig: buildGenerationConfig(cfg.GEMINI_TEXT_MODEL, { temperature }),
+    generationConfig: buildGenerationConfig(cfg.GEMINI_TEXT_MODEL, { temperature, maxOutputTokens: cfg.GEMINI_MAX_OUTPUT_TOKENS }),
   });
   const cand = data.candidates?.[0] || {};
   const gm = cand.groundingMetadata || {};
-  const chunks = (gm.groundingChunks || []).map((c) => c.web).filter((w) => w && w.uri);
+  const chunks = (gm.groundingChunks || []).map((c) => safeGroundingChunk(c.web)).filter(Boolean);
   return { text: textOf(data), chunks, queries: gm.webSearchQueries || [] };
 }
 
@@ -112,4 +175,4 @@ async function genImage(prompt, refImages = []) {
   return img; // {mime, data}
 }
 
-module.exports = { genText, genJSON, genImage, groundedSearch, textOf, supportsSamplingParams, buildGenerationConfig };
+module.exports = { genText, genJSON, genImage, groundedSearch, textOf, safeGroundingChunk, supportsSamplingParams, buildGenerationConfig, validateStructuredOutput, GeminiContractError };

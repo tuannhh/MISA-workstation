@@ -49,6 +49,12 @@
 | Confidential | Danh bạ, chi phí, hợp đồng, ghi âm tương tác | Redact/pseudonymize; consent voice; use-case allowlist |
 | Restricted | Giấy tờ định danh, tài khoản NH, bí mật đặc biệt | KHÔNG gửi external AI mặc định |
 
+**Enforcement update — 2026-09-02:** `AI-E001` voice chỉ egress sau consent rõ ràng và validation
+audio MIME/extension/magic-byte; không tự gán ngày khi audio không nói rõ. `AI-E004`/`AI-E006` chỉ
+nhận Excel/CSV đã qua worker/signature check, redact SĐT/email sau parse và đóng khung dữ liệu nguồn
+là untrusted; PDF/ảnh/binary không được gửi raw tới provider. Đây là guard kỹ thuật bổ sung, không
+thay O8/Security-Legal cho dữ liệu thật.
+
 ## E. Áp dụng (một registry, bốn trục — sửa lại sau D13/C0.2, D2 đã SUPERSEDED)
 ```
 PolicyEngine(registry):

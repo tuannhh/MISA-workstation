@@ -277,6 +277,14 @@ Phát hiện ngay trong chính vòng re-audit ACCEPTED F27: `fetchPersonSnapshot
   390×844 sau bản vá xác nhận đủ 10 hash trên: mỗi lần `rootCount=1`, `visibleRoots=1`, không overflow
   ngang. Đây là evidence browser/fake-host, không phải xác nhận AMIS WebView thật (O3/W4 vẫn mở).
 
+### F32 — AI ingress/egress tin output provider quá mức và upload có thể đi thẳng sang Gemini · **P1 High / data-integrity + privacy — ĐÃ FIX (2026-09-02)**
+
+- **Bằng chứng ban đầu:** `award-extract` từng dùng uploader audio để nhận mọi file và đưa PDF/ảnh raw thành `inlineData` cho Gemini; `event-extract` parse bảng tính nhưng gửi nguyên `parsed.text` (có thể gồm SĐT/email) ra ngoài. `genJSON()` chỉ `JSON.parse()` nên field lạ, enum sai, kiểu số sai hoặc chuỗi bất thường từ provider vẫn đi tiếp. Voice tự gán ngày hiện tại khi audio không nói ngày, làm dữ liệu lịch sử sai nhưng trông hợp lệ.
+- **Resolution fail-closed:** chỉ Excel/CSV qua worker + signature/giới hạn mới được parse/redact rồi gửi; PDF/ảnh bị từ chối với hướng dẫn dán nội dung đã rà soát. Mọi text upload/web được redact và đóng khung `untrusted` để model không coi dữ liệu nguồn là mệnh lệnh. Gateway kiểm tra/prune JSON theo schema cục bộ, giới hạn output, chặn grounding URL không HTTPS/credential; enum `organizer_type` và event `mode` được ép, ngày không tồn tại bị bỏ trống để người dùng rà soát. Audio phải khớp MIME+đuôi+magic bytes, có consent rõ ràng, không tự suy diễn ngày; propose/confirm vẫn human-in-the-loop và server kiểm tra lại trước write.
+- **Live evidence:** `npm run test:gemini:live` dùng dữ liệu tổng hợp vô hại, không in/lưu prompt, audio, response hoặc key. Lần chẩn đoán đầu phát hiện event `mode` drift; sau fix contract + prompt production, chạy lại **8/8 PASS**: award/event structured extraction, grounded source sanitation, text, image và **3/3** voice extraction độc lập. Artifact metadata-only, gitignored: `data/gemini-live-contract-last.json`.
+- **Regression evidence:** SQLite `924 total / 916 pass / 8 skip`; MySQL `926 total / 925 pass / 1 skip`; `test:security` 6/6, `verify-g0.mjs`, mapping 150/150 và Vite build đều PASS. Các test mới `BR-AI-003b/c`, `BR-AI-010b/c`, `BR-AI-011b`, `R136 privacy/magic-byte`, `R139 BR-AI-018`, `R141 BR-AI-019` khóa output contract, consent, upload redaction và prompt-injection boundary.
+- **Residual:** Gemini là probabilistic nên không được coi là authority nghiệp vụ. Những dữ liệu nhạy cảm thật vẫn phụ thuộc O8/Security-Legal; voice/AI chỉ tạo bản nháp, người dùng phải xác nhận và PolicyEngine/transaction vẫn là authority ghi dữ liệu.
+
 ## E. Điểm mạnh nên bảo toàn
 - Mô hình nghiệp vụ PR phong phú, liên hệ nhiều thực thể.
 - RBAC server-side + audit + per-user `sensitive_perms` (biểu cảm hơn role cứng).

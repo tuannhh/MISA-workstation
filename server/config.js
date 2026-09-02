@@ -23,5 +23,8 @@ module.exports = {
   // quy ước với MYSQL_QUERY_TIMEOUT_MS (mysql-sync.js).
   GEMINI_TIMEOUT_MS: Number(process.env.GEMINI_TIMEOUT_MS) || 30000,
   GEMINI_RETRY_BASE_DELAY_MS: Number(process.env.GEMINI_RETRY_BASE_DELAY_MS) || 250,
+  // Giới hạn đầu ra ở gateway để một prompt/bản trả lời bất thường không làm đội chi phí hay
+  // đẩy payload quá lớn vào UI. Mỗi route vẫn có schema/kiểm tra nghiệp vụ riêng.
+  GEMINI_MAX_OUTPUT_TOKENS: Number(process.env.GEMINI_MAX_OUTPUT_TOKENS) || 4096,
   hasKey() { return !!readKey(); },
 };

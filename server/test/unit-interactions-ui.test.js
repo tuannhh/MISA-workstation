@@ -38,14 +38,15 @@ test('UI-INT-003: Interaction Create có action theo quyền và hai composition
 test('UI-VOICE-001: Voice API chỉ gửi audio qua propose và buộc idempotency khi confirm', async () => {
   const { createVoiceApi, createVoiceIdempotencyKey } = await import(pathToFileURL(path.join(root, 'frontend', 'src', 'features', 'voice', 'domain', 'voice-api.mjs')).href);
   const calls = []; const api = createVoiceApi({ fetchFn: async (url, init) => { calls.push({ url, init }); return new Response(JSON.stringify(url.endsWith('propose') ? { proposalId: 'p-1', expiresAt: '2026-09-01 12:00:00', extracted: {}, personCandidates: [], orgCandidates: [], matchConfidence: {}, suggestedScoreDelta: 0 } : { interactionId: 9 }), { status: 200, headers: { 'content-type': 'application/json' } }); } });
-  const proposal = await api.propose(new Blob(['audio'], { type: 'audio/webm' })); assert.equal(proposal.proposalId, 'p-1'); assert.equal(calls[0].init.headers, undefined); assert.ok(calls[0].init.body instanceof FormData);
+  const proposal = await api.propose(new Blob(['audio'], { type: 'audio/webm' }), { consent: true }); assert.equal(proposal.proposalId, 'p-1'); assert.equal(calls[0].init.headers, undefined); assert.ok(calls[0].init.body instanceof FormData); assert.equal(calls[0].init.body.get('aiConsent'), 'true');
+  await assert.rejects(() => api.propose(new Blob(['audio'], { type: 'audio/webm' })), /được phép gửi bản ghi âm/);
   await api.confirm({ proposalId: 'p-1', idempotencyKey: 'key-1', edits: { summary: 'Đã sửa' } }); assert.match(calls[1].url, /interaction-voice-confirm$/); assert.match(calls[1].init.body, /key-1/); assert.equal(createVoiceIdempotencyKey(() => 'uuid-1'), 'uuid-1');
   await assert.rejects(() => api.confirm({ proposalId: 'p-1' }), /mã xác nhận an toàn/);
 });
 
 test('UI-VOICE-002: Voice review có hai composition MDS và luôn buộc user xác nhận', () => {
   const voiceRoot = path.join(root, 'frontend', 'src', 'features', 'voice'); const voiceDesktop = fs.readFileSync(path.join(voiceRoot, 'desktop', 'VoiceProposalDesktop.vue'), 'utf8'); const voiceMobile = fs.readFileSync(path.join(voiceRoot, 'mobile', 'VoiceProposalMobile.vue'), 'utf8');
-  for (const component of [voiceDesktop, voiceMobile]) { assert.match(component, /<MUpload/); assert.match(component, /<MRadioGroup/); assert.match(component, /Xác nhận ghi tương tác/); assert.doesNotMatch(component, /owner_id|created_by/); }
+  for (const component of [voiceDesktop, voiceMobile]) { assert.match(component, /<MUpload/); assert.match(component, /<MCheckbox/); assert.match(component, /<MRadioGroup/); assert.match(component, /Xác nhận ghi tương tác/); assert.doesNotMatch(component, /owner_id|created_by/); }
   assert.match(voiceMobile, /<MMobileTopBar/); assert.match(voiceMobile, /<MDialog/); assert.match(voiceMobile, /--mds-mobile-safe-bottom/); assert.match(feature, /VoiceProposalDesktop/); assert.match(feature, /VoiceProposalMobile/); assert.match(feature, /createVoiceIdempotencyKey/);
 });
 

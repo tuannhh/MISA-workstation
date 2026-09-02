@@ -17,10 +17,12 @@ export function createVoiceIdempotencyKey(randomUuid = globalThis.crypto?.random
 export function createVoiceApi({ fetchFn = globalThis.fetch, basePath = '/api' } = {}) {
   if (typeof fetchFn !== 'function') throw new TypeError('fetchFn phải là function.');
   return Object.freeze({
-    async propose(audio) {
+    async propose(audio, { consent = false } = {}) {
       if (!(audio instanceof Blob) || audio.size < 1) throw new InteractionsApiError({ status: 400, code: 'VOICE_AUDIO_REQUIRED', message: 'Hãy chọn một tệp ghi âm hợp lệ.' });
+      if (consent !== true) throw new InteractionsApiError({ status: 422, code: 'AI_DATA_CONSENT_REQUIRED', message: 'Hãy xác nhận bạn được phép gửi bản ghi âm tới dịch vụ AI để xử lý.' });
       const form = new FormData();
       form.append('audio', audio, audio.name || 'voice.webm');
+      form.append('aiConsent', 'true');
       const response = await fetchFn(`${basePath}/ai/interaction-voice-propose`, { method: 'POST', credentials: 'same-origin', body: form });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw errorOf(response.status, payload);

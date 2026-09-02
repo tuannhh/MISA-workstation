@@ -99,7 +99,8 @@ async function get(path) { return realFetch(`${baseUrl}${path}`, { headers: { co
 test('AI-E001 golden happy: POST /ai/interaction-voice — genJSON trả voice hợp lệ được parse đúng + gắn matchedPerson/matchedOrg null khi không khớp tên nào trong DB', async () => {
   useQueue(jsonResult({ transcript: 'Chị Minh Anh báo VnExpress hẹn gặp tuần sau.', summary: 'Ghi nhận cuộc gọi hẹn gặp.', channel: 'Điện thoại', result: 'Tích cực', person_name: 'Minh Anh', org_name: 'VnExpress' }));
   const fd = new FormData();
-  fd.append('audio', new Blob(['fake-audio'], { type: 'audio/webm' }), 'rec.webm');
+  fd.append('audio', new Blob([Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x42, 0x86, 0x81, 0x01])], { type: 'audio/webm' }), 'rec.webm');
+  fd.append('aiConsent', 'true');
   const res = await realFetch(`${baseUrl}/api/ai/interaction-voice`, { method: 'POST', headers: { cookie }, body: fd });
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -124,7 +125,7 @@ test('AI-E003 golden happy: POST /ai/card-image — genImage trả inlineData ba
   assert.equal(typeof body.usedLogo, 'boolean');
 });
 test('AI-E004 golden happy: POST /ai/award-extract (nhánh text) — genJSON trả AWARD_SCHEMA, route gắn thêm review_status="Thô"', async () => {
-  useQueue(jsonResult({ name: 'Giải thưởng Sao Khuê', organizer: 'VINASA', organizer_type: 'association', cost: 0 }));
+  useQueue(jsonResult({ name: 'Giải thưởng Sao Khuê', organizer: 'VINASA', organizer_type: 'association', cost: 0, ai_summary: 'Giải thưởng công nghệ do VINASA tổ chức.' }));
   const res = await post('/api/ai/award-extract', { text: 'Thông báo giải thưởng Sao Khuê 2026 do VINASA tổ chức, miễn phí tham gia.' });
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -135,7 +136,7 @@ test('AI-E004 golden happy: POST /ai/award-extract (nhánh text) — genJSON tr�
 test('AI-E004 golden happy (nhánh url): POST /ai/award-extract fetch trang thật (fake) rồi genJSON — 2 lời gọi mạng đúng thứ tự (fetch trang -> Gemini), route gắn source_url', async () => {
   useQueue(
     htmlPage('Thông báo giải thưởng ABC'),
-    jsonResult({ name: 'Giải ABC', organizer: 'Bộ X' }),
+    jsonResult({ name: 'Giải ABC', organizer: 'Bộ X', ai_summary: 'Giải ABC.' }),
   );
   const res = await post('/api/ai/award-extract', { url: 'https://award-source.example/notice-fake-but-mocked' });
   assert.equal(res.status, 200);
