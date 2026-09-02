@@ -37,21 +37,24 @@ Root cause: **3 cơ chế che tiền song song, không có nguồn sự thật c
 - Audio tương tác (giọng nói nội bộ) + dữ liệu Excel/partner có thể ra Gemini; monitoring chỉ gửi tiêu đề/link công khai (rủi ro thấp).
 - Đã có registry/gateway egress, `AI_DISABLED`, deny-list, audit không payload, consent voice, redaction, upload allowlist và live synthetic contract 8/8 (F32). **Còn O8:** Security/Legal MISA phải duyệt chính sách cho dữ liệu thật; code không thể tự cấp thẩm quyền đó.
 
-### F5 — Mobile native chưa tồn tại · **P0 structural / — / AMIS-native-host (đã cam kết)**
-- Hiện chỉ responsive web (media query ẩn sidebar ở 320px). Không có `.mds-mobile-app`, bottom nav, safe-area, native composition.
-- Vì owner đã cam kết AMIS-native-host, đây là structural gate thật (không phải responsive-CSS). Kéo theo F6.
+### F5 — Native-Mobile UI · **CODE SLICES ĐÃ CÓ; local acceptance do Owner, host/device là handoff DevOps**
+- Nhận định Gate-0 “chỉ responsive web” chỉ còn đúng với **legacy `public/app.js`**. Các strangler slice hiện có composition mobile riêng trong `frontend/src/features/*/mobile/`, root `.mds-mobile-app`, `MMobileTopBar`, safe-area và host-adapter fake-native; chúng không dùng desktop shell co CSS.
+- **Quyết định owner 2026-09-02:** nghiệm thu phần code/UI bằng Chrome local với fake-native/mobile emulation là đủ trong repository này. Khi bàn giao build, DevOps/AMIS tự cấu hình launcher/WebView/bridge và device acceptance ở môi trường MISA; không là blocker để tiếp tục code UI.
+- Giới hạn trung thực: browser local chứng minh composition native và interaction web, **không chứng minh** lifecycle/permission/Back/Dynamic Type của thiết bị AMIS thật. Phần đó là handoff reference [`31-o3-amis-bridge-acceptance.md`](31-o3-amis-bridge-acceptance.md), không được ghi sai là đã test thiết bị.
 
-### F6 — `public/app.js` monolith cản shared contract · **High / B / native**
-- Vue chỉ là shell nạp `/app.js` — `frontend/src/App.vue:47-54`. Logic nghiệp vụ dính vào HTML-string (37 `innerHTML`, 105 call `api()`, 12 views, ~2.889 dòng).
-- Native cần dùng chung **domain + API contract**, không phải DOM. Phải trích logic ra khỏi app.js theo slice (không big-bang).
+### F6 — `public/app.js` monolith cản shared contract · **High / B / strangler đang tiếp tục**
+- Legacy vẫn giữ phần catch-all: routing, HTML-string và API client nằm chung trong `public/app.js` (37 `innerHTML`, 105 call `api()`, 12 view legacy, ~2.889 dòng tại audit gốc). Đây là lý do một màn mới khó dùng lại đồng thời cho Desktop MDS và Native-Mobile.
+- `frontend/src/App.vue` nay không còn chỉ là shell: resolver route chọn strangler feature khi bật flag/surface; mỗi slice mới tách `domain/`, `desktop/`, `mobile/` dùng chung API contract nhưng **không dùng chung page DOM**. Legacy vẫn hoạt động cho phần chưa tách, tránh big-bang rewrite.
+- **Kế hoạch được owner cho tiếp tục:** hoàn thành F6 theo vertical slice, ưu tiên màn còn legacy có giá trị tác nghiệp cao; mỗi slice cần characterization → domain/API → Desktop MDS → Native-Mobile → runtime local/test rồi mới bỏ phần legacy tương ứng. Không đưa F6 vào một commit rewrite toàn bộ.
 
 ## B. Nhóm P1 / Medium
 
-### F7 — `Atomics.wait` khóa event loop (chỉ đường MySQL) · **P1 → P0 nếu tải cao / B / browser+native**
+### F7 — `Atomics.wait` khóa event loop (chỉ đường MySQL) · **Deferred bounded risk: target 50 users / browser+native**
 - `server/mysql-sync.js:63` `Atomics.wait` chạy **main thread**; mọi `all/get/run` (`:81-90`) đi qua `_call` → mỗi query MySQL block cả event loop (tối đa 30s timeout `:7`).
 - Cloud Run concurrency mặc định 80 → 1 query chậm đứng hình cả instance. Microbenchmark Codex (latency 25ms giả lập): p95 518ms @20 req, 1.291ms @50.
 - **Bẫy:** đường SQLite (`node:sqlite`) **không** qua Atomics → dev thấy nhanh, prod MySQL serialize. Benchmark BẮT BUỘC pin `DB_CLIENT=mysql`.
-- Fix: async repository seam cho code mới; migrate theo slice; hạ Cloud Run `--concurrency` chỉ là mitigation tạm có số đo.
+- **Quyết định owner 2026-09-02:** quy mô cần phục vụ là 30 người PR MISA, lấy **50 người đồng thời** làm mức dư phòng; không mở W2.4 async-repository rewrite chỉ vì kiến trúc hiện tại. Đo lại tại commit `8904a4a` với 50 virtual users **bắn request liên tục** cho kết quả 4,64 rps, error rate 2,53%, p50 9.040 ms, p95 12.730 ms (`perf-baseline/2026-09-02T06-48-41-905Z.json`) — vì vậy không được ghi F7 là PASS. Đây là stress test khắc nghiệt hơn người dùng PR thực (không có think time), nhưng là bằng chứng rõ ràng về bottleneck.
+- Hành động hiện tại: giữ baseline, **không rewrite async ngay** theo quyết định owner. Chỉ mở W2.4 nếu bài test 50 người dùng với profile tác nghiệp thực tế (có think time) vẫn có lỗi, MISA vận hành không chấp nhận latency/budget, hoặc quy mô thực vượt giả định.
 
 ### F8 — Gemini reliability + sampling params deprecated · **Medium / B — CLOSED phần reliability+capability-map (W1.9, 2026-08-30)**
 - `server/gemini.js:8-21` `call()` dùng fetch trần: không timeout/AbortController, không retry, không circuit breaker (trớ trêu: `monitor.js` có AbortController, `gemini.js` không).

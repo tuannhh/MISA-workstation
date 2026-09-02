@@ -17,6 +17,8 @@
 | D11 | SSRF | 1 `safeFetch` seam chung cho monitor + award-extract + mọi outbound fetch. |
 | D12 | Severity method | Theo 2 trục (retrofit-tier × target-gate); không thổi phồng theo target chưa cam kết. Target đã bật: browser-production + AMIS-native-host. |
 | D13 | **RBAC v2 — 4 cấp vai trò + visibility cấu hình được** (owner quyết trực tiếp trong hội thoại 2026-08-24, thay thế O2 + O7 cũ) | Xem chi tiết đầy đủ ở §D dưới — không tóm tắt 1 dòng vì đây là quyết định kiến trúc lớn nhất từ đầu dự án. |
+| D16 | **Native-Mobile acceptance boundary** (owner 2026-09-02) | Trong repository: Chrome local + fake-native/mobile emulation là evidence đủ để duyệt composition MDS cho từng slice. AMIS host/bridge/device runtime là handoff khi DevOps triển khai, không là blocker coding. Không được gọi browser check là device-test thật. |
+| D17 | **F7 capacity boundary** (owner 2026-09-02) | Target sử dụng là 30 nhân sự PR; **50 người dùng đồng thời** là dư phòng. Không mở rewrite async repository/W2.4 chỉ vì kiến trúc hiện tại; nhưng stress 50 request liên tục đã có lỗi (artifact 2026-09-02), nên bắt buộc giữ F7 mở và đo profile tác nghiệp có think time trước khi gọi là đạt. Mở W2.4 nếu profile đó có lỗi, MISA không chấp nhận latency/budget, hoặc quy mô thật vượt giả định. |
 
 ## D. D13 — RBAC v2: 4 cấp vai trò + visibility cấu hình được (chốt 2026-08-24; **security-complete hoá theo Codex C0.2 round-3, 2026-08-25**)
 

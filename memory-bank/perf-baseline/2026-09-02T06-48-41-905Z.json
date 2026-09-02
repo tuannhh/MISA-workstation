@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-09-02T06:48:41.905Z",
+  "gitSha": "8904a4a4d5e4c2ff5d59ea0630548060107ac5b4",
+  "engine": {
+    "dbClient": "mysql",
+    "note": "server/mysql-sync.js: mọi query MySQL đi qua Atomics.wait trên main thread (F7) — không phải async driver thường."
+  },
+  "pool": {
+    "note": "server/mysql-worker.js:25 dùng mysql.createConnection() — ĐÚNG 1 connection duy nhất trong worker thread, KHÔNG phải connection pool. Mọi query serialize qua đúng 1 connection này, cộng thêm Atomics.wait chặn main thread khi chờ kết quả."
+  },
+  "topology": {
+    "note": "Đo trên 1 instance local Docker Compose (docker-compose.yml, MySQL 8.4) — KHÔNG đại diện Cloud Run multi-replica/production. Ngưỡng SLO + topology production do DevOps chốt ở W2.3, không tự suy ra từ số đo này.",
+    "mysqlImage": "mysql:8.4 (docker-compose.yml)"
+  },
+  "hardware": {
+    "cpuCount": 8,
+    "cpuModel": "Apple M1 Pro",
+    "totalMemGB": 16,
+    "platform": "darwin 24.6.0"
+  },
+  "cardinality": {
+    "organizations": 50,
+    "people": 200,
+    "interactions": 500,
+    "attachments": 1
+  },
+  "workloadMix": [
+    {
+      "name": "read",
+      "weightPercent": 55
+    },
+    {
+      "name": "write",
+      "weightPercent": 15
+    },
+    {
+      "name": "report",
+      "weightPercent": 20
+    },
+    {
+      "name": "file",
+      "weightPercent": 10
+    }
+  ],
+  "warmupMs": 3000,
+  "sustainMs": 8000,
+  "results": [
+    {
+      "concurrency": 50,
+      "durationMs": 17014,
+      "totalRequests": 79,
+      "throughputRps": 4.64,
+      "errorRate": 0.0253,
+      "latency": {
+        "p50Ms": 9039.91,
+        "p95Ms": 12729.53,
+        "p99Ms": 13451.91
+      },
+      "byCategory": {
+        "read": {
+          "count": 49,
+          "p50Ms": 8707.25,
+          "p95Ms": 12700.63,
+          "p99Ms": 13451.91
+        },
+        "write": {
+          "count": 11,
+          "p50Ms": 9819.83,
+          "p95Ms": 12742.93,
+          "p99Ms": 12742.93
+        },
+        "report": {
+          "count": 11,
+          "p50Ms": 8472.88,
+          "p95Ms": 12200.98,
+          "p99Ms": 12200.98
+        },
+        "file": {
+          "count": 8,
+          "p50Ms": 11010.13,
+          "p95Ms": 12713.64,
+          "p99Ms": 12713.64
+        }
+      },
+      "eventLoopLag": {
+        "p50Ms": 282.85,
+        "p99Ms": 1133.51,
+        "maxMs": 1133.51
+      }
+    }
+  ]
+}

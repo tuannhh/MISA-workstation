@@ -9,7 +9,7 @@
 |---|---|
 | **D13 — RBAC v2** (4 vai trò Viewer/Nhân viên thực thi/Admin/Super Admin + visibility field-level cấu hình được + tách created_by/owner_id, áp cho 14 bảng "hoạt động") | Đây giờ là **khối việc lớn nhất, nền tảng** — mọi thứ khác (money policy, file policy, UI slice) phụ thuộc semantics phân quyền mới. W1.2–W1.4 cũ (money policy qua `org_fee`) **không còn là task riêng** — gộp vào RBAC v2 vì PolicyEngine (D1) giờ đọc bảng `field_visibility` động + role 4 cấp + ownership, không phải `org_fee` hard-code. F11 (role drift) **bị nuốt trọn** — thay cả hệ vai trò thì không "dọn banner" nữa mà xây mới. |
 | **Dữ liệu Cloud Run = test, bỏ được** | Chuỗi **R1.0–R1.7 sụp gọn**: không cần dual-write/backfill/reconcile/shadow/canary cẩn trọng (những cái đó sinh ra CHÍNH VÌ giả định dữ liệu sống). Thay bằng **redesign schema + seed lại sạch** 1 lần. Nhiều Tier-A "phải đúng từ dòng đầu vì dữ liệu đã ghi" **giãn ưu tiên** — code vẫn phải đúng cho khi dữ liệu thật xuất hiện, nhưng không cần retrofit cho dữ liệu ĐANG có. Target `browser-production` **lùi thời điểm** — chưa có người dùng/dữ liệu thật (xem `README.md` bối cảnh audit). |
-| **O3 (contract auth AMIS) + O5 (SLO) → DevOps MISA** | O4 session store đã được code-close 2026-09-02: `SqlSessionStore` dùng shared DB `web_sessions`, verified cross-instance trên SQLite/MySQL. DevOps chỉ vận hành DB/`SESSION_SECRET`. W2.3 ngưỡng SLO + topology do DevOps chốt; W2.5/W4.1 bridge AMIS Mobile do DevOps + team AMIS làm rõ. |
+| **O3 AMIS host → DevOps; F7 capacity → owner-bounded** | O4 session store đã code-close 2026-09-02. Theo D16, O3 là handoff DevOps/AMIS sau khi bàn giao build, không chặn code/UI local. Theo D17, mức dùng cần bảo đảm là 50 users (dư cho 30 nhân sự PR); stress 50 request liên tục đã có lỗi nên W2.3 còn mở với profile tác nghiệp có think time, không mở W2.4 trừ khi profile/scope thật phá giả định. |
 | **O6 duyệt $200** | W2.6 (Gemini eval) chạy được — ngân sách cứng $200 cho toàn bộ golden eval. |
 | **O2/O7 superseded** | Không còn quyết riêng — nuốt vào D13. |
 | **D14 — Voice Assistant vision** (gọi từ mọi màn hình + AI tự chuẩn bị hành động, **người dùng xác nhận** trước khi ghi — D14.2 đã chốt human-in-the-loop 2026-08-24) | Track riêng Wave 3/4. **KHÔNG bỏ human-in-the-loop** (owner chốt: speech-to-text sai được, phải xác nhận). Khác biệt thực chất thu hẹp còn: gọi-từ-mọi-màn-hình + AI chuẩn bị hành động đa bước chờ xác nhận 1 lần. Còn mở: quy tắc AI đề xuất mức đổi `relationship_score` (BA định nghĩa, không chặn vì đã có bước xác nhận). |
@@ -61,12 +61,11 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 >   `02-decisions.md` §F: origin allowlist, token audience/TTL/chống replay, fail-closed) — chỉ xoá
 >   nhánh giả định còn lại ("có thể không cần bridge nếu user tự login"), cơ chế cụ thể vẫn
 >   `UNVERIFIED` tới khi DevOps+AMIS chốt bridge contract.
-> - **O5:** quy mô người dùng thật rất nhỏ — toàn ngành dọc PR MISA cả nước chỉ **~30 người**, không
->   phải quy mô enterprise. Baseline G1.8 đo throughput không tăng theo tải + latency p50 tăng tuyến
->   tính 4.4ms→889ms (1→50 concurrent) — với peak thực tế nhiều khả năng thấp hơn hẳn 50, W2.3 gần
->   như chắc PASS mà không cần W2.4 (async pilot). Vẫn KHÔNG tự đặt ngưỡng thay DevOps (nguyên tắc
->   W2.3 không đổi) — chỉ là dữ liệu để DevOps chốt ngưỡng SLO sát thực tế hơn thay vì mặc định theo
->   quy mô lớn.
+> - **F7 capacity:** owner chốt 30 người dùng thực và **50 concurrent** là mức dư phòng. Baseline
+>   G1.8 phải luôn đo MySQL ở mức 50 này. Đo stress liên tục 2026-09-02 có 2,53% lỗi/p95 12,73s,
+>   nên đây không là PASS hay SLO enterprise; W2.3 phải thêm profile tác nghiệp có think time.
+>   W2.4 async pilot chỉ mở lại khi profile đó có lỗi, ngân sách vận hành MISA không đáp ứng, hoặc
+>   quy mô thực vượt 50.
 > - **O8:** owner xác nhận môi trường production MISA có quy trình pentest + chuẩn bảo mật nội bộ
 >   riêng (không public) khi go-live — coi như phần "Security/Legal duyệt lại dữ liệu thật" đã có
 >   kênh xử lý sẵn trong quy trình chuẩn của MISA, không phải backlog phát sinh thêm ngoài roadmap.
@@ -209,15 +208,15 @@ Wave 4 (WebView-host runtime + release + voice runtime) ── chặn: security 
 | # | Task | Evidence Contract |
 |---|---|---|
 | W2.1 | Chuẩn hóa API envelope/schema/error/client dùng chung (`05-error-contract.md`: `message` canonical, `error` alias; xóa `error` khi frontend hết đọc ở Wave 3) | code+test / **XONG — Claude 2026-08-30** / requestId + code ổn định cho 401/403/429/multer + phân loại DB-constraint-error (400, không lộ raw)/lỗi thật không xác định (500, không lộ raw) — exit criterion đã đóng, xem execution update phần 2 |
-| W2.2 | Tách business/domain khỏi page layout (cần W2.1 chốt trước) | code+test / all / — |
-| W2.3 | **ACCEPTANCE gate F7:** PASS khi đạt SLO tại peak trên topology production-like. **Ngưỡng SLO + peak + topology + ngân sách instance do DevOps MISA chốt (O5→DevOps)** — Claude dựng harness đo + báo cáo, không tự đặt ngưỡng release. Nếu chưa async hóa: mitigation chỉ chấp nhận khi **đo lại vẫn PASS** + owner/DevOps + expiry + rollback. "Có async-plan" ≠ exit | test / — / **PASS bắt buộc, plan-only không đủ** |
-| W2.4 | Nếu W2.3 fail: async repository pilot theo slice; benchmark lại sau mỗi slice; xóa mitigation khi đạt SLO | code+test / — / — |
+| W2.2 | Tách business/domain khỏi page layout theo strangler (cần W2.1 chốt trước) | code+test / all / F6: tiếp tục từng slice, không big-bang |
+| W2.3 | **F7 bounded-load check:** thêm profile 50 người dùng tác nghiệp (có think time) trên MySQL, lưu artifact/error/latency/event-loop lag. Stress liên tục 50 virtual users hiện **FAIL** (2,53% error) nên không dùng nó để tự đóng finding. Nếu profile có error, MISA không chấp nhận latency/budget, hoặc quy mô vượt 50 thì mở W2.4. | test / owner-bounded / OPEN |
+| W2.4 | Chỉ khi W2.3 có evidence phá D17: async repository pilot theo slice; benchmark lại sau mỗi slice | code+test / conditional / — |
 | W2.5 | Host-adapter interface + fake browser + fake-native provider, chung contract test. **XONG — contract-ready (Codex 2026-09-01):** registry chọn surface tường minh, Native thiếu provider fail-closed (không fallback Browser), capability state + lifecycle/safe-area/deep-link/Back/gesture có fake contract test; xem `25-w2-host-adapter-contract.md`. Production provider vẫn `UNVERIFIED` tới O3. **Lane: Codex** — interface sống ở `frontend/` | code+test / native / contract-ready, không phải device-pass |
 | W2.6 | **Gemini eval/model migration (O6 duyệt $200):** corpus 60-100 ca tổng hợp, ≥3 repeat/candidate, **hard cap tổng chi phí $200**, threshold quality/schema-validity/latency/cost; canary+rollback; giữ pin `gemini-3.5-flash` nếu candidate không thắng rõ | test / **XONG — Claude 2026-08-30, kết luận GIỮ PIN** / corpus 60 ca thật x2 model x3 repeat = 360 call thật, chi phí $4.456/$200; candidate `gemini-3.7-flash` KHÔNG thắng rõ (regression event-extract + latency tail), xem execution update |
 
 > **Execution update — 2026-09-02 (AI production-contract revalidation, F32 — ĐÃ FIX):** owner yêu cầu kiểm tra sâu mọi xử lý Gemini bằng dữ liệu tổng hợp và không giới hạn số call hợp lý. Audit phát hiện `award-extract` từng có thể egress binary raw, spreadsheet Event chưa redact sau parse, voice tự gán ngày hôm nay và gateway tin JSON provider chỉ qua `JSON.parse`. Sửa theo trust boundary: upload AI chỉ Excel/CSV qua worker/signature; redact + untrusted delimiter trước egress; PDF/ảnh fail-closed; audio MIME/extension/magic + consent; local schema validation/prune/length/enum; event/award date invalid thành blank review; grounding chỉ HTTPS không credential; giới hạn output token. Lần live đầu bắt event `mode` drift, sau enum + prompt production chạy `npm run test:gemini:live` **8/8 PASS**, gồm image, grounding và 3/3 voice. Full regression: SQLite 924/916 pass/8 skip; MySQL 926/925 pass/1 skip; security 6/6, mapping 150/150, G0 verifier + Vite build PASS. Gemini vẫn chỉ tạo draft; confirm/PolicyEngine là authority write. O8 cho dữ liệu thật vẫn là external approval, không bị tự đóng.
 
-**Exit gate W2:** shared layer swap được qua contract test; **W2.3 PASS thật** (đo lại, ngưỡng DevOps chốt); W2.5 contract-ready (2 fake provider); **W2.6 XONG — kết luận GIỮ PIN `gemini-3.5-flash`** (candidate `gemini-3.7-flash` không thắng rõ, trong ngân sách $4.456/$200).
+**Exit gate W2:** shared layer swap được qua contract test; **W2.3 có profile MySQL 50 người dùng tác nghiệp không lỗi** theo D17 (không diễn giải thành SLO enterprise); W2.5 contract-ready (2 fake provider); **W2.6 XONG — kết luận GIỮ PIN `gemini-3.5-flash`** (candidate `gemini-3.7-flash` không thắng rõ, trong ngân sách $4.456/$200).
 
 > **Execution update — 2026-08-30 (W2.1 chuẩn hóa error envelope — phần nền tảng, XONG):** module mới
 > `server/error-contract.js` — `requestIdMiddleware` gắn `req.requestId` (dạng `req_<24-hex>`) +
@@ -1380,15 +1379,15 @@ cần Security/Legal duyệt lại.
 | F2 session | **CLOSED 2026-09-02:** W1.7 hardening + DB-backed durable store cross-instance | DevOps vận hành DB/secret, không còn MemoryStore dependency |
 | F3 SSRF | G1B.4 → W1.8 | **CLOSED 2026-08-27** |
 | F4/O8 AI governance | G0.8 + O8(provisional) → W1.AI-POLICY (gateway) → W3.VOICE (D14) → W4.VOICE | O8 tạm cho phép; gateway siết được sau bằng config |
-| F5 mobile native | G0.4 (matrix, Section B/C do Codex dựng — C0.3) → W2.5 (contract-ready) → slice Wave 3 → W4.1-4.3 (runtime) | **D15: web-in-WebView + composition Native-Mobile RIÊNG BIỆT (không phải desktop responsive) — giảm khối lượng (không codebase native song song), KHÔNG giảm severity P0 (Codex C0.7)** |
+| F5 mobile native | W2.5 → slice Wave 3 → local Chrome fake-native acceptance | **D16:** code composition Native-Mobile riêng được nghiệm thu local; host/device AMIS là handoff DevOps sau build, không blocker repo. |
 | F12 event_id/API mismatch | **CLOSED 2026-09-02:** `event_id` vào booking write allowlist, POST/PUT round-trip ở hai driver | chỉ khôi phục persist contract, không suy diễn aggregate nghiệp vụ event |
 | F13 reminders/notif hỏng trên MySQL (`scheduler.js` `IS ?`) | **ĐÃ FIX ở G1A.3 commit 5** (owner yêu cầu sửa ngay, không đợi Wave) — không còn trong backlog Wave | phát hiện G1A.3 commit 4 (characterization), sửa commit 5, xem `01-audit-findings.md` §D |
 | F14 grandTotal báo cáo tổng hợp nối chuỗi trên MySQL (`routes.js` SUM() string) | **ĐÃ FIX ở G1A.3 batch reports-awards commit `119f81a`** (owner duyệt fix ngay, cùng cơ chế F13) — không còn trong backlog Wave | phát hiện batch reports-awards (characterization R052), xem `01-audit-findings.md` §D |
 | F15 FK `award_participations.award_id` không thực thi trên MySQL | **ĐÃ SỬA — Claude 2026-08-30** | phát hiện batch reports-awards (characterization R067), P2. Root cause: MySQL âm thầm bỏ qua `REFERENCES` inline cột (chỉ SQLite honor); `mysql-sync.js`'s `translate()` nay tách thành `CONSTRAINT...FOREIGN KEY` out-of-line, xác nhận đủ 24/24 FK thật qua `information_schema`. Xem execution update + `01-audit-findings.md` §D |
 | F17 `POST /api/monitor/scan` 500 trên MySQL (cột `sources.mode` không tồn tại do ALTER TABLE TEXT DEFAULT fail âm thầm) | **ĐÃ FIX ở G1A.3 batch monitor phần 1** (owner duyệt fix ngay, cùng cơ chế F13/F14/F16 — bug production nghiêm trọng, không phải trade-off cần hỏi) — không còn trong backlog Wave | phát hiện batch monitor phần 1 (characterization R110), P1, xem `01-audit-findings.md` §D |
 | F18 SUM()/AVG() trả string trên MySQL ở 3 route report chưa từng sửa (`/reports` 9 mảng breakdown+tiers, `/reports/by-staff` spend/avgScore, `/reports/awards` mediaCost/totalCost nối chuỗi) | **ĐÃ FIX ở G1A.3, commit `4d133d9`** (owner duyệt fix ngay, cùng cơ chế F13/F14/F16/F17 — sai số liệu báo cáo tài chính trên MySQL, không phải trade-off cần hỏi) — không còn trong backlog Wave | phát hiện lúc rà soát toàn bộ SUM()/AVG() trong routes.js trước khi đóng route mapping 145/145, P1, xem `01-audit-findings.md` §D |
-| F6 app.js monolith | W2.1-2.2 → slice Wave 3 | |
-| F7 Atomics | G1.8 (baseline) → W2.3 (acceptance, ngưỡng DevOps) → W2.4 nếu fail | |
+| F6 app.js monolith | W2.2 → slice Wave 3 | tiếp tục strangler theo vertical slice; legacy là fallback đến khi slice thay thế đủ evidence |
+| F7 Atomics | G1.8 baseline → W2.3 50-concurrent check → W2.4 nếu evidence phá D17 | không mở rewrite vì giả định enterprise |
 | F8 Gemini | G1A.7 → W1.9 → W2.6 (eval, $200) | |
 | F9 attachment | **CLOSED 2026-09-02:** server-derived `classification_tier` + idempotent backfill + event kind allowlist trước Multer | D13.3 file visibility tiếp tục là policy chung |
 | F10 secret | G0.7 — đã đóng | |

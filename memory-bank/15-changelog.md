@@ -11,6 +11,11 @@
 - Thay `express-session` MemoryStore bằng `SqlSessionStore` + bảng `web_sessions` dùng DB hiện có; cookie chỉ mang id đã ký, session payload/principal ở server. Bản vá giữ nguyên secure-cookie, login regeneration, rate-limit và audit W1.7.
 - Regression đóng đúng rủi ro scale/restart: app instance A tạo session, tắt A, instance B đọc được session; logout xoá row bền vững và cookie cũ trả 401. PASS 22/22 ở SQLite và MySQL (bao gồm production cookie, fixation, rate-limit, DB contract).
 
+## 2026-09-02 — Owner scope update: local Native UI + F7 bounded load
+
+- Owner duyệt Chrome local/fake-native mobile emulation là acceptance cho code/composition MDS trong repository; AMIS host/bridge/device runtime là handoff DevOps sau khi bàn giao build, không chặn slice UI. Tài liệu vẫn phân biệt rõ browser evidence với device-test thật.
+- Owner chốt quy mô vận hành 30 nhân sự PR và 50 concurrent users là mức dư phòng. Đo lại stress MySQL 50 request liên tục ở `8904a4a`: 4,64 rps, error 2,53%, p95 12,73s — ghi nhận rõ đây **không phải PASS**, đồng thời không tự mở rewrite async. W2.3 giữ việc đo profile tác nghiệp 50 người có think time; W2.4 chỉ mở khi profile đó có lỗi, MISA không chấp nhận latency/budget hoặc quy mô vượt giả định.
+
 ## 2026-09-01 — W3 Event Detail read pilot (Codex)
 
 - Mở rộng strangler Event List từ `#events` sang `#events/:id`, giữ feature flag `eventsListRead`.
