@@ -26,7 +26,7 @@ const emit = defineEmits(['back', 'search', 'page', 'create', 'intake', 'open', 
 
 const query = ref(props.search);
 const moreOpen = ref(false);
-const primaryKeys = new Set(['people', 'interactions', 'events']);
+const primaryKeys = new Set(['dashboard', 'people', 'interactions', 'events']);
 const primaryNavigation = computed(() => [
   ...props.nativeNavigation.filter((item) => primaryKeys.has(item.key)),
   { key: 'more', label: 'Khác', icon: 'dots-circle-horizontal', active: false },

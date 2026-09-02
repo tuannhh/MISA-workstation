@@ -1,0 +1,121 @@
+{
+  "generatedAt": "2026-09-02T08:50:21.609Z",
+  "gitSha": "993d3006b877d75cf0d5e13d20c4f273b9f13326",
+  "engine": {
+    "dbClient": "mysql",
+    "note": "server/mysql-sync.js: mọi query MySQL đi qua Atomics.wait trên main thread (F7) — không phải async driver thường."
+  },
+  "profile": {
+    "mode": "think-time-50",
+    "virtualUsers": 50,
+    "sessions": {
+      "super_admin": 5,
+      "admin": 5,
+      "executor": 30,
+      "viewer": 10
+    },
+    "thinkTime": {
+      "distribution": "uniform",
+      "minMs": 5000,
+      "maxMs": 15000,
+      "staggerInitialRequest": true,
+      "afterEveryRequest": true
+    }
+  },
+  "pool": {
+    "note": "server/mysql-worker.js:25 dùng mysql.createConnection() — ĐÚNG 1 connection duy nhất trong worker thread, KHÔNG phải connection pool. Mọi query serialize qua đúng 1 connection này, cộng thêm Atomics.wait chặn main thread khi chờ kết quả."
+  },
+  "topology": {
+    "note": "Đo trên 1 instance local Docker Compose (docker-compose.yml, MySQL 8.4) — KHÔNG đại diện Cloud Run multi-replica/production. Ngưỡng SLO + topology production do DevOps chốt ở W2.3, không tự suy ra từ số đo này.",
+    "mysqlImage": "mysql:8.4 (docker-compose.yml)"
+  },
+  "hardware": {
+    "cpuCount": 8,
+    "cpuModel": "Apple M1 Pro",
+    "totalMemGB": 16,
+    "platform": "darwin 24.6.0"
+  },
+  "cardinality": {
+    "organizations": 50,
+    "people": 200,
+    "interactions": 500,
+    "attachments": 1
+  },
+  "workloadMix": [
+    {
+      "name": "read",
+      "weightPercent": 55
+    },
+    {
+      "name": "write",
+      "weightPercent": 15
+    },
+    {
+      "name": "report",
+      "weightPercent": 20
+    },
+    {
+      "name": "file",
+      "weightPercent": 10
+    }
+  ],
+  "warmupMs": 15000,
+  "sustainMs": 60000,
+  "results": [
+    {
+      "concurrency": 50,
+      "durationMs": 74491,
+      "totalRequests": 229,
+      "throughputRps": 3.07,
+      "errorRate": 0,
+      "latency": {
+        "p50Ms": 880.21,
+        "p95Ms": 7413.97,
+        "p99Ms": 8963.66
+      },
+      "byCategory": {
+        "read": {
+          "count": 150,
+          "p50Ms": 953.91,
+          "p95Ms": 6139,
+          "p99Ms": 8963.66,
+          "statuses": {
+            "200": 150
+          }
+        },
+        "write": {
+          "count": 33,
+          "p50Ms": 608.1,
+          "p95Ms": 7623.16,
+          "p99Ms": 8012.61,
+          "statuses": {
+            "200": 33
+          }
+        },
+        "report": {
+          "count": 20,
+          "p50Ms": 623.21,
+          "p95Ms": 7413.97,
+          "p99Ms": 8424.17,
+          "statuses": {
+            "200": 20
+          }
+        },
+        "file": {
+          "count": 26,
+          "p50Ms": 1207.91,
+          "p95Ms": 8096.17,
+          "p99Ms": 10034.57,
+          "statuses": {
+            "200": 26
+          }
+        }
+      },
+      "eventLoopLag": {
+        "p50Ms": 11.98,
+        "p99Ms": 686.29,
+        "maxMs": 1771.04
+      }
+    }
+  ]
+}

@@ -1,11 +1,59 @@
 # 15 — Lịch sử phát triển (changelog)
 
+## 2026-09-02 — W2.2/F6: Dashboard Desktop + Native Mobile strangler (Codex)
+
+- Tách `#dashboard` khỏi fallback legacy bằng API/domain projection riêng và hai composition độc lập:
+  `DashboardDesktop` theo card/dashboard MDS, `DashboardMobile` là mini-app native với top bar,
+  taskbar 5 mục và dialog “Khác”. View model chỉ giữ số liệu tổng quan, chart tối thiểu và lịch;
+  không giữ note/owner/tiền nhạy cảm tại client.
+- Không dùng button HTML tự dựng: toàn bộ action của dashboard qua `MButton`; Native không chứa
+  `MHeaderBar`/`MSidebar`, có safe-area bottom và thiếu host thì fail-closed thay vì co về desktop.
+- Build và `UI-DASH-001/002` PASS. Kiểm tra runtime local 390×844: `scrollWidth===clientWidth`,
+  dialog “Khác” mở đúng, taskbar Danh bạ đổi URL kèm native flag và legacy `#app` vẫn `display:none`.
+  Đây là browser/fake-native evidence theo owner scope, không thay device acceptance AMIS của DevOps.
+
+## 2026-09-02 — W2.2/F6: Partner List/Create Desktop + Native Mobile strangler (Codex)
+
+- Tách 4 hash danh sách cơ quan (`press`/`association`/`gov`/`other`) thành một feature dùng chung
+  domain/API nhưng hai composition MDS riêng. List chỉ giữ projection công khai và thống kê; form
+  chỉ gửi allowlist thông tin nhận diện ban đầu, không gửi hội phí, người chăm sóc, owner hay tệp.
+- Tạo cơ quan vẫn gọi POST server và PolicyEngine/RBAC là authority. Các money subflow (hội phí,
+  tài trợ, quà, quyền lợi), MOU/tệp và phân công tiếp tục ở slice chính sách riêng, không bị kéo
+  vào patch này chỉ để “đủ form”.
+- `UI-PARTNER-LIST-001/002` PASS; runtime local fake-native 390×844 mở được list/form, không tràn
+  ngang, và shell legacy bị ẩn. Đây là browser evidence theo owner scope, không phải device-test AMIS.
+
+## 2026-09-02 — W2.3: profile MySQL 50 người dùng tác nghiệp (Codex)
+
+- Mở rộng `perf-baseline.mjs` bằng `npm run perf:think-time-50`: 50 session tách biệt theo role
+  (5 super_admin, 5 admin, 30 executor, 10 viewer), initial stagger và nhịp thao tác đều 5–15 giây.
+  Workload chỉ chọn endpoint role được server cho phép; artifact ghi HTTP status theo từng loại,
+  tránh đếm 403 permission hoặc fixture sai thành lỗi hiệu năng.
+- Artifact chính thức tại commit `993d300`: `perf-baseline/2026-09-02T08-50-21-609Z.json`, 229
+  request, **0 error**, p50 880ms/p95 7.414s/p99 8.964s, event-loop p99 686ms. Đây là PASS theo
+  mức 50 người tác nghiệp owner chốt; stress liên tục vẫn là baseline FAIL và Atomics/1 connection
+  vẫn là rủi ro bounded, không bị gắn nhãn đã tối ưu hay SLO enterprise.
+- Khi dựng profile, fixture attachment thiếu `Public/public` tạo 403 giả cho viewer/executor. Đã
+  sửa fixture theo registry server, loại artifact calibration khỏi repository rồi chạy lại ở SHA
+  truy xuất được. W2.4 chỉ mở nếu latency/budget không được MISA chấp nhận, có lỗi về sau hoặc vượt 50.
+
+## 2026-09-02 — BR-AI-018: monitor AI queue integration + DB write guard (Codex)
+
+- Đóng test debt duy nhất còn ghi `TODO`: `monitor.analyzePending()` nay có integration test trên
+  SQLite lẫn MySQL với Gemini fake ở module boundary, không gọi provider/network. Test khóa queue
+  rỗng không egress, phân lô 8, map index theo từng chunk, clamp score `[-1,1]`, chỉ ghi mention
+  nhận output hợp lệ và vẫn tiếp tục chunk sau khi Gemini lỗi một chunk.
+- Bổ sung defence-in-depth tại DB write boundary: dù `genJSON()` đã validate `SENT_SCHEMA`, job cũng
+  bỏ qua output thiếu index, sentiment lạ, score không hữu hạn hoặc tags không phải mảng. Điều này
+  không thay Policy/Gemini schema; nó ngăn dữ liệu xấu đi qua nếu provider adapter bị refactor.
+- `gate1-test-mapping.md` promote `BR-AI-018` sang `green`; Gate-1 mapping không còn product `TODO`.
+
 ## 2026-09-02 — Audit roadmap tổng thể và tách production handoff (Codex)
 
 - Rà lại roadmap, route catalog và Vue strangler thực tế; không mở lại các Gate 0/1, Wave 1
   backend/security, Gemini gateway hay Voice secure-command đã có evidence đóng.
-- Ghi rõ backlog repository còn lại: W2.2/F6 UI strangler theo flow còn legacy, W2.3 profile MySQL
-  50 người có think time, BA rule cho `relationship_score`, rồi audit matrix Desktop/Native × 4 role
+- Ghi rõ backlog repository còn lại: W2.2/F6 UI strangler theo flow còn legacy, BA rule cho
+  `relationship_score`, rồi audit matrix Desktop/Native × 4 role
   theo release scope. Stress liên tục 50 VU vẫn là FAIL/baseline, không bị đổi thành PASS.
 - Đối chiếu verifier phát hiện 1 test-debt có tên rõ ràng còn treo: `BR-AI-018` cho job
   `monitor.analyzePending()`; thêm vào roadmap thay vì để trạng thái Gate 1 lịch sử che mất.

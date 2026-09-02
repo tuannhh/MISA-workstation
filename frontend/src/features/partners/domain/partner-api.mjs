@@ -15,6 +15,17 @@ function parseError(status, payload) {
 export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api' } = {}) {
   if (typeof fetchFn !== 'function') throw new TypeError('fetchFn phải là một function.');
   return Object.freeze({
+    async getList({ type = 'press', page = 1, pageSize = 20, search = '' } = {}) {
+      const safeType = ['press', 'association', 'gov', 'other'].includes(type) ? type : 'other';
+      const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
+      const safePageSize = Math.min(100, Math.max(1, Number.parseInt(pageSize, 10) || 20));
+      const query = new URLSearchParams({ type: safeType, page: String(safePage), pageSize: String(safePageSize), search: String(search || '') });
+      const response = await fetchFn(`${basePath}/partners?${query}`, { credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      if (!Array.isArray(payload?.rows)) throw new PartnerApiError({ status: 502, code: 'PARTNER_LIST_INVALID_RESPONSE', message: 'Danh sách cơ quan trả về không hợp lệ.' });
+      return payload;
+    },
     async getDetail(partnerId) {
       const id = Number(partnerId);
       if (!Number.isInteger(id) || id < 1) throw new TypeError('partnerId phải là số nguyên dương.');
@@ -55,6 +66,14 @@ export function createPartnerApi({ fetchFn = globalThis.fetch, basePath = '/api'
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw parseError(response.status, payload);
       return payload;
+    },
+    async createPartner(input) {
+      const response = await fetchFn(`${basePath}/partners`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw parseError(response.status, payload);
+      const id = Number(payload?.id);
+      if (!Number.isInteger(id) || id < 1) throw new PartnerApiError({ status: 502, code: 'PARTNER_CREATE_INVALID_RESPONSE', message: 'Máy chủ không trả về mã cơ quan hợp lệ.' });
+      return Object.freeze({ id });
     },
     async deletePartner(partnerId) {
       const response = await fetchFn(`${basePath}/partners/${Number(partnerId)}`, { method: 'DELETE', credentials: 'same-origin' });
