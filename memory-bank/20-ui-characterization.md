@@ -121,3 +121,12 @@ Native host thật, thiết bị và accessibility OS vẫn UNVERIFIED tới O3/
 - Runtime fake-native 390×844: route list và form create đều có đúng một `.mds-mobile-app`, topbar,
   buttons 48px, không overflow ngang. `UI-REM-001` khóa payload/permission/flag/composition. AMIS
   lifecycle, keyboard, safe-area thiết bị và accessibility OS vẫn `UNVERIFIED` tới O3/W4.
+
+### W3.REMINDERS.NOTIFICATIONS — 2026-09-02
+
+- Hộp thư nhắc có composition Desktop và Native, dùng R057-R059: tải projection riêng principal,
+  đánh dấu từng thông báo hoặc tất cả đã đọc. Mở hộp thư **không** tự acknowledge như legacy bell;
+  người dùng chọn action rõ ràng, action chỉ hiện khi `/api/me` có `reminders:ack`.
+- Fake-native 390×844 mở/đóng hộp thư: đúng một root, topbar/action 48px, không overflow và không
+  console error. Integration backend đã phủ principal/ack; UI contract `UI-REM-001` khóa client API
+  và composition. R060 run scheduler, R061 ICS và R137-R138 AI card vẫn là scope riêng.

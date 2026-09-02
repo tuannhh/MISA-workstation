@@ -21,6 +21,10 @@ test('UI-REM-001: Reminder slice có API allowlist, feature flag và hai composi
   assert.match(app, /isRemindersPilotEnabled\(\).*remindersList/);
   assert.match(app, /resolveRemindersRoute\(key\).*key !== 'reminders'/);
   assert.match(feature, /permissions\?\.modules\?\.reminders\?\.includes\('delete'\)/);
+  assert.match(feature, /markNotificationRead\(record\)/);
+  assert.match(feature, /markAllNotificationsRead\(\)/);
+  assert.match(read('frontend/src/features/reminders/desktop/ReminderNotificationsDesktop.vue'), /Đánh dấu đã đọc/);
+  assert.match(read('frontend/src/features/reminders/mobile/ReminderNotificationsMobile.vue'), /--mds-mobile-touch-target/);
   assert.match(desktop, /<section class="min-h-0 bg-\[var\(--mds-bg-page\)\]/);
   assert.match(mobile, /class="mds-mobile-app flex h-\[100dvh\]/);
   assert.match(mobile, /--mds-mobile-touch-target/);

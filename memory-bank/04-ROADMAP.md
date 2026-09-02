@@ -1314,6 +1314,12 @@ Mỗi slice: characterization/spec → mechanical extraction (commit riêng) →
 > action 48px, không overflow. Notification/ICS/AI card và AMIS host/device lifecycle là slice/gate
 > riêng, chưa suy diễn PASS trước O3/W4.
 
+> **Execution update — 2026-09-02 (W3.REMINDERS.NOTIFICATIONS):** bổ sung inbox Desktop/Native cho
+> R057-R059: GET projection theo principal, acknowledge từng dòng hoặc tất cả chỉ khi server trả
+> `reminders:ack`. Khác legacy bell, mở inbox không tự động đánh dấu đã đọc. Fake-native 390×844 có
+> một root/topbar/touch target 48px, không overflow; R060 scheduler, R061 ICS và AI card không bị
+> gộp vào scope này. O3/W4 host/device evidence vẫn mở.
+
 ---
 
 ## WAVE 4 — WebView-host runtime & release gate (+ voice runtime)

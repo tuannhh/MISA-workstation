@@ -3291,3 +3291,10 @@ Hoàn thiện bốn entity Direct cuối cùng trong tab Hợp tác của Partne
 - Generic payload chỉ có field ngày nhắc công khai, không nhận `subject_id` từ client; action hiển thị
   theo permission `/api/me`, còn API/PolicyEngine là authority cuối. `UI-REM-001` và fake-native
   390×844 xác nhận list/form có Native MDS riêng, root duy nhất, touch action 48px, không overflow.
+
+## 2026-09-02 — W3.REMINDERS.NOTIFICATIONS: inbox MDS
+
+- Bổ sung inbox Desktop/Native cho R057-R059, load projection theo principal và chỉ ack từng/tất cả
+  khi server cấp `reminders:ack`. Mở inbox không tự đánh dấu đã đọc như legacy bell.
+- Runtime fake-native 390×844: inbox có một native root, topbar/touch 48px, không overflow hay lỗi
+  console. Scheduler run, ICS và AI card được giữ ở slice riêng thay vì gộp vào UI CRUD/inbox.
