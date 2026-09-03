@@ -97,3 +97,21 @@ npm run test:security   # test bảo mật Excel upload + validate email (server
 npm audit                # audit dependency
 ```
 Không có test suite phủ route API (D8 — dựng test net 100% route là việc CHƯA làm, thuộc roadmap Wave 1, xem `04-ROADMAP.md`).
+
+## F. Cấu hình Gemini API key + SMTP khi DevOps MISA tự deploy (hạ tầng riêng, ngoài Cloud Run)
+
+> Owner xác nhận (2026-09-03): deploy lên máy chủ MISA do **DevOps MISA tự thực hiện**, không phải Cloud Run. Mục này để bàn giao DevOps đúng cơ chế đã có sẵn trong code — **không có trang quản trị (admin UI) nào để nhập Gemini key/SMTP**, đây là chủ đích (secret không đi qua DB/UI), không phải thiếu tính năng.
+
+App đọc 2 cấu hình này theo đúng 1 cơ chế, ưu tiên biến môi trường trước, có fallback file nếu môi trường không tiện set biến môi trường (vd chạy tay trên VM, không qua orchestrator):
+
+| Cấu hình | Biến môi trường (ưu tiên) | File fallback trong `DATA_DIR` | Nguồn |
+|---|---|---|---|
+| Gemini API key | `GEMINI_API_KEY` | `data/gemini.key` — file text thuần, chỉ chứa đúng key, không xuống dòng thừa | `server/config.js:5-15` |
+| SMTP (mail nhắc/cảnh báo) | `SMTP_HOST`+`SMTP_PORT`+`SMTP_USER`+`SMTP_PASS`+`SMTP_FROM`+`SMTP_SECURE` (xem §C) | `data/smtp.json` — JSON `{"host":"...","port":587,"secure":false,"user":"...","pass":"...","from":"..."}` | `server/mailer.js:8-19` |
+
+Cách chọn cho DevOps:
+- **Có biến môi trường/secret manager của MISA (khuyến nghị):** set thẳng các biến ở bảng §C, không cần tạo file gì. Container/service khởi động lại vẫn giữ nguyên, không phụ thuộc volume ghi được.
+- **Không tiện set biến môi trường (vd chạy tay, hoặc muốn tách secret khỏi biến môi trường của service):** tạo 2 file `gemini.key` và `smtp.json` đúng định dạng trên, đặt trong thư mục trỏ bởi `DATA_DIR` (mặc định `<repo>/data`, đổi được qua biến `DATA_DIR`). Thư mục này đã có sẵn trong `.gitignore` — không commit nhầm secret vào git.
+- **Không đặt gì cả:** Gemini tắt (mọi route AI trả lỗi `Chưa cấu hình GEMINI_API_KEY`, không crash app), mail tắt (`mailer.enabled() === false`, các nút gửi nhắc/cảnh báo âm thầm không gửi được — xem log `SMTP chưa cấu hình (email tắt)`). App vẫn chạy bình thường cho mọi tính năng khác.
+
+Gmail SMTP (nếu DevOps chọn Gmail thay vì Brevo): cần **Mật khẩu ứng dụng (App Password)** 16 ký tự từ tài khoản Gmail có bật xác minh 2 bước (myaccount.google.com/apppasswords) — Gmail chặn SMTP bằng mật khẩu thường. `host=smtp.gmail.com`, `port=587`, `secure=false`.
